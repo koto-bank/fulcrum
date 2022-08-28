@@ -124,6 +124,14 @@ struct AliasType : LanguageType {
     }
 };
 
+struct BoolType : LanguageType {
+    using LanguageType::LanguageType;
+
+    Type *llvmType() override {
+        return Type::getInt1Ty(context);
+    }
+};
+
 struct FunctionType : LanguageType {
 private:
     llvm::FunctionType *funcType;
