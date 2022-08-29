@@ -24,7 +24,6 @@ class Function {
     std::string name;
     std::vector<std::string> argumentNames;
 public:
-
     Function(LLVMContext &context, llvm::Module &module,
              std::string name, std::vector<std::tuple<std::string, LanguageType *>> arguments,
              LanguageType *returnType)
@@ -52,6 +51,7 @@ struct CodegenContext {
     llvm::Module &module;
 
     std::map<std::string, std::unique_ptr<LanguageType>> types;
+    std::map<std::string, Function> functions;
 };
 
 LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
@@ -186,7 +186,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     return codegenCont.types[typeName].get();
 }
 
-void parseHeader(LLVMContext &context, llvm::Module &module, std::string path) {
+void parseHeader(CodegenContext &codegenCont, std::string path) {
     CXIndex index = clang_createIndex(0, 0);
     CXTranslationUnit unit = clang_parseTranslationUnit(
         index,
@@ -197,8 +197,6 @@ void parseHeader(LLVMContext &context, llvm::Module &module, std::string path) {
         std::cout << "Could not parse " << path;
         return;
     }
-
-    CodegenContext data = { .context = context, .module = module };
 
     CXCursor cursor = clang_getTranslationUnitCursor(unit);
     clang_visitChildren(
@@ -247,13 +245,14 @@ void parseHeader(LLVMContext &context, llvm::Module &module, std::string path) {
                     return CXChildVisit_Continue;
                 }
 
-                auto fnc = Function(client_data->context, client_data->module, funcName, arguments, returnType);
-                llvm::Function *llvmFnc = fnc.llvmFunction();
+                client_data->functions.emplace(funcName, Function(client_data->context, client_data->module, funcName, arguments, returnType));
+                llvm::Function *llvmFnc = client_data->functions.at(funcName).llvmFunction();
                 for (auto i = 0; i < llvmFnc->arg_size(); i++) {
                     auto &[name, _] = arguments[i];
 
                     llvmFnc->getArg(i)->setName(name);
                 }
+
 
                 return CXChildVisit_Continue;
             }
@@ -263,7 +262,7 @@ void parseHeader(LLVMContext &context, llvm::Module &module, std::string path) {
 
             return CXChildVisit_Recurse;
         },
-        &data
+        &codegenCont
     );
 
     clang_disposeTranslationUnit(unit);
@@ -276,7 +275,8 @@ int main() {
 
     llvm::Module module("main", context);
 
-    parseHeader(context, module, "/usr/include/stdlib.h");
+    CodegenContext codegenCont = { .context = context, .module = module };
+    parseHeader(codegenCont, "/usr/include/stdlib.h");
 
     llvm::FunctionType *type = llvm::FunctionType::get(Type::getVoidTy(context), std::vector<Type*>(), false);
     llvm::Function *f = llvm::Function::Create(type, llvm::Function::ExternalLinkage, "main", module);
