@@ -71,14 +71,14 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     case CXType_LongLong:
     case CXType_Short:
     case CXType_Int128:
-        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp), true);
+        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp) * 8, true);
         break;
     case CXType_UInt:
     case CXType_ULong:
     case CXType_ULongLong:
     case CXType_UShort:
     case CXType_UInt128:
-        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp), false);
+        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp) * 8, false);
         break;
     case CXType_Float:
         result = std::make_unique<FloatType>(context, FloatType::Bits::Float);
