@@ -22,3 +22,12 @@ target_compile_definitions(lisp_project PUBLIC ${LLVM_DEFINITIONS_LIST})
 llvm_map_components_to_libnames(llvm_libs support)
 
 target_link_libraries(lisp_project LLVM libclang ${llvm_libs})
+
+set(GRAMMAR_DIR "${CMAKE_BINARY_DIR}/grammar")
+file(MAKE_DIRECTORY ${GRAMMAR_DIR})
+add_custom_command(
+  OUTPUT "${GRAMMAR_DIR}/grammar.cpp"
+  COMMAND leg -o ${GRAMMAR_DIR}/grammar.cpp ${CMAKE_SOURCE_DIR}/src/grammar.leg
+)
+add_custom_target(grammar DEPENDS "${GRAMMAR_DIR}/grammar.cpp")
+add_dependencies(lisp_project grammar)
