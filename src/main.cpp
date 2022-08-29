@@ -1,5 +1,8 @@
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h"
 #include <llvm/IR/IRBuilder.h>
@@ -12,8 +15,85 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <concepts>
 
 #include "types.hpp"
+
+struct Expression {
+protected:
+    LanguageType *type = nullptr;
+    llvm::Value *value = nullptr;
+public:
+    Expression(LanguageType *type) : type(type) { }
+
+    llvm::Type *llvmType() { return type->llvmType(); }
+    virtual llvm::Value *llvmValue() { return value; }
+};
+
+template<typename T>
+concept IsLongInteger = std::same_as<T, long int> || std::same_as<T, unsigned long int>;
+
+template<IsLongInteger T>
+struct IntegerConstant : Expression {
+    T constValue;
+
+    IntegerConstant(LanguageType *type, T constValue) : Expression(type), constValue(constValue) {
+        if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), constValue)) {
+            std::cout << "Integer " << value << "does not fit into its type" << std::endl;
+            return;
+        }
+        value = llvm::ConstantInt::get(type->llvmType(), constValue);
+    }
+};
+
+template<typename T>
+concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
+
+template<IsFloatingPoint T>
+struct FloatConstant : Expression {
+    T constValue;
+
+    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue) : Expression(type) {
+        auto apFloat = llvm::APFloat(constValue);
+        if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
+            std::cout << "Float " << value << "does not fit into its type" << std::endl;
+            return;
+        }
+        value = llvm::ConstantFP::get(type->llvmType(), apFloat);
+    }
+};
+
+struct StringConstant : Expression {
+private:
+    llvm::GlobalVariable *llvmConst;
+public:
+    std::string constValue;
+
+    StringConstant(llvm::Module &mod, LanguageType *type, std::string constValue) : Expression(type), constValue(constValue) {
+        auto constStr = llvm::ConstantDataArray::getString(type->llvmType()->getContext(), constValue.data());
+
+        // New here is overriden in llvm, so supposedly it's not just allocating on the heap
+        llvmConst = new llvm::GlobalVariable(
+            mod, constStr->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, constStr
+        );
+    }
+
+    llvm::Value *llvmValue() override {
+        auto Zero = llvm::ConstantInt::get(Type::getInt32Ty(type->llvmType()->getContext()), 0);
+        llvm::Constant *Indices[] = {Zero, Zero};
+        return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
+    }
+};
+
+struct BoolConstant : Expression {
+public:
+    bool constValue;
+
+    BoolConstant(LanguageType *type, bool constValue) : Expression(type), constValue(constValue) {
+        value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
+    }
+};
 
 class Function {
     LLVMContext &context;
@@ -41,9 +121,8 @@ public:
             llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
     }
 
-    llvm::Function *llvmFunction() {
-        return function;
-    }
+    FunctionType *functionType() { return type.get(); }
+    llvm::Function *llvmFunction() { return function; }
 };
 
 struct CodegenContext {
@@ -217,6 +296,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                 //std::cout << "Function decl: " << funcName << std::endl;
 
                 auto funcType = clang_getCursorType(c);
+                bool variadic = clang_isFunctionTypeVariadic(funcType);
 
                 auto resType = clang_getResultType(funcType);
                 LanguageType *returnType = clangToLanguageType(*client_data, resType);
@@ -276,14 +356,35 @@ int main() {
     llvm::Module module("main", context);
 
     CodegenContext codegenCont = { .context = context, .module = module };
-    parseHeader(codegenCont, "/usr/include/stdlib.h");
+    parseHeader(codegenCont, "/usr/include/stdio.h");
 
-    llvm::FunctionType *type = llvm::FunctionType::get(Type::getVoidTy(context), std::vector<Type*>(), false);
+    IntegerConstant x(codegenCont.types["int"].get(), 10l);
+
+    llvm::FunctionType *type = llvm::FunctionType::get(Type::getInt32Ty(context), std::vector<Type*>(), false);
     llvm::Function *f = llvm::Function::Create(type, llvm::Function::ExternalLinkage, "main", module);
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", f);
 
     builder.SetInsertPoint(bb);
-    builder.CreateRetVoid();
+
+    auto &puts = codegenCont.functions.at("puts");
+    auto strToPut = StringConstant(module, codegenCont.types.at("char *").get(), "A string to print");
+    auto &charType = codegenCont.types.at("char");
+    auto &intType = codegenCont.types.at("int");
+
+    builder.CreateCall((llvm::FunctionType*)puts.functionType()->llvmType(), puts.llvmFunction(), { strToPut.llvmValue() });
+
+    /*
+    auto &rand = codegenCont.functions.at("rand");
+    auto &srand = codegenCont.functions.at("srand");
+
+    std::vector<llvm::Value *> srandArgs = { IntegerConstant(srand.functionType()->arguments[0], 100l).llvmValue(), str.llvmValue() };
+    builder.CreateCall(srand.llvmFunction()->getFunctionType(), srand.llvmFunction(), srandArgs);
+
+    std::vector<llvm::Value *> args;
+    auto res = builder.CreateCall(rand.llvmFunction()->getFunctionType(), rand.llvmFunction(), args, "result");
+    */
+
+    builder.CreateRet(x.llvmValue());
 
     llvm::errs() << module;
 
