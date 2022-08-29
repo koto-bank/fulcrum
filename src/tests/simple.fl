@@ -1,0 +1,9 @@
+(module simple
+  (import :use line)
+  (import :c "stdio.h"))
+
+(struct vector
+ (x *******bool)
+ (y f64))
+
+(struct- point)

@@ -1,0 +1,142 @@
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory>
+
+#include "parsing_types.hpp"
+
+#define YYSTYPE ParsedLine
+#define YY_CTX_LOCAL 1
+#define YY_CTX_MEMBERS \
+    std::unique_ptr<Program> program; \
+    std::unique_ptr<TypeStorage> type;
+%}
+
+# How to compile: leg grammar.leg > parser.cpp && clang++ -std=c++20 parser.cpp -o parser
+# Then echo test file to parser's stdin: cat tests/simple.fn | parser
+
+Program = - Module - (Statement -)* Eof
+Statement = Struct | Var | Alias | Fn
+Module = LP ('module' -) m:Id {
+    yy->program->module.name = m.str;
+} Import* RP
+
+Import = LP ('import' -) {
+    yy->program->module.imports.emplace_back();
+} (kw:Keyword {
+    yy->program->module.imports.back().keywords.push_back(kw.str);
+})* file:Str RP - {
+    yy->program->module.imports.back().filename = file.str;
+}
+
+Struct = LP StructType CustomType {
+    auto typePtr = yy->type->consume();
+    auto type = typePtr->as<CustomType>();
+    yy->program->statements.back()->as<Struct>()->type.name = type->name;
+} (StructField -)* - RP
+
+StructType = ('struct-' -) {
+    yy->program->statements.emplace_back(std::make_unique<Struct>(false));
+} | ('struct' -) {
+    yy->program->statements.emplace_back(std::make_unique<Struct>(true));
+}
+
+StructField = LP id:Id {
+    StructField field;
+    field.name = id.str;
+    yy->program->statements.back()->as<Struct>()->fields.push_back(std::move(field));
+} - Type {
+    yy->program->statements.back()->as<Struct>()->fields.back().type =
+      std::move(yy->type->consume());
+} RP
+
+Fn = LP FnType Id ArgList Type Expr* RP
+FnType = 'fn' | 'fn-'
+ArgList = LP ArgDecl* RP
+ArgDecl = Id Type
+
+Type = PtrType | TypeName
+PtrType = '*' {
+    yy->type->addType(std::make_unique<PtrType>());
+} - Type
+
+TypeName = BuiltInType | CustomType
+CustomType = n:Id {
+    yy->type->addType(std::make_unique<CustomType>());
+    yy->type->as<CustomType>()->name = n.str;
+}
+
+BuiltInType = ( 'f32' {
+    yy->type->addType(std::make_unique<FloatType>());
+    yy->type->as<FloatType>()->is_double = false;
+} | 'f64' {
+    yy->type->addType(std::make_unique<FloatType>());
+    yy->type->as<FloatType>()->is_double = true;
+}) | 'void' {
+    yy->type->addType(std::make_unique<VoidType>());
+} | 'bool' {
+    yy->type->addType(std::make_unique<BoolType>());
+} | IntegerType
+
+IntegerType = ('i' {
+    yy->type->addType(std::make_unique<IntegerType>());
+    yy->type->as<IntegerType>()->is_signed = true;
+} | 'u' {
+    yy->type->addType(std::make_unique<IntegerType>());
+    yy->type->as<IntegerType>()->is_signed = false;
+}) < Bits > {
+    yy->type->as<IntegerType>()->bits = std::atoi(yytext);
+}
+Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
+Var = LP 'var' Id Expr RP
+
+Alias = LP 'alias' Id Id RP
+
+Expr = LP ExpressionCont* RP
+ExpressionCont = Expr | IdStatement | Literal
+IdStatement = Id | AddrOfVar | FieldAccess | Keyword
+AddrOfVar = '&' - Id
+
+Keyword = [:] < Char+ > - { $$.str = yytext; }
+
+Literal = Str | IntLiteral | FloatLiteral
+IntLiteral = < '-'? ( Num | Num [iu] Bits? ) > - { $$.i_num = std::atoi(yytext); }
+FloatLiteral = < '-'? Num '.' Num 'f'? > - { $$.f_num = std::atof(yytext); }
+Num = '0' | [1-9] [0-9]* -
+
+FieldAccess = Id '.' Id
+
+LP = '(' -
+RP = - ')'
+Char = ( !Space . )
+Str = ["] < ( !["] Char )* > ["] - { $$.str = yytext; }
+Id = < ( ![.] !LP !RP Char )+ > - { $$.str = yytext; }
+
+- = ( Space | Comment )*
+Space = ' ' | '\t' | Eol
+Comment = ';' ( !Eol . )* Eol
+Eol = '\r\n' | '\n' | '\r'
+Eof = !.
+
+%%
+
+int main(void) {
+    printf("Parsing started\n");
+
+    yycontext yy;
+    memset(&yy, 0, sizeof(yy));
+    yy.program = std::make_unique<Program>();
+    yy.type = std::make_unique<TypeStorage>();
+
+    while(yyparse(&yy)) {
+        printf("success!\n");
+    }
+    printf("Parsing finished\n");
+
+    yy.program->print();
+    yy.program.release();
+    yy.type.release();
+
+    yyrelease(&yy);
+    return 0;
+}
