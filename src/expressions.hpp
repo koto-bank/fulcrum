@@ -6,6 +6,7 @@
 #include "types.hpp"
 
 #include <iostream>
+#include <variant>
 
 using llvm::Type;
 
@@ -23,13 +24,12 @@ public:
 };
 
 template<typename T>
-concept IsLongInteger = std::same_as<T, long int> || std::same_as<T, unsigned long int>;
+concept IsLongInteger = std::same_as<T, long> || std::same_as<T, unsigned long>;
 
-template<IsLongInteger T>
 struct IntegerConstant : Expression {
-    T constValue;
+    std::variant<long, unsigned long> constValue;
 
-    IntegerConstant(LanguageType *type, T constValue) : Expression(type), constValue(constValue) {
+    IntegerConstant(LanguageType *type, IsLongInteger auto constValue) : Expression(type), constValue(constValue) {
         if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), constValue)) {
             std::cout << "Integer " << value << "does not fit into its type" << std::endl;
             return;
@@ -41,11 +41,10 @@ struct IntegerConstant : Expression {
 template<typename T>
 concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
 
-template<IsFloatingPoint T>
 struct FloatConstant : Expression {
-    T constValue;
+    std::variant<float, double> constValue;
 
-    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue) : Expression(type) {
+    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue) : Expression(type), constValue(constValue) {
         auto apFloat = llvm::APFloat(constValue);
         if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
             std::cout << "Float " << value << "does not fit into its type" << std::endl;
