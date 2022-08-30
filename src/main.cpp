@@ -4,6 +4,14 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h"
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/CodeGen.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
 
 #include <clang-c/Index.h>
 
@@ -310,6 +318,37 @@ int main() {
     builder.CreateRet(x.llvmValue());
 
     llvm::errs() << module;
+
+    // Object file generation
+    /*
+
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+
+    auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string err;
+    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
+    if (!target) {
+        llvm::errs() << err;
+        return 1;
+    }
+
+    llvm::TargetOptions options;
+    auto rm = llvm::Optional<llvm::Reloc::Model>();
+    auto targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
+    module.setDataLayout(targetMachine->createDataLayout());
+    module.setTargetTriple(targetTriple);
+
+    auto filename = "output.o";
+    std::error_code EC;
+    llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
+
+    llvm::legacy::PassManager passManager;
+    targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
+    passManager.run(module);
+    dest.flush();
+    */
 
     return 0;
 }
