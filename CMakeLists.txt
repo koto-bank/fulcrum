@@ -26,8 +26,10 @@ target_link_libraries(fulcrum LLVM libclang ${llvm_libs})
 set(GRAMMAR_DIR "${CMAKE_BINARY_DIR}/grammar")
 file(MAKE_DIRECTORY ${GRAMMAR_DIR})
 add_custom_command(
-  OUTPUT "${GRAMMAR_DIR}/grammar.cpp"
-  COMMAND leg -o ${GRAMMAR_DIR}/grammar.cpp ${CMAKE_SOURCE_DIR}/src/grammar.leg
+  OUTPUT "${GRAMMAR_DIR}/grammar.hpp"
+  DEPENDS ${CMAKE_SOURCE_DIR}/src/grammar.leg
+  COMMAND leg -o ${GRAMMAR_DIR}/grammar.hpp ${CMAKE_SOURCE_DIR}/src/grammar.leg
 )
-add_custom_target(grammar DEPENDS "${GRAMMAR_DIR}/grammar.cpp")
+add_custom_target(grammar DEPENDS "${GRAMMAR_DIR}/grammar.hpp")
+target_include_directories(fulcrum PUBLIC "src" ${GRAMMAR_DIR})
 add_dependencies(fulcrum grammar)

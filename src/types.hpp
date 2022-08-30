@@ -12,6 +12,7 @@ protected:
     LLVMContext &context;
 public:
     virtual Type* llvmType() = 0;
+    virtual std::string signature() = 0;
 
     LanguageType(LLVMContext &context) : context(context) { }
 
@@ -27,6 +28,10 @@ struct IntegerType : LanguageType {
     Type* llvmType() override {
         return Type::getIntNTy(context, bits);
     }
+
+    std::string signature() override {
+        return std::string(isSigned ? "i" : "u") + std::to_string(bits);
+    }
 };
 
 struct FloatType : LanguageType {
@@ -40,6 +45,10 @@ struct FloatType : LanguageType {
             ? Type::getFloatTy(context)
             : Type::getDoubleTy(context);
     }
+
+    std::string signature() override {
+        return bits == Bits::Float ? "f32" : "f64";
+    }
 };
 
 struct StringType : LanguageType {
@@ -48,17 +57,45 @@ struct StringType : LanguageType {
     Type* llvmType() override {
         return Type::getIntNPtrTy(context, 8);
     }
+
+    std::string signature() override {
+        return "str";
+    }
 };
 
-struct StructType : LanguageType {
+struct CustomType : LanguageType {
+    std::string name;
+
+    CustomType(LLVMContext &context, std::string name)
+        : LanguageType(context), name(name) { }
+
+    Type* llvmType() override { return Type::getVoidTy(context); }
+
+    std::string signature() override {
+        return name;
+    }
+};
+
+struct AliasType : CustomType {
+    LanguageType *aliasTo;
+
+    AliasType(LLVMContext &context, std::string name, LanguageType *aliasTo_)
+        : CustomType(context, name), aliasTo(aliasTo_) { }
+
+    Type* llvmType() override {
+        return aliasTo->llvmType();
+    }
+};
+
+struct StructType : CustomType {
 private:
     llvm::StructType *structType;
 public:
-    std::string name;
     std::vector<std::tuple<std::string, LanguageType *>> fields;
+    bool isPublic;
 
-    StructType(LLVMContext &context, std::string name, decltype(fields) fields_)
-        : LanguageType(context), name(name), fields(fields_) {
+    StructType(LLVMContext &context, std::string name, decltype(fields) fields_, bool isPublic)
+        : CustomType(context, name), fields(fields_), isPublic(isPublic) {
         std::vector<Type *> fieldTypes;
         std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {
             auto &[_, tp] = type;
@@ -79,6 +116,10 @@ struct CharType : LanguageType {
     Type *llvmType() override {
         return Type::getInt8Ty(context);
     }
+
+    std::string signature() override {
+        return "char";
+    }
 };
 
 struct PointerType : LanguageType {
@@ -90,6 +131,10 @@ struct PointerType : LanguageType {
     Type* llvmType() override {
         return llvm::PointerType::get(pointerTo->llvmType(), 0);
     }
+
+    std::string signature() override {
+        return pointerTo->signature() + "*";
+    }
 };
 
 struct VoidType : LanguageType {
@@ -98,16 +143,9 @@ struct VoidType : LanguageType {
     Type *llvmType() override {
         return Type::getVoidTy(context);
     }
-};
 
-struct AliasType : LanguageType {
-    LanguageType *aliasTo;
-
-    AliasType(LLVMContext &context, LanguageType *aliasTo_)
-        : LanguageType(context), aliasTo(aliasTo_) { }
-
-    Type* llvmType() override {
-        return aliasTo->llvmType();
+    std::string signature() override {
+        return "void";
     }
 };
 
@@ -116,6 +154,10 @@ struct BoolType : LanguageType {
 
     Type *llvmType() override {
         return Type::getInt1Ty(context);
+    }
+
+    std::string signature() override {
+        return "bool";
     }
 };
 
@@ -137,5 +179,16 @@ public:
 
     Type* llvmType() override {
         return funcType;
+    }
+
+    std::string signature() override {
+        std::string argSignatures;
+        for (int i = 0; i < arguments.size(); i++) {
+            if (i != 0)
+                argSignatures += ", ";
+            argSignatures += arguments[i]->signature();
+        }
+
+        return returnType->signature() + " (" + argSignatures + ")";
     }
 };
