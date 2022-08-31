@@ -6,29 +6,13 @@
 
 #include "codegen_context.hpp"
 
-enum class TypeKind {
-    Integer,
-    Float,
-    String,
-    Bool,
-    Custom,
-};
-
-enum class ExprType {
-    Expr,
-    Id,
-    Literal,
-};
-
 struct Expr;
 struct ExprContents {
     std::string id;
     Expr *expr;
-//    Literal *literal;
 };
 
 struct Expr {
-    ExprType type;
     ExprContents expr;
 };
 
@@ -39,7 +23,6 @@ struct LiteralContents {
 };
 
 struct Literal {
-    TypeKind type;
     LiteralContents value;
 };
 
@@ -138,6 +121,13 @@ union ParsedLine {
     long i_num;
     double f_num;
     char *str;
+};
+
+struct FunctionParseContext
+{
+    std::string name;
+    std::vector<std::tuple<std::string, LanguageType *>> arguments;
+    LanguageType *returnType = nullptr;
 };
 
 std::unique_ptr<Program> parse(CodegenContext *codegenCont);
