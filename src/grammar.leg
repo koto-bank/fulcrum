@@ -14,7 +14,7 @@
     LanguageType *currentlyDefiningType; \
     \
     std::unique_ptr<Program> program; \
-    bool isPublic; \
+    bool isPublic, isSigned; \
 %}
 
 # How to compile: leg grammar.leg > parser.cpp && clang++ -std=c++20 parser.cpp -o parser
@@ -91,11 +91,11 @@ BuiltInType = ( 'f32' {
 } | IntegerType
 
 IntegerType = ('i' {
-    yy->parsedType = yy->context->types.at("i32").get()
+    yy->isSigned = true;
 } | 'u' {
-    yy->parsedType = yy->context->types.at("u32").get()
+    yy->isSigned = false;
 }) < Bits > {
-    bool isSigned = ((IntegerType *)yy->parsedType)->isSigned;
+    bool isSigned = yy->isSigned;
     std::string signature = std::string(isSigned ? "i" : "u") + yytext;
     if (!yy->context->types.contains(signature)) {
        yy->context->types.emplace(signature, std::make_unique<IntegerType>(yy->context->context, std::atoi(yytext), isSigned));
