@@ -87,6 +87,7 @@ struct Statement {
 
 struct Import {
     std::string filename;
+    std::string module;
     std::vector<std::string> keywords;
 };
 
@@ -99,7 +100,14 @@ struct Module {
 
         cout << "Module " << name << "\n";
         for (const auto &import : imports) {
-            cout << "Imports " << import.filename;
+            if (!import.filename.empty()) {
+                cout << "Imports C header " << import.filename;
+            }
+
+            if (!import.module.empty()) {
+                cout << "Imports module " << import.module;
+            }
+
             if (import.keywords.empty() == false) {
                 cout << " with options: ";
                 for (const auto &kw : import.keywords) {

@@ -29,9 +29,11 @@ Import = LP ('import' -) {
     yy->program->module.imports.emplace_back();
 } (kw:Keyword {
     yy->program->module.imports.back().keywords.push_back(kw.str);
-})* file:Str RP - {
+})* (file:Str {
     yy->program->module.imports.back().filename = file.str;
-}
+} | name:Id {
+    yy->program->module.imports.back().module = name.str;
+}) RP -
 
 Struct = LP StructType Id {
     if (yy->context->types.contains(yytext)) {
