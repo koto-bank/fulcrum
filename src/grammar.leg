@@ -8,9 +8,10 @@
 #define YYSTYPE ParsedLine
 #define YY_CTX_LOCAL 1
 #define YY_CTX_MEMBERS \
-    CodegenContext *context; \
-    LanguageType *parsedType; \
-    LanguageType *currentlyDefiningType; \
+    CodegenContext *context = nullptr; \
+    LanguageType *parsedType = nullptr; \
+    LanguageType *currentlyDefiningType = nullptr; \
+    FunctionParseContext functionBeingDefined; \
     \
     std::unique_ptr<Program> program; \
     bool isPublic, isSigned; \
@@ -43,8 +44,12 @@ Struct = LP StructType Id {
     }
 
     yy->context->types.emplace(yytext, std::make_unique<StructType>(yy->context->context, yytext, decltype(StructType::fields){}, yy->isPublic));
+    assert(yy->currentlyDefiningType == nullptr);
     yy->currentlyDefiningType = yy->context->types.at(yytext).get();
-} (StructField -)* - RP
+} (StructField -)* - RP {
+    assert(yy->currentlyDefiningType != nullptr);
+    yy->currentlyDefiningType = nullptr;
+}
 
 StructType = ('struct-' -) {
     yy->isPublic = false;
@@ -54,13 +59,38 @@ StructType = ('struct-' -) {
 
 StructField = LP id:Id - Type {
     auto structTp = (StructType *)yy->currentlyDefiningType;
+    assert(yy->parsedType != nullptr);
     structTp->fields.emplace_back(id.str, yy->parsedType);
+    yy->parsedType = nullptr;
 } RP
 
-Fn = LP FnType Id ArgList Type Expr* RP
-FnType = 'fn' | 'fn-'
-ArgList = LP ArgDecl* RP
-ArgDecl = Id Type
+Fn = ( LP FnType - id:Id {
+    yy->functionBeingDefined.arguments.clear();
+    yy->functionBeingDefined.name = id.str;
+    yy->functionBeingDefined.returnType = nullptr;
+} - Type {
+    assert(yy->functionBeingDefined.returnType == nullptr);
+    yy->functionBeingDefined.returnType = yy->parsedType;
+    yy->parsedType = nullptr;
+} - ArgList - (Expr -)* RP ) {
+    const auto &fn = yy->functionBeingDefined;
+    const auto &name = fn.name;
+    yy->context->functions.emplace(name, Function(yy->context->context,
+                                                  yy->context->module,
+                                                  name,
+                                                  fn.arguments,
+                                                  fn.returnType));
+}
+FnType = ('fn-' -) {
+    yy->isPublic = false;
+} | ('fn' -) {
+    yy->isPublic = true;
+}
+
+ArgList = LP (ArgDecl -)* RP
+ArgDecl = LP name:Id - Type RP {
+   yy->functionBeingDefined.arguments.emplace_back(name.str, yy->parsedType);
+}
 
 Type = PtrType | TypeName
 PtrType = '*' - Type {
@@ -76,8 +106,9 @@ PtrType = '*' - Type {
 TypeName = BuiltInType | CustomType
 CustomType = n:Id {
     if (!yy->context->types.contains(n.str)) {
-        yy->context->unresolved_custom_types.emplace(yytext, std::make_unique<CustomType>(yy->context->context, yytext));
+        yy->context->unresolvedCustomTypes.emplace(yytext, std::make_unique<CustomType>(yy->context->context, yytext));
     }
+    assert(yy->parsedType == nullptr);
     yy->parsedType = yy->context->types.at(yytext).get();
 }
 
@@ -109,8 +140,16 @@ Var = LP 'var' Id Expr RP
 
 Alias = LP 'alias' Id Id RP
 
-Expr = LP ExpressionCont* RP
-ExpressionCont = Expr | IdStatement | Literal
+Expr = LP {
+//    yy->context->currentExpression.clear();
+} (ExpressionCont -)* RP {
+//    yy->functionBeingDefined.expressions.push_back(yy->context->currentExpression);
+}
+
+ExpressionCont = Expr | IdStatement | Literal {
+//    yy->context->currentExpression.push_back(n.str);
+}
+
 IdStatement = Id | AddrOfVar | FieldAccess | Keyword
 AddrOfVar = '&' - Id
 
@@ -119,7 +158,7 @@ Keyword = [:] < Char+ > - { $$.str = yytext; }
 Literal = Str | IntLiteral | FloatLiteral
 IntLiteral = < '-'? ( Num | Num [iu] Bits? ) > - { $$.i_num = std::atoi(yytext); }
 FloatLiteral = < '-'? Num '.' Num 'f'? > - { $$.f_num = std::atof(yytext); }
-Num = '0' | [1-9] [0-9]* -
+Num = ('0' | [1-9] [0-9]* -)
 
 FieldAccess = Id '.' Id
 

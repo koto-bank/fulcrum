@@ -164,6 +164,7 @@ struct BoolType : LanguageType {
 struct FunctionType : LanguageType {
 private:
     llvm::FunctionType *funcType;
+
 public:
     std::vector<LanguageType *> arguments;
     LanguageType *returnType;

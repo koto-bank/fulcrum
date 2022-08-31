@@ -32,6 +32,7 @@ public:
             llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
     }
 
+    const std::string &getName() const { return name; }
     FunctionType *functionType() { return type.get(); }
     llvm::Function *llvmFunction() { return function; }
 };
@@ -41,7 +42,7 @@ struct CodegenContext {
     llvm::Module &module;
 
     std::map<std::string, std::unique_ptr<LanguageType>> types;
-    std::map<std::string, std::unique_ptr<CustomType>> unresolved_custom_types;
+    std::map<std::string, std::unique_ptr<CustomType>> unresolvedCustomTypes;
 
     std::map<std::string, Function> functions;
 };
