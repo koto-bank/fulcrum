@@ -147,6 +147,32 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             return nullptr;
         }
     }
+    case CXType_FunctionProto: {
+        auto resType = clang_getResultType(clangTp);
+        LanguageType *returnType = clangToLanguageType(codegenCont, resType);
+
+        bool unknownType = returnType == nullptr;
+
+        std::vector<LanguageType *> arguments;
+        for (auto i = 0; i < clang_getNumArgTypes(clangTp); i++) {
+            auto argType = clang_getArgType(clangTp, i);
+
+            auto langArgType = clangToLanguageType(codegenCont, argType);
+            if (langArgType == nullptr) {
+                unknownType = true;
+                break;
+            }
+
+            arguments.emplace_back(std::move(langArgType));
+        }
+        if (unknownType) {
+            std::cout << "Skipped " << typeName << std::endl;
+            return nullptr;
+        }
+        result = std::make_unique<FunctionType>(context, std::move(arguments), returnType);
+
+        break;
+    }
     default:
         auto typeName = clang_getTypeSpelling(clangTp);
         std::cout << "Unknown type: " << std::string((char*)typeName.data) << " ";
