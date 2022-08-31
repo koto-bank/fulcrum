@@ -1,6 +1,5 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h"
 #include <llvm/IR/IRBuilder.h>
@@ -23,46 +22,10 @@
 #include <algorithm>
 #include <concepts>
 
+#include "parsing_types.hpp"
 #include "types.hpp"
 #include "expressions.hpp"
-
-class Function {
-    LLVMContext &context;
-    llvm::Module &module;
-    llvm::Function *function;
-
-    std::unique_ptr<FunctionType> type;
-    std::string name;
-    std::vector<std::string> argumentNames;
-public:
-    Function(LLVMContext &context, llvm::Module &module,
-             std::string name, std::vector<std::tuple<std::string, LanguageType *>> arguments,
-             LanguageType *returnType)
-        : context(context), module(module), name(name) {
-
-        std::vector<LanguageType *> argumentTypes;
-        for (auto &&[nm, tp] : arguments) {
-            argumentNames.push_back(nm);
-            argumentTypes.push_back(tp);
-        }
-        type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
-
-        auto funcType = (llvm::FunctionType*)type->llvmType();
-        function =
-            llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
-    }
-
-    FunctionType *functionType() { return type.get(); }
-    llvm::Function *llvmFunction() { return function; }
-};
-
-struct CodegenContext {
-    LLVMContext &context;
-    llvm::Module &module;
-
-    std::map<std::string, std::unique_ptr<LanguageType>> types;
-    std::map<std::string, Function> functions;
-};
+#include "codegen_context.hpp"
 
 LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     auto &context = codegenCont.context;
@@ -133,7 +96,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         if (aliasTo == nullptr)
             return nullptr;
 
-        result = std::make_unique<AliasType>(context, aliasTo);
+        result = std::make_unique<AliasType>(context, typeName, aliasTo);
         break;
     }
     case CXType_Elaborated: {
@@ -166,7 +129,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             std::string name((char*)spelling.data);
             clang_disposeString(spelling);
 
-            result = std::make_unique<StructType>(context, name, data.fields);
+            result = std::make_unique<StructType>(context, name, data.fields, true);
             break;
         } else {
             auto spelling = clang_getTypeKindSpelling(namedType.kind);
@@ -287,10 +250,21 @@ int main() {
     llvm::Module module("main", context);
 
     CodegenContext codegenCont = { .context = context, .module = module };
-    parseHeader(codegenCont, "/usr/include/stdio.h");
 
-    IntegerConstant x(codegenCont.types["int"].get(), 10l);
+    //parseHeader(codegenCont, "/usr/include/stdio.h");
 
+    codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Float));
+    codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Double));
+    codegenCont.types.emplace("void", std::make_unique<VoidType>(codegenCont.context));
+    codegenCont.types.emplace("bool", std::make_unique<BoolType>(codegenCont.context));
+    codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont.context, 32, true));
+    codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont.context, 32, false));
+
+    parse(&codegenCont);
+
+    //IntegerConstant x(codegenCont.types["int"].get(), 10l);
+
+        /*
     llvm::FunctionType *type = llvm::FunctionType::get(Type::getInt32Ty(context), std::vector<Type*>(), false);
     llvm::Function *f = llvm::Function::Create(type, llvm::Function::ExternalLinkage, "main", module);
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", f);
@@ -303,6 +277,7 @@ int main() {
     auto &intType = codegenCont.types.at("int");
 
     builder.CreateCall((llvm::FunctionType*)puts.functionType()->llvmType(), puts.llvmFunction(), { strToPut.llvmValue() });
+    */
 
     /*
     auto &rand = codegenCont.functions.at("rand");
@@ -315,9 +290,9 @@ int main() {
     auto res = builder.CreateCall(rand.llvmFunction()->getFunctionType(), rand.llvmFunction(), args, "result");
     */
 
-    builder.CreateRet(x.llvmValue());
+    //builder.CreateRet(x.llvmValue());
 
-    llvm::errs() << module;
+    //llvm::errs() << module;
 
     // Object file generation
     /*

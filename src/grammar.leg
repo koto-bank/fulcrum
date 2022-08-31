@@ -8,8 +8,12 @@
 #define YYSTYPE ParsedLine
 #define YY_CTX_LOCAL 1
 #define YY_CTX_MEMBERS \
+    CodegenContext *context; \
+    LanguageType *parsedType; \
+    LanguageType *currentlyDefiningType; \
+    \
     std::unique_ptr<Program> program; \
-    std::unique_ptr<TypeStorage> type;
+    bool isPublic, isSigned; \
 %}
 
 # How to compile: leg grammar.leg > parser.cpp && clang++ -std=c++20 parser.cpp -o parser
@@ -29,25 +33,26 @@ Import = LP ('import' -) {
     yy->program->module.imports.back().filename = file.str;
 }
 
-Struct = LP StructType CustomType {
-    auto typePtr = yy->type->consume();
-    auto type = typePtr->as<CustomType>();
-    yy->program->statements.back()->as<Struct>()->type.name = type->name;
+Struct = LP StructType Id {
+    if (yy->context->types.contains(yytext)) {
+      // TODO: Error, struct already defined
+      printf("Struct %s redefined", yytext);
+      return;
+    }
+
+    yy->context->types.emplace(yytext, std::make_unique<StructType>(yy->context->context, yytext, decltype(StructType::fields){}, yy->isPublic));
+    yy->currentlyDefiningType = yy->context->types.at(yytext).get();
 } (StructField -)* - RP
 
 StructType = ('struct-' -) {
-    yy->program->statements.emplace_back(std::make_unique<Struct>(false));
+    yy->isPublic = false;
 } | ('struct' -) {
-    yy->program->statements.emplace_back(std::make_unique<Struct>(true));
+    yy->isPublic = true;
 }
 
-StructField = LP id:Id {
-    StructField field;
-    field.name = id.str;
-    yy->program->statements.back()->as<Struct>()->fields.push_back(std::move(field));
-} - Type {
-    yy->program->statements.back()->as<Struct>()->fields.back().type =
-      std::move(yy->type->consume());
+StructField = LP id:Id - Type {
+    auto structTp = (StructType *)yy->currentlyDefiningType;
+    structTp->fields.emplace_back(id.str, yy->parsedType);
 } RP
 
 Fn = LP FnType Id ArgList Type Expr* RP
@@ -56,36 +61,46 @@ ArgList = LP ArgDecl* RP
 ArgDecl = Id Type
 
 Type = PtrType | TypeName
-PtrType = '*' {
-    yy->type->addType(std::make_unique<PtrType>());
-} - Type
+PtrType = '*' - Type {
+    auto pointeeName = yy->parsedType->signature();
+    auto ptrName = pointeeName + "*";
+    // If such a pointer type already exists, use it. Otherwise add it
+    if (!yy->context->types.contains(ptrName)) {
+        yy->context->types.emplace(ptrName, std::make_unique<PointerType>(yy->context->context, yy->parsedType));
+    }
+    yy->parsedType = yy->context->types.at(ptrName).get();
+}
 
 TypeName = BuiltInType | CustomType
 CustomType = n:Id {
-    yy->type->addType(std::make_unique<CustomType>());
-    yy->type->as<CustomType>()->name = n.str;
+    if (!yy->context->types.contains(n.str)) {
+        yy->context->unresolved_custom_types.emplace(yytext, std::make_unique<CustomType>(yy->context->context, yytext));
+    }
+    yy->parsedType = yy->context->types.at(yytext).get();
 }
 
 BuiltInType = ( 'f32' {
-    yy->type->addType(std::make_unique<FloatType>());
-    yy->type->as<FloatType>()->is_double = false;
+    yy->parsedType = yy->context->types.at("f32").get();
 } | 'f64' {
-    yy->type->addType(std::make_unique<FloatType>());
-    yy->type->as<FloatType>()->is_double = true;
+    yy->parsedType = yy->context->types.at("f64").get();
 }) | 'void' {
-    yy->type->addType(std::make_unique<VoidType>());
+    yy->parsedType = yy->context->types.at("void").get()
 } | 'bool' {
-    yy->type->addType(std::make_unique<BoolType>());
+    yy->parsedType = yy->context->types.at("bool").get()
 } | IntegerType
 
 IntegerType = ('i' {
-    yy->type->addType(std::make_unique<IntegerType>());
-    yy->type->as<IntegerType>()->is_signed = true;
+    yy->isSigned = true;
 } | 'u' {
-    yy->type->addType(std::make_unique<IntegerType>());
-    yy->type->as<IntegerType>()->is_signed = false;
+    yy->isSigned = false;
 }) < Bits > {
-    yy->type->as<IntegerType>()->bits = std::atoi(yytext);
+    bool isSigned = yy->isSigned;
+    std::string signature = std::string(isSigned ? "i" : "u") + yytext;
+    if (!yy->context->types.contains(signature)) {
+       yy->context->types.emplace(signature, std::make_unique<IntegerType>(yy->context->context, std::atoi(yytext), isSigned));
+    }
+    yy->parsedType = yy->context->types.at(signature).get();
+
 }
 Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
 Var = LP 'var' Id Expr RP
@@ -120,23 +135,23 @@ Eof = !.
 
 %%
 
-int main(void) {
+std::unique_ptr<Program> parse(CodegenContext *codegenCont) {
     printf("Parsing started\n");
 
     yycontext yy;
     memset(&yy, 0, sizeof(yy));
     yy.program = std::make_unique<Program>();
-    yy.type = std::make_unique<TypeStorage>();
+    yy.context = codegenCont;
 
     while(yyparse(&yy)) {
         printf("success!\n");
     }
     printf("Parsing finished\n");
 
-    yy.program->print();
-    yy.program.release();
-    yy.type.release();
-
+    auto program = std::move(yy.program);
     yyrelease(&yy);
-    return 0;
+
+    program->print();
+
+    return std::move(program);
 }
