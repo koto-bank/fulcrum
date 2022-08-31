@@ -1,9 +1,10 @@
 #pragma once
 
-#include "types.hpp"
 #include <string>
 #include <vector>
 #include <iostream>
+
+#include "codegen_context.hpp"
 
 enum class TypeKind {
     Integer,
@@ -130,3 +131,5 @@ union ParsedLine {
     double f_num;
     char *str;
 };
+
+std::unique_ptr<Program> parse(CodegenContext *codegenCont);

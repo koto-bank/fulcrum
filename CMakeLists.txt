@@ -12,6 +12,7 @@ find_package(Clang REQUIRED)
 
 add_executable(fulcrum
   "src/main.cpp")
+target_include_directories(fulcrum PUBLIC "src")
 
 target_include_directories(fulcrum PUBLIC
   ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
@@ -26,10 +27,9 @@ target_link_libraries(fulcrum LLVM libclang ${llvm_libs})
 set(GRAMMAR_DIR "${CMAKE_BINARY_DIR}/grammar")
 file(MAKE_DIRECTORY ${GRAMMAR_DIR})
 add_custom_command(
-  OUTPUT "${GRAMMAR_DIR}/grammar.hpp"
+  OUTPUT "${GRAMMAR_DIR}/generated_parser.cpp"
   DEPENDS ${CMAKE_SOURCE_DIR}/src/grammar.leg
-  COMMAND leg -o ${GRAMMAR_DIR}/grammar.hpp ${CMAKE_SOURCE_DIR}/src/grammar.leg
+  COMMAND leg -o ${GRAMMAR_DIR}/generated_parser.cpp ${CMAKE_SOURCE_DIR}/src/grammar.leg
 )
-add_custom_target(grammar DEPENDS "${GRAMMAR_DIR}/grammar.hpp")
-target_include_directories(fulcrum PUBLIC "src" ${GRAMMAR_DIR})
-add_dependencies(fulcrum grammar)
+
+target_sources(fulcrum PUBLIC "${GRAMMAR_DIR}/generated_parser.cpp")

@@ -4,7 +4,6 @@
 #include <memory>
 
 #include "parsing_types.hpp"
-#include "codegen_context.hpp"
 
 #define YYSTYPE ParsedLine
 #define YY_CTX_LOCAL 1
