@@ -103,6 +103,14 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         auto namedType = clang_Type_getNamedType(clangTp);
 
         if (namedType.kind == CXType_Record) {
+            auto spelling = clang_getCursorDisplayName(clang_getTypeDeclaration(namedType));
+            std::string name((char*)spelling.data);
+            clang_disposeString(spelling);
+
+            // Create and insert the type early, in case the type is recursive
+            result = std::make_unique<StructType>(context, name, decltype(StructType::fields){}, true);
+            codegenCont.types[typeName] = std::move(result);
+
             struct VisitData {
                 CodegenContext &codegenContext;
                 std::vector<std::tuple<std::string, LanguageType *>> fields;
@@ -124,12 +132,10 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
                 },
                 &data
             );
+            // Now insert the fields into the struct
+            ((StructType*)codegenCont.types[typeName].get())->fields =
+                std::move(data.fields);
 
-            auto spelling = clang_getCursorDisplayName(clang_getTypeDeclaration(namedType));
-            std::string name((char*)spelling.data);
-            clang_disposeString(spelling);
-
-            result = std::make_unique<StructType>(context, name, data.fields, true);
             break;
         } else {
             auto spelling = clang_getTypeKindSpelling(namedType.kind);
@@ -155,7 +161,10 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         return nullptr;
     }
 
-    codegenCont.types[typeName] = std::move(result);
+    // Check if the type hasn't been added early
+    if (!codegenCont.types.contains(typeName))
+        codegenCont.types[typeName] = std::move(result);
+
     return codegenCont.types[typeName].get();
 }
 
