@@ -30,6 +30,9 @@ public:
         auto funcType = (llvm::FunctionType*)type->llvmType();
         function =
             llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
+
+        for (auto i = 0; i < function->arg_size(); i++)
+            function->getArg(i)->setName(argumentNames[i]);
     }
 
     const std::string &getName() const { return name; }
