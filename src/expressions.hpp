@@ -2,7 +2,9 @@
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IRBuilder.h"
 
+#include "codegen_context.hpp"
 #include "types.hpp"
 
 #include <iostream>
@@ -12,13 +14,14 @@ using llvm::Type;
 
 struct Expression {
 protected:
-    LanguageType *type = nullptr;
     llvm::Value *value = nullptr;
 public:
+    LanguageType *type = nullptr;
+
     Expression(LanguageType *type) : type(type) { }
 
     Type *llvmType() { return type->llvmType(); }
-    virtual llvm::Value *llvmValue() { return value; }
+    virtual llvm::Value *llvmValue(llvm::IRBuilder<> &builder) { return value; }
 
     virtual ~Expression() = default;
 };
@@ -70,7 +73,7 @@ public:
         );
     }
 
-    llvm::Value *llvmValue() override {
+    llvm::Value *llvmValue(llvm::IRBuilder<> &builder) override {
         auto Zero = llvm::ConstantInt::get(Type::getInt32Ty(type->llvmType()->getContext()), 0);
         llvm::Constant *Indices[] = {Zero, Zero};
         return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
@@ -83,5 +86,41 @@ public:
 
     BoolConstant(LanguageType *type, bool constValue) : Expression(type), constValue(constValue) {
         value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
+    }
+};
+
+struct FunctionCall : Expression {
+private:
+    CodegenContext &context;
+
+public:
+    std::string name;
+    std::vector<std::unique_ptr<Expression>> args;
+
+    FunctionCall(CodegenContext &codegenCont, std::string name, std::vector<std::unique_ptr<Expression>> &&args)
+        // Initialize type with nullptr for now, since we don't know the return type yet
+        : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
+
+    llvm::Value *llvmValue(llvm::IRBuilder<> &builder) override {
+        if (!context.functions.contains(name)) {
+            // TODO: error here
+        }
+        auto &calledFunction = context.functions.at(name);
+
+        std::vector<llvm::Value *> argValues;
+        for (auto i = 0; i < args.size(); i++) {
+            LanguageType *argType = args[i]->type;
+            LanguageType *expectedType = calledFunction.functionType()->arguments[i];
+            if (argType->llvmType() != expectedType->llvmType()) {
+                std::cout << "Incompatible argument type in " << name << ": "
+                          << "for argument #" << i << " expected " << expectedType->signature()
+                          << ", but received " << argType->signature();
+                // TODO: error here
+                return nullptr;
+            }
+            argValues.push_back(args[i]->llvmValue(builder));
+        }
+
+        return builder.CreateCall(calledFunction.llvmFunction(), argValues);
     }
 };

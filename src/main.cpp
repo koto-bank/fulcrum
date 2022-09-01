@@ -299,19 +299,31 @@ int main() {
 
     //IntegerConstant x(codegenCont.types["int"].get(), 10l);
 
-        /*
-    llvm::FunctionType *type = llvm::FunctionType::get(Type::getInt32Ty(context), std::vector<Type*>(), false);
-    llvm::Function *f = llvm::Function::Create(type, llvm::Function::ExternalLinkage, "main", module);
-    llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", f);
+    /*
+    {
+        std::vector<std::tuple<std::string, LanguageType *>> testArgs {
+            { "x", codegenCont.types["i32"].get() }
+        };
+        Function testF(context, module, "test", std::move(testArgs), codegenCont.types["i32"].get());
+        llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", testF.llvmFunction());
+
+        builder.SetInsertPoint(bb);
+        builder.CreateRet(testF.llvmFunction()->getArg(0));
+
+        codegenCont.functions.emplace("test", std::move(testF));
+    }
+
+    std::vector<std::tuple<std::string, LanguageType *>> mainArgs;
+    Function mainF(context, module, "main", std::move(mainArgs), codegenCont.types["i32"].get());
+
+    llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", mainF.llvmFunction());
 
     builder.SetInsertPoint(bb);
+    std::vector<std::unique_ptr<Expression>> fCallArgs;
+    fCallArgs.push_back(std::make_unique<IntegerConstant>(codegenCont.types["i32"].get(), 123l));
 
-    auto &puts = codegenCont.functions.at("puts");
-    auto strToPut = StringConstant(module, codegenCont.types.at("char *").get(), "A string to print");
-    auto &charType = codegenCont.types.at("char");
-    auto &intType = codegenCont.types.at("int");
-
-    builder.CreateCall((llvm::FunctionType*)puts.functionType()->llvmType(), puts.llvmFunction(), { strToPut.llvmValue() });
+    auto fCall = FunctionCall(codegenCont, "test", std::move(fCallArgs));
+    builder.CreateRet(fCall.llvmValue(builder));
     */
 
     /*
