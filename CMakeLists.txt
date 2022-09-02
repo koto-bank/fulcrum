@@ -11,7 +11,8 @@ find_package(LLVM REQUIRED)
 find_package(Clang REQUIRED)
 
 add_executable(fulcrum
-  "src/main.cpp")
+  "src/main.cpp"
+  "src/codegen_context.cpp")
 target_include_directories(fulcrum PUBLIC "src")
 
 target_include_directories(fulcrum PUBLIC
@@ -33,3 +34,6 @@ add_custom_command(
 )
 
 target_sources(fulcrum PUBLIC "${GRAMMAR_DIR}/generated_parser.cpp")
+
+add_subdirectory(deps/fmt)
+target_link_libraries(fulcrum fmt)

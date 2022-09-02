@@ -17,12 +17,14 @@ class Function {
     std::string name;
     std::vector<std::string> argumentNames;
     std::vector<std::unique_ptr<Expression>> body;
-
 public:
+    bool isPublic;
+
     Function(LLVMContext &context, llvm::Module &module,
              const std::string &name, const std::vector<std::tuple<std::string, LanguageType *>> &arguments,
-             LanguageType *returnType, std::vector<std::unique_ptr<Expression>> &&body)
-        : context(context), module(module), name(name), body(std::move(body)) {
+             LanguageType *returnType, std::vector<std::unique_ptr<Expression>> &&body,
+             bool isPublic)
+        : context(context), module(module), name(name), body(std::move(body)), isPublic(isPublic) {
 
         std::vector<LanguageType *> argumentTypes;
         for (auto &&[nm, tp] : arguments) {
@@ -42,6 +44,8 @@ public:
     const std::string &getName() const { return name; }
     FunctionType *functionType() { return type.get(); }
     llvm::Function *llvmFunction() { return function; }
+
+    std::string dump();
 };
 
 struct CodegenContext {

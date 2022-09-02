@@ -4,6 +4,8 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 
+#include "fmt/format.h"
+
 #include "codegen_context.hpp"
 #include "types.hpp"
 
@@ -16,6 +18,10 @@ struct Expression {
 protected:
     llvm::Value *value = nullptr;
 
+    std::string indentSpaces(int n) {
+        return fmt::format("{: >{}}", "", n);
+    }
+
 public:
     LanguageType *type = nullptr;
 
@@ -23,6 +29,7 @@ public:
 
     Type *llvmType() { return type->llvmType(); }
     virtual llvm::Value *llvmValue(llvm::IRBuilder<> &builder) { return value; }
+    virtual std::string dump(int indent = 0) = 0;
 
     virtual ~Expression() = default;
 };
@@ -40,6 +47,17 @@ struct IntegerConstant : Expression {
         }
         value = llvm::ConstantInt::get(type->llvmType(), constValue);
     }
+
+    std::string dump(int indent) override {
+        auto isSigned = ((IntegerType*)type)->isSigned;
+
+        return fmt::format(
+            "{}{}{}",
+            indentSpaces(indent),
+            isSigned ? std::get<long>(constValue) : std::get<unsigned long>(constValue),
+            type->signature()
+        );
+    }
 };
 
 template<typename T>
@@ -55,6 +73,17 @@ struct FloatConstant : Expression {
             return;
         }
         value = llvm::ConstantFP::get(type->llvmType(), apFloat);
+    }
+
+    std::string dump(int indent) override {
+        auto floatbits = ((FloatType*)type)->bits;
+
+        return fmt::format(
+            "{}{}{}",
+            indentSpaces(indent),
+            floatbits == FloatType::Bits::Double ? std::get<double>(constValue) : std::get<float>(constValue),
+            type->signature()
+        );
     }
 };
 
@@ -80,6 +109,10 @@ public:
         llvm::Constant *Indices[] = {Zero, Zero};
         return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
     }
+
+    std::string dump(int indent) override {
+        return fmt::format("{}\"{}\"", indentSpaces(indent), constValue);
+    }
 };
 
 struct BoolConstant : Expression {
@@ -88,6 +121,10 @@ public:
 
     BoolConstant(LanguageType *type, bool constValue) : Expression(type), constValue(constValue) {
         value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
+    }
+
+    std::string dump(int indent) override {
+        return fmt::format("{}{}", indentSpaces(indent), constValue);
     }
 };
 
@@ -114,9 +151,9 @@ public:
             LanguageType *argType = args[i]->type;
             LanguageType *expectedType = calledFunction.functionType()->arguments[i];
             if (argType->llvmType() != expectedType->llvmType()) {
-                std::cout << "Incompatible argument type in " << name << ": "
-                          << "for argument #" << i << " expected " << expectedType->signature()
-                          << ", but received " << argType->signature();
+                std::cout <<
+                    fmt::format("Incompatible argument type in {}: for argument #{} "
+                                " expected {}, but received {}", name, i, expectedType->signature(), argType->signature());
                 // TODO: error here
                 return nullptr;
             }
@@ -124,6 +161,14 @@ public:
         }
 
         return builder.CreateCall(calledFunction.llvmFunction(), argValues);
+    }
+
+    std::string dump(int indent) override {
+        std::vector<std::string> argDumps;
+        for (auto &arg : args)
+            argDumps.push_back(arg->dump());
+
+        return fmt::format("{}({} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
     }
 };
 
@@ -136,4 +181,8 @@ public:
 
     VarAccess(CodegenContext &codegenCont, const std::string& name)
         : Expression(nullptr), context(codegenCont), name(name) { }
+
+    std::string dump(int indent) override {
+        return fmt::format("{}{}", indentSpaces(indent), name);
+    }
 };
