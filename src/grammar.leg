@@ -89,7 +89,8 @@ Fn = ( LP FnType - id:Id {
                                                   name,
                                                   fn.arguments,
                                                   fn.returnType,
-                                                  std::move(fn.body)));
+                                                  std::move(fn.body),
+                                                  yy->isPublic));
 }
 
 FnType = ('fn-' -) {
