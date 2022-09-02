@@ -6,6 +6,8 @@
 
 #include "types.hpp"
 
+struct Expression;
+
 class Function {
     LLVMContext &context;
     llvm::Module &module;
@@ -14,11 +16,13 @@ class Function {
     std::unique_ptr<FunctionType> type;
     std::string name;
     std::vector<std::string> argumentNames;
+    std::vector<std::unique_ptr<Expression>> body;
+
 public:
     Function(LLVMContext &context, llvm::Module &module,
-             std::string name, std::vector<std::tuple<std::string, LanguageType *>> arguments,
-             LanguageType *returnType)
-        : context(context), module(module), name(name) {
+             const std::string &name, const std::vector<std::tuple<std::string, LanguageType *>> &arguments,
+             LanguageType *returnType, std::vector<std::unique_ptr<Expression>> &&body)
+        : context(context), module(module), name(name), body(std::move(body)) {
 
         std::vector<LanguageType *> argumentTypes;
         for (auto &&[nm, tp] : arguments) {

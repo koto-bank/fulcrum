@@ -15,6 +15,7 @@ using llvm::Type;
 struct Expression {
 protected:
     llvm::Value *value = nullptr;
+
 public:
     LanguageType *type = nullptr;
 
@@ -60,10 +61,11 @@ struct FloatConstant : Expression {
 struct StringConstant : Expression {
 private:
     llvm::GlobalVariable *llvmConst;
+
 public:
     std::string constValue;
 
-    StringConstant(llvm::Module &mod, LanguageType *type, std::string constValue) : Expression(type), constValue(constValue) {
+    StringConstant(llvm::Module &mod, LanguageType *type, const std::string& constValue) : Expression(type), constValue(constValue) {
         auto constStr = llvm::ConstantDataArray::getString(type->llvmType()->getContext(), constValue.data());
 
         // New here is overriden in llvm, so supposedly it's not just allocating on the heap
@@ -123,4 +125,15 @@ public:
 
         return builder.CreateCall(calledFunction.llvmFunction(), argValues);
     }
+};
+
+struct VarAccess : Expression {
+private:
+    CodegenContext &context;
+
+public:
+    std::string name;
+
+    VarAccess(CodegenContext &codegenCont, const std::string& name)
+        : Expression(nullptr), context(codegenCont), name(name) { }
 };

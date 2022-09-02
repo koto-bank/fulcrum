@@ -5,55 +5,7 @@
 #include <iostream>
 
 #include "codegen_context.hpp"
-
-struct Expr;
-struct ExprContents {
-    std::string id;
-    Expr *expr;
-};
-
-struct Expr {
-    ExprContents expr;
-};
-
-struct LiteralContents {
-    std::string str;
-//    FloatValue f;
-//    IntegerValue i;
-};
-
-struct Literal {
-    LiteralContents value;
-};
-
-struct IntegerValue {
-    IntegerType type;
-    long value;
-};
-
-struct FloatValue {
-    FloatType type;
-    double value;
-};
-
-struct Var {
-    char *name;
-    bool global;
-    std::unique_ptr<Type> type;
-    Expr initializer;
-};
-
-struct Alias {
-    char *alias_name;
-    char *target_type;
-};
-
-struct Fn {
-    bool is_public;
-    char *name;
-//    Arg **args;
-    Expr **body;
-};
+#include "expressions.hpp"
 
 struct Statement {
     virtual ~Statement() = default;
@@ -118,16 +70,22 @@ struct Program {
 };
 
 union ParsedLine {
-    long i_num;
-    double f_num;
+    long iNum;
+    double fNum;
     char *str;
+    bool boolConst;
 };
 
-struct FunctionParseContext
-{
+struct FunctionParseContext {
     std::string name;
     std::vector<std::tuple<std::string, LanguageType *>> arguments;
     LanguageType *returnType = nullptr;
+    std::vector<std::unique_ptr<Expression>> body;
+};
+
+struct FunctionCallParseContext {
+    std::string name;
+    std::vector<std::unique_ptr<Expression>> args;
 };
 
 std::unique_ptr<Program> parse(CodegenContext *codegenCont);
