@@ -12,6 +12,8 @@
     LanguageType *parsedType = nullptr; \
     LanguageType *currentlyDefiningType = nullptr; \
     FunctionParseContext functionBeingDefined; \
+    FunctionCallParseContext functionCallBeingDefined; \
+    std::unique_ptr<Expression> expressionBeingDefined; \
     \
     std::unique_ptr<Program> program; \
     bool isPublic, isSigned; \
@@ -25,6 +27,8 @@ Statement = Struct | Var | Alias | Fn
 Module = LP ('module' -) m:Id {
     yy->program->module.name = m.str;
 } Import* RP
+
+Keyword = [:] < Char+ > - { $$.str = yytext; }
 
 Import = LP ('import' -) {
     yy->program->module.imports.emplace_back();
@@ -72,15 +76,22 @@ Fn = ( LP FnType - id:Id {
     assert(yy->functionBeingDefined.returnType == nullptr);
     yy->functionBeingDefined.returnType = yy->parsedType;
     yy->parsedType = nullptr;
-} - ArgList - (Expr -)* RP ) {
-    const auto &fn = yy->functionBeingDefined;
+} - ArgList - (Expr {
+    auto &fn = yy->functionBeingDefined;
+    assert(yy->expressionBeingDefined != nullptr);
+    std::cout << "Adding new expr to fn body!\n";
+    fn.body.push_back(std::move(yy->expressionBeingDefined));
+} -)* RP ) {
+    auto &fn = yy->functionBeingDefined;
     const auto &name = fn.name;
     yy->context->functions.emplace(name, Function(yy->context->context,
                                                   yy->context->module,
                                                   name,
                                                   fn.arguments,
-                                                  fn.returnType));
+                                                  fn.returnType,
+                                                  std::move(fn.body)));
 }
+
 FnType = ('fn-' -) {
     yy->isPublic = false;
 } | ('fn' -) {
@@ -133,34 +144,49 @@ IntegerType = ('i' {
        yy->context->types.emplace(signature, std::make_unique<IntegerType>(yy->context->context, std::atoi(yytext), isSigned));
     }
     yy->parsedType = yy->context->types.at(signature).get();
-
 }
 Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
 Var = LP 'var' Id Expr RP
 
 Alias = LP 'alias' Id Id RP
 
-Expr = LP {
-//    yy->context->currentExpression.clear();
-} (ExpressionCont -)* RP {
-//    yy->functionBeingDefined.expressions.push_back(yy->context->currentExpression);
+Expr = FnCall | IdExpr | Literal | FieldAccess
+
+FnCall = LP id:Id {
+    yy->functionCallBeingDefined.name = id.str;
+} - (Expr {
+    yy->functionCallBeingDefined.args.push_back(std::move(yy->expressionBeingDefined));
+} -)* RP {
+    auto& fnDef = yy->functionCallBeingDefined;
+    auto fnCall = std::make_unique<FunctionCall>(*yy->context, fnDef.name, std::move(fnDef.args));
+    yy->expressionBeingDefined = std::move(fnCall);
 }
 
-ExpressionCont = Expr | IdStatement | Literal {
-//    yy->context->currentExpression.push_back(n.str);
+IdExpr = Id | AddrOfVar
+AddrOfVar = '&' - IdExpr
+
+Literal = c:Str {
+    if (!yy->context->types.contains("str")) {
+        yy->context->types.emplace("str", std::make_unique<StringType>(yy->context->context));
+    }
+    yy->expressionBeingDefined = std::make_unique<StringConstant>(yy->context->module,
+                                                                  yy->context->types.at("str").get(),
+                                                                  c.str);
+} | i:IntLiteral {
+} | f:FloatLiteral {
+} | b:BoolLiteral {
+    auto t = yy->context->types.at("bool").get();
+    assert(t != nullptr);
+    yy->expressionBeingDefined = std::make_unique<BoolConstant>(t, $$.boolConst);
 }
 
-IdStatement = Id | AddrOfVar | FieldAccess | Keyword
-AddrOfVar = '&' - Id
-
-Keyword = [:] < Char+ > - { $$.str = yytext; }
-
-Literal = Str | IntLiteral | FloatLiteral
-IntLiteral = < '-'? ( Num | Num [iu] Bits? ) > - { $$.i_num = std::atoi(yytext); }
-FloatLiteral = < '-'? Num '.' Num 'f'? > - { $$.f_num = std::atof(yytext); }
+IntLiteral = < '-'? ( Num | Num > [iu] Bits? ) - { $$.iNum = std::atoi(yytext); }
+FloatLiteral = < '-'? Num '.' Num > 'f'? - { $$.fNum = std::atof(yytext); }
+BoolLiteral = 'false' { $$.boolConst = false; } | 'true' { $$.boolConst = true; }
 Num = ('0' | [1-9] [0-9]* -)
 
-FieldAccess = Id '.' Id
+FieldAccess = FieldTarget Id
+FieldTarget = Id - '.'
 
 LP = '(' -
 RP = - ')'
@@ -185,14 +211,11 @@ std::unique_ptr<Program> parse(CodegenContext *codegenCont) {
     yy.context = codegenCont;
 
     while(yyparse(&yy)) {
-        printf("success!\n");
+        printf("---- ---- ---- success! ---- ---- ---\n");
     }
     printf("Parsing finished\n");
-
     auto program = std::move(yy.program);
     yyrelease(&yy);
-
     program->print();
-
     return std::move(program);
 }
