@@ -10,6 +10,7 @@ using llvm::Type;
 struct LanguageType {
 protected:
     LLVMContext &context;
+
 public:
     virtual Type* llvmType() = 0;
     virtual std::string signature() = 0;
@@ -90,11 +91,13 @@ struct AliasType : CustomType {
 struct StructType : CustomType {
 private:
     llvm::StructType *structType;
+
 public:
-    std::vector<std::tuple<std::string, LanguageType *>> fields;
+    using Fields = std::vector<std::tuple<std::string, LanguageType *>>;
+    Fields fields;
     bool isPublic;
 
-    StructType(LLVMContext &context, std::string name, decltype(fields) fields_, bool isPublic)
+    StructType(LLVMContext &context, std::string name, const Fields &fields_, bool isPublic)
         : CustomType(context, name), fields(fields_), isPublic(isPublic) {
         std::vector<Type *> fieldTypes;
         std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {

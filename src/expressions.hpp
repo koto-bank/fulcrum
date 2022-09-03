@@ -35,28 +35,28 @@ public:
 };
 
 template<typename T>
-concept IsLongInteger = std::same_as<T, long> || std::same_as<T, unsigned long>;
+concept IsLongInteger = std::same_as<T, uint64_t> || std::same_as<T, int64_t>;
 
 struct IntegerConstant : Expression {
-    std::variant<long, unsigned long> constValue;
+    std::variant<uint64_t, int64_t> constValue;
 
-    IntegerConstant(LanguageType *type, IsLongInteger auto constValue) : Expression(type), constValue(constValue) {
-        if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), constValue)) {
+    IntegerConstant(IntegerType *type, IsLongInteger auto _constValue) : Expression(type), constValue(_constValue) {
+        if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
             std::cout << "Integer " << value << "does not fit into its type" << std::endl;
             return;
         }
-        value = llvm::ConstantInt::get(type->llvmType(), constValue);
+
+        value = llvm::ConstantInt::get(type->llvmType(), _constValue);
     }
 
     std::string dump(int indent) override {
-        auto isSigned = ((IntegerType*)type)->isSigned;
+        auto isSigned = static_cast<IntegerType *>(type)->isSigned;
 
-        return fmt::format(
-            "{}{}{}",
-            indentSpaces(indent),
-            isSigned ? std::get<long>(constValue) : std::get<unsigned long>(constValue),
-            type->signature()
-        );
+        return isSigned
+            ? fmt::format(
+                "{}{}{}", indentSpaces(indent), std::get<int64_t>(constValue), type->signature())
+            : fmt::format(
+                "{}{}{}", indentSpaces(indent), std::get<uint64_t>(constValue), type->signature());
     }
 };
 
@@ -94,7 +94,7 @@ private:
 public:
     std::string constValue;
 
-    StringConstant(llvm::Module &mod, LanguageType *type, const std::string& constValue) : Expression(type), constValue(constValue) {
+    StringConstant(LanguageType *type, llvm::Module &mod, const std::string& constValue) : Expression(type), constValue(constValue) {
         auto constStr = llvm::ConstantDataArray::getString(type->llvmType()->getContext(), constValue.data());
 
         // New here is overriden in llvm, so supposedly it's not just allocating on the heap
@@ -136,6 +136,9 @@ public:
     std::string name;
     std::vector<std::unique_ptr<Expression>> args;
 
+    FunctionCall(CodegenContext &codegenCont, std::string name)
+        : Expression(nullptr), context(codegenCont), name(name) { }
+
     FunctionCall(CodegenContext &codegenCont, std::string name, std::vector<std::unique_ptr<Expression>> &&args)
         // Initialize type with nullptr for now, since we don't know the return type yet
         : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
@@ -165,8 +168,13 @@ public:
 
     std::string dump(int indent) override {
         std::vector<std::string> argDumps;
-        for (auto &arg : args)
-            argDumps.push_back(arg->dump());
+        for (auto &arg : args) {
+            if (arg != nullptr) {
+                argDumps.push_back(arg->dump());
+            } else {
+                argDumps.push_back("nullptr");
+            }
+        }
 
         return fmt::format("{}({} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
     }

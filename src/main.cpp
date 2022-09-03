@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <concepts>
 
-#include "parsing_types.hpp"
+#include "parse_context.hpp"
 #include "types.hpp"
 #include "expressions.hpp"
 #include "codegen_context.hpp"
@@ -295,8 +295,24 @@ int main() {
     codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont.context, 32, true));
     codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont.context, 32, false));
 
-    parse(&codegenCont);
+    if (!parse(&codegenCont)) {
+        std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
+        return 1;
+    }
 
+    std::cout << "Module " << codegenCont.moduleName << std::endl;
+    std::cout << "Imports: " << std::endl;
+    for (const auto &i : codegenCont.imports) {
+        std::cout << i.target;
+        if (!i.keywords.empty()) {
+            std::cout << " keywords:";
+        }
+
+        for (const auto &kw : i.keywords) {
+            std::cout << ' ' << kw;
+        }
+        std::cout << std::endl;
+    }
     std::cout << codegenCont.functions.at("main").dump() << std::endl;
 
     //IntegerConstant x(codegenCont.types["int"].get(), 10l);
