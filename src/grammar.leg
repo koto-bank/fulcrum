@@ -3,185 +3,215 @@
 #include <stdlib.h>
 #include <memory>
 
-#include "parsing_types.hpp"
+#include <csignal>
+
+#include "parse_context.hpp"
 
 #define YYSTYPE ParsedLine
 #define YY_CTX_LOCAL 1
 #define YY_CTX_MEMBERS \
-    CodegenContext *context = nullptr; \
-    LanguageType *parsedType = nullptr; \
-    LanguageType *currentlyDefiningType = nullptr; \
-    FunctionParseContext functionBeingDefined; \
-    FunctionCallParseContext functionCallBeingDefined; \
-    std::unique_ptr<Expression> expressionBeingDefined; \
-    \
-    std::unique_ptr<Program> program; \
-    bool isPublic, isSigned; \
+    CodegenContext *code = nullptr; \
+    std::unique_ptr<ParseContext> ctx;
 %}
 
-# How to compile: leg grammar.leg > parser.cpp && clang++ -std=c++20 parser.cpp -o parser
-# Then echo test file to parser's stdin: cat tests/simple.fn | parser
-
 Program = - Module - (Statement -)* Eof
+
 Statement = Struct | Var | Alias | Fn
+
 Module = LP ('module' -) m:Id {
-    yy->program->module.name = m.str;
+    yy->code->moduleName = m.str;
 } Import* RP
 
 Keyword = [:] < Char+ > - { $$.str = yytext; }
 
-Import = LP ('import' -) {
-    yy->program->module.imports.emplace_back();
-} (kw:Keyword {
-    yy->program->module.imports.back().keywords.push_back(kw.str);
+Import = LP 'import' {
+    yy->ctx->import = std::make_unique<Import>();
+} - (kw:Keyword {
+    yy->ctx->import->keywords.push_back(kw.str);
 })* (file:Str {
-    yy->program->module.imports.back().filename = file.str;
+    yy->ctx->import->target = file.str;
 } | name:Id {
-    yy->program->module.imports.back().module = name.str;
-}) RP -
+    yy->ctx->import->target = name.str;
+}) RP - {
+    yy->code->imports.push_back(*yy->ctx->import.release());
+}
 
-Struct = LP StructType Id {
-    if (yy->context->types.contains(yytext)) {
-      // TODO: Error, struct already defined
-      printf("Struct %s redefined", yytext);
-      return;
-    }
-
-    yy->context->types.emplace(yytext, std::make_unique<StructType>(yy->context->context, yytext, decltype(StructType::fields){}, yy->isPublic));
-    assert(yy->currentlyDefiningType == nullptr);
-    yy->currentlyDefiningType = yy->context->types.at(yytext).get();
+Struct = LP StructType id:Id {
+    assert(yy->ctx->structDef != nullptr);
+    assert(yy->code->getType(id.str) == nullptr && "Structure already defined");
+    yy->ctx->structDef->name = id.str;
 } (StructField -)* - RP {
-    assert(yy->currentlyDefiningType != nullptr);
-    yy->currentlyDefiningType = nullptr;
+    assert(yy->ctx->structDef != nullptr);
+    auto structDef = std::move(yy->ctx->structDef);
+    yy->code->emplaceType<StructType>(structDef->name, structDef->name, std::move(structDef->fields), structDef->isPublic);
 }
 
 StructType = ('struct-' -) {
-    yy->isPublic = false;
+    assert(yy->ctx->structDef == nullptr && "Nested structure definitions are not allowed");
+    yy->ctx->structDef = std::make_unique<ParseContext::StructDef>();
+    yy->ctx->structDef->isPublic = false;
 } | ('struct' -) {
-    yy->isPublic = true;
+    assert(yy->ctx->structDef == nullptr && "Nested structure definitions are not allowed");
+    yy->ctx->structDef = std::make_unique<ParseContext::StructDef>();
+    yy->ctx->structDef->isPublic = true;
 }
 
 StructField = LP id:Id - Type {
-    auto structTp = (StructType *)yy->currentlyDefiningType;
-    assert(yy->parsedType != nullptr);
-    structTp->fields.emplace_back(id.str, yy->parsedType);
-    yy->parsedType = nullptr;
+    assert(yy->ctx->structDef != nullptr);
+    assert(yy->ctx->type != nullptr);
+    yy->ctx->structDef->fields.emplace_back(id.str, yy->ctx->type.release());
 } RP
 
 Fn = ( LP FnType - id:Id {
-    yy->functionBeingDefined.arguments.clear();
-    yy->functionBeingDefined.name = id.str;
-    yy->functionBeingDefined.returnType = nullptr;
+    assert(yy->ctx->fnDef != nullptr);
+    yy->ctx->fnDef->name = id.str;
 } - Type {
-    assert(yy->functionBeingDefined.returnType == nullptr);
-    yy->functionBeingDefined.returnType = yy->parsedType;
-    yy->parsedType = nullptr;
-} - ArgList - (Expr {
-    auto &fn = yy->functionBeingDefined;
-    assert(yy->expressionBeingDefined != nullptr);
-    std::cout << "Adding new expr to fn body!\n";
-    fn.body.push_back(std::move(yy->expressionBeingDefined));
+    assert(yy->ctx->fnDef != nullptr);
+    assert(yy->ctx->type != nullptr);
+    yy->ctx->fnDef->returnType = yy->ctx->type.release();
+} - ArgList # Hadled in its own clause
+- (Expr {
+    assert(yy->ctx->fnDef != nullptr);
+    assert(yy->ctx->exprStack.size() == 1);
+    auto& body = yy->ctx->fnDef->body;
+    auto& exprs = yy->ctx->exprStack;
+    body.push_back(std::move(yy->ctx->exprStack.back()));
+    yy->ctx->exprStack.pop_back();
 } -)* RP ) {
-    auto &fn = yy->functionBeingDefined;
-    const auto &name = fn.name;
-    yy->context->functions.emplace(name, Function(yy->context->context,
-                                                  yy->context->module,
-                                                  name,
-                                                  fn.arguments,
-                                                  fn.returnType,
-                                                  std::move(fn.body),
-                                                  yy->isPublic));
+    assert(yy->ctx->fnDef != nullptr);
+    auto fn = std::move(yy->ctx->fnDef);
+    yy->code->emplaceFn(fn->name, fn->arguments,
+                        fn->returnType,
+                        std::move(fn->body),
+                        fn->isPublic);
 }
 
 FnType = ('fn-' -) {
-    yy->isPublic = false;
+    assert(yy->ctx->fnDef == nullptr && "Nested function definitions are not allowed");
+    yy->ctx->fnDef = std::make_unique<ParseContext::FunctionDef>();
+    yy->ctx->fnDef->isPublic = false;
 } | ('fn' -) {
-    yy->isPublic = true;
+    assert(yy->ctx->fnDef == nullptr && "Nested function definitions are not allowed");
+    yy->ctx->fnDef = std::make_unique<ParseContext::FunctionDef>();
+    yy->ctx->fnDef->isPublic = true;
 }
 
 ArgList = LP (ArgDecl -)* RP
-ArgDecl = LP name:Id - Type RP {
-   yy->functionBeingDefined.arguments.emplace_back(name.str, yy->parsedType);
+ArgDecl = LP name:Id {
+    assert(yy->ctx->fnDef != nullptr);
+    yy->ctx->fnDef->arguments.emplace_back(name.str, nullptr);
+} - Type RP {
+    assert(yy->ctx->fnDef != nullptr);
+    assert(!yy->ctx->fnDef->arguments.empty());
+    assert(std::get<1>(yy->ctx->fnDef->arguments.back()) == nullptr);
+    assert(yy->ctx->type != nullptr);
+    std::get<1>(yy->ctx->fnDef->arguments.back()) = yy->ctx->type.release();
 }
 
 Type = PtrType | TypeName
 PtrType = '*' - Type {
-    auto pointeeName = yy->parsedType->signature();
+    assert(yy->ctx->type != nullptr);
+    auto pointeeName = yy->ctx->type->signature();
     auto ptrName = pointeeName + "*";
-    // If such a pointer type already exists, use it. Otherwise add it
-    if (!yy->context->types.contains(ptrName)) {
-        yy->context->types.emplace(ptrName, std::make_unique<PointerType>(yy->context->context, yy->parsedType));
-    }
-    yy->parsedType = yy->context->types.at(ptrName).get();
+    yy->ctx->type.reset(yy->code->getOrEmplaceType<PointerType>(ptrName, yy->ctx->type.release()));
 }
 
 TypeName = BuiltInType | CustomType
-CustomType = n:Id {
-    if (!yy->context->types.contains(n.str)) {
-        yy->context->unresolvedCustomTypes.emplace(yytext, std::make_unique<CustomType>(yy->context->context, yytext));
+CustomType = id:Id {
+    if (!yy->code->types.contains(id.str)) {
+        yy->code->unresolvedCustomTypes.emplace(id.str, std::make_unique<CustomType>(yy->code->context, id.str));
     }
-    assert(yy->parsedType == nullptr);
-    yy->parsedType = yy->context->types.at(yytext).get();
+    assert(yy->ctx->type == nullptr);
+    yy->ctx->type.reset(yy->code->getType(id.str));
 }
 
 BuiltInType = ( 'f32' {
-    yy->parsedType = yy->context->types.at("f32").get();
+    yy->ctx->type.reset(yy->code->getType("f32"));
+    assert(yy->ctx->type != nullptr);
 } | 'f64' {
-    yy->parsedType = yy->context->types.at("f64").get();
+    yy->ctx->type.reset(yy->code->getType("f64"));
+    assert(yy->ctx->type != nullptr);
 }) | 'void' {
-    yy->parsedType = yy->context->types.at("void").get()
+    yy->ctx->type.reset(yy->code->getType("void"));
+    assert(yy->ctx->type != nullptr);
 } | 'bool' {
-    yy->parsedType = yy->context->types.at("bool").get()
+    yy->ctx->type.reset(yy->code->getType("bool"));
+    assert(yy->ctx->type != nullptr);
 } | IntegerType
 
 IntegerType = ('i' {
-    yy->isSigned = true;
+    yy->ctx->isSigned = true;
 } | 'u' {
-    yy->isSigned = false;
+    yy->ctx->isSigned = false;
 }) < Bits > {
-    bool isSigned = yy->isSigned;
-    std::string signature = std::string(isSigned ? "i" : "u") + yytext;
-    if (!yy->context->types.contains(signature)) {
-       yy->context->types.emplace(signature, std::make_unique<IntegerType>(yy->context->context, std::atoi(yytext), isSigned));
-    }
-    yy->parsedType = yy->context->types.at(signature).get();
+    auto isSigned = yy->ctx->isSigned;
+    auto signature = std::string(isSigned ? "i" : "u") + yytext;
+    yy->ctx->type.reset(yy->code->getOrEmplaceType<IntegerType>(signature, std::atoi(yytext), isSigned));
 }
 Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
 Var = LP 'var' Id Expr RP
 
 Alias = LP 'alias' Id Id RP
 
-Expr = FnCall | IdExpr | Literal | FieldAccess
+#Expr = FnCall | IdExpr | Literal | FieldAccess
+Expr = FnCall | Literal
 
 FnCall = LP id:Id {
-    yy->functionCallBeingDefined.name = id.str;
+    yy->ctx->exprStack.push_back(std::make_unique<FunctionCall>(*yy->code, id.str));
 } - (Expr {
-    yy->functionCallBeingDefined.args.push_back(std::move(yy->expressionBeingDefined));
-} -)* RP {
-    auto& fnDef = yy->functionCallBeingDefined;
-    auto fnCall = std::make_unique<FunctionCall>(*yy->context, fnDef.name, std::move(fnDef.args));
-    yy->expressionBeingDefined = std::move(fnCall);
-}
+    assert(!yy->ctx->exprStack.empty());
+    auto expr = std::move(yy->ctx->exprStack.back());
+    yy->ctx->exprStack.pop_back();
+
+    assert(!yy->ctx->exprStack.empty());
+    auto fnCall = dynamic_cast<FunctionCall*>(yy->ctx->exprStack.back().get());
+    assert(fnCall != nullptr);
+    fnCall->args.push_back(std::move(expr));
+} -)* RP
 
 IdExpr = Id | AddrOfVar
 AddrOfVar = '&' - IdExpr
 
-Literal = c:Str {
-    if (!yy->context->types.contains("str")) {
-        yy->context->types.emplace("str", std::make_unique<StringType>(yy->context->context));
+Literal = s:Str {
+    auto strType = yy->code->getOrEmplaceType<StringType>("str");
+    yy->ctx->exprStack.push_back(std::make_unique<StringConstant>(strType, yy->code->module, s.str));
+} | IntLiteral {
+    auto isSigned = yy->ctx->intLiteral.isSigned;
+    auto signature = std::string(isSigned ? "i" : "u");
+    auto bits = yy->ctx->intLiteral.bits;
+    yy->ctx->intLiteral.bits.clear();
+    if (bits.empty()) {
+        bits = "32";
     }
-    yy->expressionBeingDefined = std::make_unique<StringConstant>(yy->context->module,
-                                                                  yy->context->types.at("str").get(),
-                                                                  c.str);
-} | i:IntLiteral {
+    signature += bits;
+    auto intType = yy->code->getOrEmplaceType<IntegerType>(signature,
+                                                           std::stoi(bits),
+                                                           isSigned);
+    isSigned
+       ? yy->ctx->exprStack.push_back(std::make_unique<IntegerConstant>(intType, yy->ctx->intLiteral.num.i))
+       : yy->ctx->exprStack.push_back(std::make_unique<IntegerConstant>(intType, yy->ctx->intLiteral.num.u))
+       ;
 } | f:FloatLiteral {
+    std::cout << "Pushing new float literal to expr stack! "  << s.str << '\n';
+//    auto strType = yy->code->getOrEmplaceType<StringType>("str");
+//    yy->ctx->exprStack.push_back(std::make_unique<StringConstant>(strType, yy->code->module, s.str));
 } | b:BoolLiteral {
-    auto t = yy->context->types.at("bool").get();
+    auto t = yy->code->getType("bool");
     assert(t != nullptr);
-    yy->expressionBeingDefined = std::make_unique<BoolConstant>(t, $$.boolConst);
+    yy->ctx->exprStack.push_back(std::make_unique<BoolConstant>(t, b.boolConst));
 }
 
-IntLiteral = < '-'? ( Num | Num > [iu] Bits? ) - { $$.iNum = std::atoi(yytext); }
+IntLiteral = < '-'? Num > {
+    yy->ctx->intLiteral.str = yytext;
+    yy->ctx->intLiteral.isSigned = true;
+    yy->ctx->intLiteral.num.i = std::stoll(yy->ctx->intLiteral.str);
+} (('i' | 'u' {
+    yy->ctx->intLiteral.isSigned = false;
+    yy->ctx->intLiteral.num.u = std::stoull(yy->ctx->intLiteral.str);
+} ) ( < Bits > {
+    yy->ctx->intLiteral.bits = yytext;
+} )? )? -
+
 FloatLiteral = < '-'? Num '.' Num > 'f'? - { $$.fNum = std::atof(yytext); }
 BoolLiteral = 'false' { $$.boolConst = false; } | 'true' { $$.boolConst = true; }
 Num = ('0' | [1-9] [0-9]* -)
@@ -192,7 +222,7 @@ FieldTarget = Id - '.'
 LP = '(' -
 RP = - ')'
 Char = ( !Space . )
-Str = ["] < ( !["] Char )* > ["] - { $$.str = yytext; }
+Str = ["] < ( !["] . )* > ["] - { $$.str = yytext; }
 Id = < ( ![.] !LP !RP Char )+ > - { $$.str = yytext; }
 
 - = ( Space | Comment )*
@@ -203,20 +233,21 @@ Eof = !.
 
 %%
 
-std::unique_ptr<Program> parse(CodegenContext *codegenCont) {
-    printf("Parsing started\n");
+bool parse(CodegenContext *codegenCont) {
+    printf("parsing started\n");
 
     yycontext yy;
     memset(&yy, 0, sizeof(yy));
-    yy.program = std::make_unique<Program>();
-    yy.context = codegenCont;
+    yy.code = codegenCont;
+    yy.ctx = std::make_unique<ParseContext>();
 
+    bool res = false;
     while(yyparse(&yy)) {
+        res = true;
         printf("---- ---- ---- success! ---- ---- ---\n");
     }
-    printf("Parsing finished\n");
-    auto program = std::move(yy.program);
+    yy.ctx.release();
+
     yyrelease(&yy);
-    program->print();
-    return std::move(program);
+    return res;
 }

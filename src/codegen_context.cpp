@@ -23,3 +23,10 @@ std::string Function::dump() {
             fmt::join(expressionDumps, "\n")
         );
 }
+
+LanguageType *CodegenContext::getType(const std::string &&name) const {
+    if (types.contains(name)) {
+        return types.at(name).get();
+    }
+    return nullptr;
+}
