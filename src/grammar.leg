@@ -153,7 +153,7 @@ Var = LP 'var' Id Expr RP
 
 Alias = LP 'alias' Id Id RP
 
-#Expr = FnCall | IdExpr | Literal | FieldAccess
+#Expr = FnCall | Literal | IdExpr | FieldAccess
 Expr = FnCall | Literal
 
 FnCall = LP id:Id {

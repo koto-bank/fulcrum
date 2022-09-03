@@ -137,6 +137,75 @@ struct FunctionCall : Expression {
 private:
     CodegenContext &context;
 
+    llvm::Value *returnProcessor(ExpressionGenContext &genContext) {
+        if (args.size() != 0 && args.size() != 1) {
+            std::cout << "Return must have 0 or 1 arguments" << std::endl;
+            return nullptr;
+        }
+
+        auto returnType = genContext.function->functionType()->returnType;
+        if (args.size() == 0 && returnType != context.types.at("void").get()) {
+            std::cout << "Only void function can return nothing" << std::endl;
+            return nullptr;
+        } else if (args.size() == 1 && returnType != args[0]->type) {
+            std::cout << fmt::format(
+                "Function expected to return {}, but returns {}",
+                returnType->signature(),
+                args[0]->type->signature()) << std::endl;
+            return nullptr;
+        }
+
+        if (args.size() == 0)
+            genContext.builder.CreateRetVoid();
+        else
+            genContext.builder.CreateRet(args[0]->llvmValue(genContext));
+
+        return nullptr;
+    }
+
+    llvm::Value *doProcessor(ExpressionGenContext &genContext) {
+        for (auto &arg : args)
+            arg->llvmValue(genContext);
+
+        return nullptr;
+    }
+
+    llvm::Value *ifProcessor(ExpressionGenContext &genContext) {
+        if (args.size() < 2 || args.size() > 3) {
+            std::cout << "If must have from 2 to 3 arguments" << std::endl;
+            return nullptr;
+        }
+        if (args[0]->type != context.types.at("bool").get()) {
+            std::cout << "First argument to if must be boolean" << std::endl;
+            return nullptr;
+        }
+
+        auto &builder = genContext.builder;
+
+        auto ifCondition = args[0]->llvmValue(genContext);
+
+        auto thenBlock = llvm::BasicBlock::Create(context.context, "if-then", genContext.function->llvmFunction());
+        auto elseBlock = args.size() == 3
+            ? llvm::BasicBlock::Create(context.context, "if-else", genContext.function->llvmFunction())
+            : nullptr;
+        auto afterIfBlock = llvm::BasicBlock::Create(context.context, "after-if", genContext.function->llvmFunction());
+
+        builder.CreateCondBr(ifCondition, thenBlock, elseBlock != nullptr ? elseBlock : afterIfBlock);
+
+        builder.SetInsertPoint(thenBlock);
+        args[1]->llvmValue(genContext);
+        builder.CreateBr(afterIfBlock);
+
+        if (args.size() == 3) {
+            builder.SetInsertPoint(elseBlock);
+            args[2]->llvmValue(genContext);
+            builder.CreateBr(afterIfBlock);
+        }
+        builder.SetInsertPoint(afterIfBlock);
+
+        return nullptr;
+    }
+
 public:
     std::string name;
     std::vector<std::unique_ptr<Expression>> args;
@@ -148,33 +217,16 @@ public:
         // Initialize type with nullptr for now, since we don't know the return type yet
         : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
 
+    using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
+    std::map<std::string, SpecialFunctionProcessor> specialFunctions {
+        {"return", &FunctionCall::returnProcessor},
+        {"if", &FunctionCall::ifProcessor},
+        {"do", &FunctionCall::doProcessor}
+    };
+
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
-        if (name == "return") {
-            if (args.size() != 0 && args.size() != 1) {
-                std::cout << "Return must have 0 or 1 arguments" << std::endl;
-                return nullptr;
-            }
-
-
-            auto returnType = genContext.function->functionType()->returnType;
-            if (args.size() == 0 && returnType != context.types.at("void").get()) {
-                std::cout << "Only void function can return nothing" << std::endl;
-                return nullptr;
-            } else if (args.size() == 1 && returnType != args[0]->type) {
-                std::cout << fmt::format(
-                    "Function expected to return {}, but returns {}",
-                    returnType->signature(),
-                    args[0]->type->signature()) << std::endl;
-                return nullptr;
-            }
-
-            if (args.size() == 0)
-                genContext.builder.CreateRetVoid();
-            else
-                genContext.builder.CreateRet(args[0]->llvmValue(genContext));
-
-            return nullptr;
-        }
+        if (specialFunctions.contains(name))
+            return specialFunctions[name](this, genContext);
 
         if (!context.functions.contains(name)) {
             // TODO: error here
