@@ -286,8 +286,6 @@ int main() {
 
     CodegenContext codegenCont = { .context = context, .module = module };
 
-    //parseHeader(codegenCont, "/usr/include/stdio.h");
-
     codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Float));
     codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Double));
     codegenCont.types.emplace("void", std::make_unique<VoidType>(codegenCont.context));
@@ -298,6 +296,12 @@ int main() {
     if (!parse(&codegenCont)) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
         return 1;
+    }
+
+    for (auto &import : codegenCont.imports) {
+        if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
+            parseHeader(codegenCont, import.target);
+        }
     }
 
     std::cout << "Module " << codegenCont.moduleName << std::endl;
@@ -314,6 +318,14 @@ int main() {
         std::cout << std::endl;
     }
     std::cout << codegenCont.functions.at("main").dump() << std::endl;
+
+    ExpressionGenContext exprGenContext = {
+        .builder = builder
+    };
+    for (auto &f : codegenCont.functions) {
+        exprGenContext.function = &f.second;
+        f.second.generateBody(exprGenContext);
+    }
 
     //IntegerConstant x(codegenCont.types["int"].get(), 10l);
 
@@ -357,10 +369,9 @@ int main() {
 
     //builder.CreateRet(x.llvmValue());
 
-    //llvm::errs() << module;
+    llvm::errs() << module;
 
     // Object file generation
-    /*
 
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -388,7 +399,6 @@ int main() {
     targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
     passManager.run(module);
     dest.flush();
-    */
 
     return 0;
 }

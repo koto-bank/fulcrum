@@ -7,6 +7,7 @@
 #include "types.hpp"
 
 struct Expression;
+struct ExpressionGenContext;
 
 class Function {
     LLVMContext &context;
@@ -48,6 +49,8 @@ public:
     const std::string &getName() const { return name; }
     FunctionType *functionType() { return type.get(); }
     llvm::Function *llvmFunction() { return function; }
+
+    void generateBody(ExpressionGenContext &builder);
 
     std::string dump();
 };

@@ -14,6 +14,11 @@
 
 using llvm::Type;
 
+struct ExpressionGenContext {
+    llvm::IRBuilder<> &builder;
+    Function *function;
+};
+
 struct Expression {
 protected:
     llvm::Value *value = nullptr;
@@ -28,7 +33,7 @@ public:
     Expression(LanguageType *type) : type(type) { }
 
     Type *llvmType() { return type->llvmType(); }
-    virtual llvm::Value *llvmValue(llvm::IRBuilder<> &builder) { return value; }
+    virtual llvm::Value *llvmValue(ExpressionGenContext &genContext) { return value; }
     virtual std::string dump(int indent = 0) = 0;
 
     virtual ~Expression() = default;
@@ -104,7 +109,7 @@ public:
         );
     }
 
-    llvm::Value *llvmValue(llvm::IRBuilder<> &builder) override {
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
         auto Zero = llvm::ConstantInt::get(Type::getInt32Ty(type->llvmType()->getContext()), 0);
         llvm::Constant *Indices[] = {Zero, Zero};
         return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
@@ -143,9 +148,38 @@ public:
         // Initialize type with nullptr for now, since we don't know the return type yet
         : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
 
-    llvm::Value *llvmValue(llvm::IRBuilder<> &builder) override {
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
+        if (name == "return") {
+            if (args.size() != 0 && args.size() != 1) {
+                std::cout << "Return must have 0 or 1 arguments" << std::endl;
+                return nullptr;
+            }
+
+
+            auto returnType = genContext.function->functionType()->returnType;
+            if (args.size() == 0 && returnType != context.types.at("void").get()) {
+                std::cout << "Only void function can return nothing" << std::endl;
+                return nullptr;
+            } else if (args.size() == 1 && returnType != args[0]->type) {
+                std::cout << fmt::format(
+                    "Function expected to return {}, but returns {}",
+                    returnType->signature(),
+                    args[0]->type->signature()) << std::endl;
+                return nullptr;
+            }
+
+            if (args.size() == 0)
+                genContext.builder.CreateRetVoid();
+            else
+                genContext.builder.CreateRet(args[0]->llvmValue(genContext));
+
+            return nullptr;
+        }
+
         if (!context.functions.contains(name)) {
             // TODO: error here
+           std::cout << fmt::format("Undefined function {}", name) << std::endl;
+           return nullptr;
         }
         auto &calledFunction = context.functions.at(name);
 
@@ -160,10 +194,10 @@ public:
                 // TODO: error here
                 return nullptr;
             }
-            argValues.push_back(args[i]->llvmValue(builder));
+            argValues.push_back(args[i]->llvmValue(genContext));
         }
 
-        return builder.CreateCall(calledFunction.llvmFunction(), argValues);
+        return genContext.builder.CreateCall(calledFunction.llvmFunction(), argValues);
     }
 
     std::string dump(int indent) override {

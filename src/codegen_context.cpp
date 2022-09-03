@@ -30,3 +30,14 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
     }
     return nullptr;
 }
+
+void Function::generateBody(ExpressionGenContext &genContext) {
+    if (body.size() == 0) return;
+
+    llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", function);
+    genContext.builder.SetInsertPoint(bb);
+
+    for (auto &expr : body) {
+        expr->llvmValue(genContext);
+    }
+}
