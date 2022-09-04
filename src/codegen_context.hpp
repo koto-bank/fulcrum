@@ -8,9 +8,10 @@
 
 struct Expression;
 struct ExpressionGenContext;
+struct CodegenContext;
 
 class Function {
-    LLVMContext &context;
+    CodegenContext &context;
     llvm::Module &module;
     llvm::Function *function;
 
@@ -18,38 +19,30 @@ class Function {
     std::string name;
     std::vector<std::string> argumentNames;
     std::vector<std::unique_ptr<Expression>> body;
-
 public:
     bool isPublic;
 
     using Args = std::vector<std::tuple<std::string, LanguageType *>>;
     using Body = std::vector<std::unique_ptr<Expression>>;
 
-    Function(LLVMContext &context, llvm::Module &module,
+    Function(CodegenContext &context, llvm::Module &module,
              const std::string &name, const Args &arguments,
              LanguageType *returnType, Body &&body,
-             bool isPublic)
-        : context(context), module(module), name(name), body(std::move(body)), isPublic(isPublic) {
-
-        std::vector<LanguageType *> argumentTypes;
-        for (auto &&[nm, tp] : arguments) {
-            argumentNames.push_back(nm);
-            argumentTypes.push_back(tp);
-        }
-        type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
-
-        auto funcType = (llvm::FunctionType*)type->llvmType();
-        function =
-            llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
-
-        for (auto i = 0; i < function->arg_size(); i++)
-            function->getArg(i)->setName(argumentNames[i]);
-    }
+             bool isPublic);
 
     const std::string &getName() const { return name; }
     FunctionType *functionType() { return type.get(); }
     llvm::Function *llvmFunction() { return function; }
 
+
+    bool generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions) {
+        std::vector<Expression *> args;
+        for (auto &expr : expressions)
+            args.push_back(expr.get());
+        return generateExpressions(genContext, args);
+    }
+    // Returns true if the function returned early because of "return"
+    bool generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
     void generateBody(ExpressionGenContext &builder);
 
     std::string dump();
@@ -94,7 +87,7 @@ struct CodegenContext {
     void emplaceFn(const std::string &name, const Function::Args &args,
                    LanguageType *returnType, Function::Body &&body,
                    bool isPublic) {
-        functions.emplace(name, Function(context, module, name, args, returnType,
+        functions.emplace(name, Function(*this, module, name, args, returnType,
                                          std::move(body), isPublic));
     }
 

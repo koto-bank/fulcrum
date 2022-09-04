@@ -3,6 +3,26 @@
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 
+Function::Function(CodegenContext &context, llvm::Module &module,
+         const std::string &name, const Args &arguments,
+         LanguageType *returnType, Body &&body,
+         bool isPublic)
+    : context(context), module(module), name(name), body(std::move(body)), isPublic(isPublic) {
+    std::vector<LanguageType *> argumentTypes;
+        for (auto &&[nm, tp] : arguments) {
+            argumentNames.push_back(nm);
+            argumentTypes.push_back(tp);
+        }
+        type = std::make_unique<FunctionType>(context.context, argumentTypes, returnType);
+
+        auto funcType = (llvm::FunctionType*)type->llvmType();
+        function =
+            llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
+
+        for (auto i = 0; i < function->arg_size(); i++)
+            function->getArg(i)->setName(argumentNames[i]);
+}
+
 std::string Function::dump() {
         std::vector<std::string> argumentDumps, expressionDumps;
         for (auto i = 0; i < argumentNames.size(); i++)
@@ -34,10 +54,32 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
 void Function::generateBody(ExpressionGenContext &genContext) {
     if (body.size() == 0) return;
 
-    llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "enter", function);
+    llvm::BasicBlock *bb = llvm::BasicBlock::Create(context.context, "enter", function);
     genContext.builder.SetInsertPoint(bb);
 
-    for (auto &expr : body) {
-        expr->llvmValue(genContext);
+    generateExpressions(genContext, body);
+
+    if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
+        // If the function is not void, insert unreachable at the end, since the user must return something
+        if (genContext.function->functionType()->returnType != context.getType("void")) {
+            genContext.builder.CreateUnreachable();
+        } else {
+            // Otherwise, return void automatically
+            genContext.builder.CreateRetVoid();
+        }
     }
+}
+
+bool Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
+    for (auto &expr : expressions) {
+        expr->llvmValue(genContext);
+
+        auto maybeRet = dynamic_cast<FunctionCall *>(expr);
+        if (maybeRet != nullptr && maybeRet->name == "return") {
+            // Don't continue generating after a return
+            return true;
+        }
+    }
+
+    return false;
 }

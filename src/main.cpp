@@ -1,9 +1,10 @@
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/IR/Value.h"
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/CodeGen.h>
@@ -254,7 +255,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     return CXChildVisit_Continue;
                 }
 
-                client_data->functions.emplace(funcName, Function(client_data->context, client_data->module, funcName, arguments, returnType, {}, true));
+                client_data->functions.emplace(funcName, Function(*client_data, client_data->module, funcName, arguments, returnType, {}, true));
                 llvm::Function *llvmFnc = client_data->functions.at(funcName).llvmFunction();
                 for (auto i = 0; i < llvmFnc->arg_size(); i++) {
                     auto &[name, _] = arguments[i];
@@ -370,6 +371,11 @@ int main() {
     //builder.CreateRet(x.llvmValue());
 
     llvm::errs() << module;
+
+    if (llvm::verifyModule(module, &llvm::errs())) {
+        // Exit early if there's an error
+        return 1;
+    }
 
     // Object file generation
 

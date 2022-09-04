@@ -164,8 +164,7 @@ private:
     }
 
     llvm::Value *doProcessor(ExpressionGenContext &genContext) {
-        for (auto &arg : args)
-            arg->llvmValue(genContext);
+        genContext.function->generateExpressions(genContext, args);
 
         return nullptr;
     }
@@ -189,17 +188,24 @@ private:
             ? llvm::BasicBlock::Create(context.context, "if-else", genContext.function->llvmFunction())
             : nullptr;
         auto afterIfBlock = llvm::BasicBlock::Create(context.context, "after-if", genContext.function->llvmFunction());
+        thenBlock->moveAfter(builder.GetInsertBlock());
+        if (elseBlock != nullptr) elseBlock->moveAfter(thenBlock);
+        afterIfBlock->moveAfter(elseBlock != nullptr ? elseBlock : thenBlock);
 
         builder.CreateCondBr(ifCondition, thenBlock, elseBlock != nullptr ? elseBlock : afterIfBlock);
 
         builder.SetInsertPoint(thenBlock);
-        args[1]->llvmValue(genContext);
-        builder.CreateBr(afterIfBlock);
+
+        if (!genContext.function->generateExpressions(genContext, {args[1].get()})) {
+            builder.CreateBr(afterIfBlock);
+        }
 
         if (args.size() == 3) {
             builder.SetInsertPoint(elseBlock);
-            args[2]->llvmValue(genContext);
-            builder.CreateBr(afterIfBlock);
+
+            if (!genContext.function->generateExpressions(genContext, {args[2].get()})) {
+                builder.CreateBr(afterIfBlock);
+            }
         }
         builder.SetInsertPoint(afterIfBlock);
 
