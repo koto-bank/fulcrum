@@ -171,3 +171,24 @@ LanguageType *FunctionCall::arithmeticsProcessorType() {
 
     return args[0]->languageType();
 }
+
+VarAccess::VarAccess(CodegenContext &codegenCont, const std::string& name)
+    : Expression(nullptr), context(codegenCont), name(name) { }
+
+std::string VarAccess::dump(int indent) {
+    return fmt::format("{}{}", indentSpaces(indent), name);
+}
+
+AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
+    : Expression(nullptr), target(std::move(target)) { }
+
+std::string AddrOf::dump(int indent) {
+    return fmt::format("{}&", indentSpaces(indent));
+}
+
+Dereference::Dereference() : Expression(nullptr) { }
+
+std::string Dereference::dump(int indent) {
+    return fmt::format("{}@", indentSpaces(indent));
+}
+
