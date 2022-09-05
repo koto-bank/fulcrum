@@ -28,6 +28,7 @@ protected:
     }
 
     LanguageType *type = nullptr;
+
 public:
     Expression(LanguageType *type) : type(type) { }
 
@@ -231,10 +232,22 @@ private:
 public:
     std::string name;
 
-    VarAccess(CodegenContext &codegenCont, const std::string& name)
-        : Expression(nullptr), context(codegenCont), name(name) { }
+    VarAccess(CodegenContext &codegenCont, const std::string& name);
+    std::string dump(int indent) override;
+};
 
-    std::string dump(int indent) override {
-        return fmt::format("{}{}", indentSpaces(indent), name);
-    }
+struct AddrOf : Expression {
+private:
+    std::unique_ptr<Expression> target;
+
+public:
+    AddrOf(std::unique_ptr<Expression> &&target);
+    std::string dump(int indent);
+};
+
+struct Dereference : Expression {
+    std::unique_ptr<Expression> target;
+
+    Dereference();
+    std::string dump(int indent) override;
 };

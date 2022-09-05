@@ -153,8 +153,7 @@ Var = LP 'var' Id Expr RP
 
 Alias = LP 'alias' Id Id RP
 
-#Expr = FnCall | Literal | IdExpr | FieldAccess
-Expr = FnCall | Literal
+Expr = FnCall | Literal | Dereference | AddrOfVar | IdExpr
 
 FnCall = LP id:Id {
     yy->ctx->exprStack.push_back(std::make_unique<FunctionCall>(*yy->code, id.str));
@@ -169,8 +168,33 @@ FnCall = LP id:Id {
     fnCall->args.push_back(std::move(expr));
 } -)* RP
 
-IdExpr = Id | AddrOfVar
-AddrOfVar = '&' - IdExpr
+# FieldAccess |
+IdExpr = id:Id {
+    yy->ctx->exprStack.push_back(std::make_unique<VarAccess>(*yy->code, id.str));
+}
+
+AddrOfVar = '&'- IdExpr {
+    assert(!yy->ctx->exprStack.empty());
+    auto expr = std::move(yy->ctx->exprStack.back());
+    yy->ctx->exprStack.pop_back();
+
+    yy->ctx->exprStack.push_back(std::make_unique<AddrOf>(std::move(expr)));
+}
+
+Dereference = ('@' {
+    yy->ctx->exprStack.push_back(std::make_unique<Dereference>());
+})+ - DereferencableExpr {
+    assert(!yy->ctx->exprStack.empty());
+    auto expr = std::move(yy->ctx->exprStack.back());
+    yy->ctx->exprStack.pop_back();
+
+    assert(!yy->ctx->exprStack.empty());
+    auto deref = dynamic_cast<Dereference*>(yy->ctx->exprStack.back().get());
+    assert(deref != nullptr);
+    deref->target = std::move(expr);
+}
+
+DereferencableExpr = Id | FnCall
 
 Literal = s:Str {
     auto strType = yy->code->getOrEmplaceType<StringType>("str");
@@ -216,14 +240,13 @@ FloatLiteral = < '-'? Num '.' Num > 'f'? - { $$.fNum = std::atof(yytext); }
 BoolLiteral = 'false' { $$.boolConst = false; } | 'true' { $$.boolConst = true; }
 Num = ('0' | [1-9] [0-9]* -)
 
-FieldAccess = FieldTarget Id
-FieldTarget = Id - '.'
-
 LP = '(' -
 RP = - ')'
 Char = ( !Space . )
 Str = ["] < ( !["] . )* > ["] - { $$.str = yytext; }
-Id = < ( ![.] !LP !RP Char )+ > - { $$.str = yytext; }
+
+Id = ( < ( ![./] !LP !RP !Space Char )+ > &( Space | Comment | [.] | LP | RP )- { $$.str = yytext; }
+   | < '/' > - ){ $$.str = yytext; } # division
 
 - = ( Space | Comment )*
 Space = ' ' | '\t' | Eol
