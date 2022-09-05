@@ -175,9 +175,7 @@ public:
                 type = specialFunctions[name].second(this);
             } else {
                 if (!context.functions.contains(name)) {
-                    // TODO: error here
-                    std::cout << fmt::format("Undefined function {}", name) << std::endl;
-                    return nullptr;
+                    throw CodegenError(fmt::format("Undefined function {}", name));
                 }
 
                 type = context.functions.at(name).functionType()->returnType;
@@ -192,9 +190,7 @@ public:
             return specialFunctions[name].first(this, genContext);
 
         if (!context.functions.contains(name)) {
-            // TODO: error here
-           std::cout << fmt::format("Undefined function {}", name) << std::endl;
-           return nullptr;
+            throw CodegenError(fmt::format("Undefined function {}", name));
         }
         auto &calledFunction = context.functions.at(name);
 
@@ -203,11 +199,10 @@ public:
             LanguageType *argType = args[i]->languageType();
             LanguageType *expectedType = calledFunction.functionType()->arguments[i];
             if (argType->llvmType() != expectedType->llvmType()) {
-                std::cout <<
+                throw CodegenError(
                     fmt::format("Incompatible argument type in {}: for argument #{} "
-                                " expected {}, but received {}", name, i, expectedType->signature(), argType->signature());
-                // TODO: error here
-                return nullptr;
+                                " expected {}, but received {}", name, i, expectedType->signature(), argType->signature())
+                );
             }
             argValues.push_back(args[i]->llvmValue(genContext));
         }

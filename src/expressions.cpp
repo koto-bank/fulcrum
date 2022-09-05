@@ -1,26 +1,22 @@
 #include "expressions.hpp"
 #include "types.hpp"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Instructions.h"
-#include <type_traits>
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     if (args.size() != 0 && args.size() != 1) {
-        std::cout << "Return must have 0 or 1 arguments" << std::endl;
-        return nullptr;
+        throw CodegenError("Return must have 0 or 1 arguments");
     }
 
     auto returnType = genContext.function->functionType()->returnType;
     if (args.size() == 0 && returnType != context.types.at("void").get()) {
-        std::cout << "Only void function can return nothing" << std::endl;
-        return nullptr;
+        throw CodegenError("Only void function can return nothing");
     } else if (args.size() == 1 && returnType != args[0]->languageType()) {
-        std::cout << fmt::format(
-            "Function expected to return {}, but returns {}",
-            returnType->signature(),
-            args[0]->languageType()->signature()) << std::endl;
-        return nullptr;
+        throw CodegenError(
+            fmt::format(
+                "Function expected to return {}, but returns {}",
+                returnType->signature(),
+                args[0]->languageType()->signature()
+            )
+        );
     }
 
     if (args.size() == 0)
@@ -39,12 +35,10 @@ llvm::Value *FunctionCall::doProcessor(ExpressionGenContext &genContext) {
 
 llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 2 || args.size() > 3) {
-        std::cout << "If must have from 2 to 3 arguments" << std::endl;
-        return nullptr;
+        throw CodegenError("If must have from 2 to 3 arguments");
     }
     if (args[0]->languageType() != context.types.at("bool").get()) {
-        std::cout << "First argument to if must be boolean" << std::endl;
-        return nullptr;
+        throw CodegenError("First argument to if must be boolean");
     }
 
     auto &builder = genContext.builder;
@@ -82,8 +76,9 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
 
 llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext) {
     if (args.size() == 0) {
-        std::cout << fmt::format("Expected at least 1 argument to {}, but got 0", name) << std::endl;
-        return nullptr;
+        throw CodegenError(
+            fmt::format("Expected at least 1 argument to {}, but got 0", name)
+        );
     }
 
     auto expectedType = args[0]->languageType();
@@ -91,25 +86,27 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     auto floatType = intType == nullptr ? nullptr : dynamic_cast<FloatType*>(expectedType);
 
     if (intType == nullptr && floatType == nullptr) {
-        std::cout << fmt::format(
+        throw CodegenError(
+            fmt::format(
             "Expected first argument to {} to be of a numeric type, but it was of type {}",
             name,
             expectedType->signature()
-        ) << std::endl;
-        return nullptr;
+            )
+        );
     }
 
     for (auto i = 0; i< args.size(); i++) {
         auto &arg = args[i];
         if (arg->languageType() != expectedType) {
-            std::cout << fmt::format(
-                "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
-                name,
-                expectedType->signature(),
-                i,
-                arg->languageType()->signature()
-            ) << std::endl;
-            return nullptr;
+            throw CodegenError(
+                fmt::format(
+                    "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
+                    name,
+                    expectedType->signature(),
+                    i,
+                    arg->languageType()->signature()
+                )
+            );
         }
     }
 
@@ -167,8 +164,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
 LanguageType *FunctionCall::arithmeticsProcessorType() {
     if (args.size() == 0) {
-        std::cout << fmt::format("Expected at least 1 argument to {}, but got 0", name) << std::endl;
-        return nullptr;
+        throw CodegenError(
+            fmt::format("Expected at least 1 argument to {}, but got 0", name)
+        );
     }
 
     return args[0]->languageType();

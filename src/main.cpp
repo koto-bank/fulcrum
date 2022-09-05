@@ -15,6 +15,8 @@
 
 #include <clang-c/Index.h>
 
+#include "fmt/color.h"
+
 #include <iostream>
 #include <memory>
 #include <tuple>
@@ -324,8 +326,18 @@ int main() {
         .builder = builder
     };
     for (auto &f : codegenCont.functions) {
-        exprGenContext.function = &f.second;
-        f.second.generateBody(exprGenContext);
+        try {
+            exprGenContext.function = &f.second;
+            f.second.generateBody(exprGenContext);
+        } catch (const CodegenError &err) {
+            std::cout << fmt::format(
+                "{}\n{}",
+                fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold),
+                err.whatIndented(4)
+            ) << std::endl;
+
+            return 1;
+        }
     }
 
     //IntegerConstant x(codegenCont.types["int"].get(), 10l);

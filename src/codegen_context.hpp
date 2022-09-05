@@ -4,6 +4,8 @@
 
 #include "llvm/IR/Function.h"
 
+#include "fmt/format.h"
+
 #include "types.hpp"
 
 struct Expression;
@@ -92,4 +94,47 @@ struct CodegenContext {
     }
 
     std::map<std::string, Function> functions;
+};
+
+class CodegenError : public std::exception {
+protected:
+    std::string message;
+    mutable std::string indentedMessage;
+
+    std::string indentSpaces(int n) const {
+        return fmt::format("{: >{}}", "", n);
+    }
+public:
+    CodegenError(std::string message) : message(message) { }
+
+    const char *what() const noexcept override {
+        return whatIndented(0);
+    }
+
+    virtual const char *whatIndented(int indent) const {
+        indentedMessage = fmt::format("{}{}", indentSpaces(indent), message.data());
+        return indentedMessage.data();
+    }
+
+    virtual ~CodegenError() { }
+};
+
+class StackedCodegenErrors : public CodegenError {
+    std::vector<std::unique_ptr<CodegenError>> errors;
+    mutable std::string indentedMsg;
+public:
+    StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors)
+        : CodegenError(message), errors(std::move(errors)) { }
+
+    const char *what() const noexcept override {
+        return whatIndented(0);
+    }
+
+    virtual const char *whatIndented(int indent) const override {
+        indentedMsg = fmt::format("{}{}\n", indentSpaces(indent), message);
+        for (auto &err : errors) {
+            indentedMsg += fmt::format("{}\n", err->whatIndented(indent + 2));
+        }
+        return indentedMsg.data();
+    }
 };
