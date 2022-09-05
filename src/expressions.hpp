@@ -27,12 +27,12 @@ protected:
         return fmt::format("{: >{}}", "", n);
     }
 
-public:
     LanguageType *type = nullptr;
-
+public:
     Expression(LanguageType *type) : type(type) { }
 
-    Type *llvmType() { return type->llvmType(); }
+    virtual LanguageType *languageType() { return type; }
+    virtual Type *llvmType() { return languageType()->llvmType(); }
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext) { return value; }
     virtual std::string dump(int indent = 0) = 0;
 
@@ -137,81 +137,13 @@ struct FunctionCall : Expression {
 private:
     CodegenContext &context;
 
-    llvm::Value *returnProcessor(ExpressionGenContext &genContext) {
-        if (args.size() != 0 && args.size() != 1) {
-            std::cout << "Return must have 0 or 1 arguments" << std::endl;
-            return nullptr;
-        }
+    llvm::Value *returnProcessor(ExpressionGenContext &genContext);
+    llvm::Value *doProcessor(ExpressionGenContext &genContext);
+    llvm::Value *ifProcessor(ExpressionGenContext &genContext);
+    llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
 
-        auto returnType = genContext.function->functionType()->returnType;
-        if (args.size() == 0 && returnType != context.types.at("void").get()) {
-            std::cout << "Only void function can return nothing" << std::endl;
-            return nullptr;
-        } else if (args.size() == 1 && returnType != args[0]->type) {
-            std::cout << fmt::format(
-                "Function expected to return {}, but returns {}",
-                returnType->signature(),
-                args[0]->type->signature()) << std::endl;
-            return nullptr;
-        }
-
-        if (args.size() == 0)
-            genContext.builder.CreateRetVoid();
-        else
-            genContext.builder.CreateRet(args[0]->llvmValue(genContext));
-
-        return nullptr;
-    }
-
-    llvm::Value *doProcessor(ExpressionGenContext &genContext) {
-        genContext.function->generateExpressions(genContext, args);
-
-        return nullptr;
-    }
-
-    llvm::Value *ifProcessor(ExpressionGenContext &genContext) {
-        if (args.size() < 2 || args.size() > 3) {
-            std::cout << "If must have from 2 to 3 arguments" << std::endl;
-            return nullptr;
-        }
-        if (args[0]->type != context.types.at("bool").get()) {
-            std::cout << "First argument to if must be boolean" << std::endl;
-            return nullptr;
-        }
-
-        auto &builder = genContext.builder;
-
-        auto ifCondition = args[0]->llvmValue(genContext);
-
-        auto thenBlock = llvm::BasicBlock::Create(context.context, "if-then", genContext.function->llvmFunction());
-        auto elseBlock = args.size() == 3
-            ? llvm::BasicBlock::Create(context.context, "if-else", genContext.function->llvmFunction())
-            : nullptr;
-        auto afterIfBlock = llvm::BasicBlock::Create(context.context, "after-if", genContext.function->llvmFunction());
-        thenBlock->moveAfter(builder.GetInsertBlock());
-        if (elseBlock != nullptr) elseBlock->moveAfter(thenBlock);
-        afterIfBlock->moveAfter(elseBlock != nullptr ? elseBlock : thenBlock);
-
-        builder.CreateCondBr(ifCondition, thenBlock, elseBlock != nullptr ? elseBlock : afterIfBlock);
-
-        builder.SetInsertPoint(thenBlock);
-
-        if (!genContext.function->generateExpressions(genContext, {args[1].get()})) {
-            builder.CreateBr(afterIfBlock);
-        }
-
-        if (args.size() == 3) {
-            builder.SetInsertPoint(elseBlock);
-
-            if (!genContext.function->generateExpressions(genContext, {args[2].get()})) {
-                builder.CreateBr(afterIfBlock);
-            }
-        }
-        builder.SetInsertPoint(afterIfBlock);
-
-        return nullptr;
-    }
-
+    LanguageType *arithmeticsProcessorType();
+    LanguageType *voidProcessorType() { return context.getType("void"); }
 public:
     std::string name;
     std::vector<std::unique_ptr<Expression>> args;
@@ -224,15 +156,40 @@ public:
         : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
 
     using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
-    std::map<std::string, SpecialFunctionProcessor> specialFunctions {
-        {"return", &FunctionCall::returnProcessor},
-        {"if", &FunctionCall::ifProcessor},
-        {"do", &FunctionCall::doProcessor}
+    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *)>;
+
+    std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions {
+        {"return", {&FunctionCall::returnProcessor, &FunctionCall::voidProcessorType}},
+        {"if", {&FunctionCall::ifProcessor, &FunctionCall::voidProcessorType}},
+        {"do", {&FunctionCall::doProcessor, &FunctionCall::voidProcessorType}},
+
+        {"+", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
+        {"-", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
+        {"/", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
+        {"%", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
     };
+
+    LanguageType *languageType() override {
+        if (type == nullptr) {
+            if (specialFunctions.contains(name)) {
+                type = specialFunctions[name].second(this);
+            } else {
+                if (!context.functions.contains(name)) {
+                    // TODO: error here
+                    std::cout << fmt::format("Undefined function {}", name) << std::endl;
+                    return nullptr;
+                }
+
+                type = context.functions.at(name).functionType()->returnType;
+            }
+        }
+
+        return type;
+    }
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
         if (specialFunctions.contains(name))
-            return specialFunctions[name](this, genContext);
+            return specialFunctions[name].first(this, genContext);
 
         if (!context.functions.contains(name)) {
             // TODO: error here
@@ -243,7 +200,7 @@ public:
 
         std::vector<llvm::Value *> argValues;
         for (auto i = 0; i < args.size(); i++) {
-            LanguageType *argType = args[i]->type;
+            LanguageType *argType = args[i]->languageType();
             LanguageType *expectedType = calledFunction.functionType()->arguments[i];
             if (argType->llvmType() != expectedType->llvmType()) {
                 std::cout <<
