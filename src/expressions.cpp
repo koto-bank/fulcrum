@@ -114,9 +114,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     if (intType == nullptr && floatType == nullptr) {
         throw CodegenError(
             fmt::format(
-            "Expected first argument to {} to be of a numeric type, but it was of type {}",
-            name,
-            expectedType->signature()
+                "Expected first argument to {} to be of a numeric type, but it was of type {}",
+                name,
+                expectedType->signature()
             )
         );
     }

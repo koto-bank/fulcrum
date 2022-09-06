@@ -59,6 +59,7 @@ struct CodegenContext {
     LLVMContext &context;
     llvm::Module &module;
 
+    std::map<std::string, std::unique_ptr<Expression>> globalVariables;
     std::string moduleName;
     std::vector<Import> imports;
 

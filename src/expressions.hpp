@@ -63,8 +63,7 @@ struct IntegerConstant : Expression {
 
     IntegerConstant(IntegerType *type, IsLongInteger auto _constValue) : Expression(type), constValue(_constValue) {
         if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
-            std::cout << "Integer " << value << "does not fit into its type" << std::endl;
-            return;
+            throw CodegenError(fmt::format("Integer {} does not fit into its type", _constValue));
         }
 
         value = llvm::ConstantInt::get(type->llvmType(), _constValue);
@@ -87,11 +86,10 @@ concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
 struct FloatConstant : Expression {
     std::variant<float, double> constValue;
 
-    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue) : Expression(type), constValue(constValue) {
-        auto apFloat = llvm::APFloat(constValue);
+    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_) : Expression(type), constValue(constValue_) {
+        auto apFloat = llvm::APFloat(constValue_);
         if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
-            std::cout << "Float " << value << "does not fit into its type" << std::endl;
-            return;
+            throw CodegenError(fmt::format("Float {} does not fit into its type", constValue_));
         }
         value = llvm::ConstantFP::get(type->llvmType(), apFloat);
     }

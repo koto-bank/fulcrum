@@ -30,12 +30,17 @@
 #include "expressions.hpp"
 #include "codegen_context.hpp"
 
+std::string cxToString(CXString &&str) {
+    auto res = std::string((char*)str.data);
+    clang_disposeString(str);
+
+    return res;
+}
+
 LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     auto &context = codegenCont.context;
 
-    auto typeSpelling = clang_getTypeSpelling(clangTp);
-    auto typeName = std::string((char*)typeSpelling.data);
-    clang_disposeString(typeSpelling);
+    auto typeName = cxToString(clang_getTypeSpelling(clangTp));
 
     if (codegenCont.types.contains(typeName))
         return codegenCont.types[typeName].get();
@@ -106,9 +111,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         auto namedType = clang_Type_getNamedType(clangTp);
 
         if (namedType.kind == CXType_Record) {
-            auto spelling = clang_getCursorDisplayName(clang_getTypeDeclaration(namedType));
-            std::string name((char*)spelling.data);
-            clang_disposeString(spelling);
+            auto name = cxToString(clang_getCursorDisplayName(clang_getTypeDeclaration(namedType)));
 
             // Create and insert the type early, in case the type is recursive
             result = std::make_unique<StructType>(context, name, decltype(StructType::fields){}, true);
@@ -125,9 +128,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
                     VisitData *visitData = (VisitData*)client_data;
 
                     auto type = clang_getCursorType(cursor);
-                    auto fieldNameC = clang_getCursorSpelling(cursor);
-                    auto fieldName = std::string((char*)fieldNameC.data);
-                    clang_disposeString(fieldNameC);
+                    auto fieldName = cxToString(clang_getCursorSpelling(cursor));
 
                     visitData->fields.emplace_back(fieldName, clangToLanguageType(visitData->codegenContext, type));
 
@@ -141,10 +142,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
 
             break;
         } else {
-            auto spelling = clang_getTypeKindSpelling(namedType.kind);
-            auto kindName = std::string((char*)spelling.data);
-            clang_disposeString(spelling);
-
+            auto kindName = cxToString(clang_getTypeKindSpelling(namedType.kind));
             std::cout << "Unknown elaborate type: " << kindName << std::endl;
 
             return nullptr;
@@ -177,15 +175,8 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         break;
     }
     default:
-        auto typeName = clang_getTypeSpelling(clangTp);
-        std::cout << "Unknown type: " << std::string((char*)typeName.data) << " ";
-        clang_disposeString(typeName);
-
-        auto spelling = clang_getTypeKindSpelling(clangTp.kind);
-        auto kindName = std::string((char*)spelling.data);
-        clang_disposeString(spelling);
-
-        std::cout << "kind " << kindName << std::endl;
+        std::cout << "Unknown type: " << cxToString(clang_getTypeSpelling(clangTp)) << " ";
+        std::cout << "kind " << cxToString(clang_getTypeKindSpelling(clangTp.kind)) << std::endl;
 
         return nullptr;
     }
@@ -202,7 +193,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
     CXTranslationUnit unit = clang_parseTranslationUnit(
         index,
         path.data(),
-        nullptr, 0, nullptr, 0, CXTranslationUnit_None
+        nullptr, 0, nullptr, 0, CXTranslationUnit_DetailedPreprocessingRecord
     );
     if (unit == nullptr) {
         std::cout << "Could not parse " << path;
@@ -218,9 +209,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
 
             switch (cursorKind) {
             case CXCursor_FunctionDecl: {
-                auto str = clang_getCursorSpelling(c);
-                auto funcName = std::string((char*)str.data);
-                clang_disposeString(str);
+                auto funcName = cxToString(clang_getCursorSpelling(c));
 
                 // Skip internal functions
                 if (funcName.starts_with("__")) return CXChildVisit_Continue;
@@ -239,9 +228,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {
                     auto argCursor = clang_Cursor_getArgument(c, i);
 
-                    auto argNameC = clang_getCursorSpelling(argCursor);
-                    auto argName = std::string((char*)argNameC.data);
-                    clang_disposeString(argNameC);
+                    auto argName = cxToString(clang_getCursorSpelling(argCursor));
 
                     auto argType = clang_getCursorType(argCursor);
                     auto langArgType = clangToLanguageType(*client_data, argType);
@@ -267,6 +254,35 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
 
 
                 return CXChildVisit_Continue;
+            }
+            case CXCursor_MacroDefinition: {
+                auto name = cxToString(clang_getCursorSpelling(c));
+                // Skip internals
+                if (name.starts_with("__")) return CXChildVisit_Continue;
+
+                auto tu = clang_Cursor_getTranslationUnit(c);
+                auto extent = clang_getCursorExtent(c);
+
+                std::string macroContents;
+                CXToken *tokens;
+                unsigned count;
+                clang_tokenize(tu, extent, &tokens, &count);
+
+                if (count == 2) {
+                    auto macroStr = cxToString(clang_getTokenSpelling(tu, tokens[1]));
+                    try {
+                        auto parsed = std::stoll(macroStr, nullptr, 0);
+                        client_data->globalVariables.emplace(
+                            name,
+                            std::make_unique<IntegerConstant>((IntegerType*)client_data->getType("i32"), (int64_t)parsed)
+                        );
+                    } catch (std::exception &) {
+                        // Not a number, it seems
+                    }
+                }
+                clang_disposeTokens(tu, tokens, count);
+
+                break;
             }
             default: break;
             };
@@ -382,7 +398,7 @@ int main() {
 
     //builder.CreateRet(x.llvmValue());
 
-    llvm::errs() << module;
+    // llvm::errs() << module;
 
     if (llvm::verifyModule(module, &llvm::errs())) {
         // Exit early if there's an error
