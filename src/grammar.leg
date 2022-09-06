@@ -5,6 +5,7 @@
 
 #include <csignal>
 
+#include <fmt/format.h>
 #include "parse_context.hpp"
 
 #define YYSTYPE ParsedLine
@@ -16,7 +17,7 @@
 
 Program = - Module - (Statement -)* Eof
 
-Statement = Struct | Var | Alias | Fn
+Statement = Struct | Alias | Fn
 
 Module = LP ('module' -) m:Id {
     yy->code->moduleName = m.str;
@@ -72,11 +73,12 @@ Fn = ( LP FnType - id:Id {
 } - ArgList # Hadled in its own clause
 - (Expr {
     assert(yy->ctx->fnDef != nullptr);
-    assert(yy->ctx->exprStack.size() == 1);
     auto& body = yy->ctx->fnDef->body;
     auto& exprs = yy->ctx->exprStack;
-    body.push_back(std::move(yy->ctx->exprStack.back()));
-    yy->ctx->exprStack.pop_back();
+    while (yy->ctx->exprStack.size() > 0) {
+        body.push_back(std::move(yy->ctx->exprStack.back()));
+        yy->ctx->exprStack.pop_back();
+    }
 } -)* RP ) {
     assert(yy->ctx->fnDef != nullptr);
     auto fn = std::move(yy->ctx->fnDef);
@@ -100,15 +102,26 @@ ArgList = LP (ArgDecl -)* RP
 ArgDecl = LP name:Id {
     assert(yy->ctx->fnDef != nullptr);
     yy->ctx->fnDef->arguments.emplace_back(name.str, nullptr);
-} - Type RP {
+} - Type {
     assert(yy->ctx->fnDef != nullptr);
     assert(!yy->ctx->fnDef->arguments.empty());
     assert(std::get<1>(yy->ctx->fnDef->arguments.back()) == nullptr);
     assert(yy->ctx->type != nullptr);
     std::get<1>(yy->ctx->fnDef->arguments.back()) = yy->ctx->type.release();
+} RP
+
+Type = ArrType | PtrType | TypeName
+
+ArrType = LP 'array' Space+ < Num > {
+    yy->ctx->arraySize = std::atoll(yytext);
+} - Type RP {
+    assert(yy->ctx->type != nullptr);
+    auto pointeeName = yy->ctx->type->signature();
+    auto size = yy->ctx->arraySize;
+    auto arrName = fmt::format("{}[{}]", pointeeName, size);
+    yy->ctx->type.reset(yy->code->getOrEmplaceType<ArrayType>(arrName, yy->ctx->type.release(), size));
 }
 
-Type = PtrType | TypeName
 PtrType = '*' - Type {
     assert(yy->ctx->type != nullptr);
     auto pointeeName = yy->ctx->type->signature();
@@ -149,11 +162,36 @@ IntegerType = ('i' {
     yy->ctx->type.reset(yy->code->getOrEmplaceType<IntegerType>(signature, std::atoi(yytext), isSigned));
 }
 Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
-Var = LP 'var' Id Expr RP
 
-Alias = LP 'alias' Id Id RP
+Alias = LP 'alias' Space+ Id - Id RP
 
-Expr = FnCall | Literal | Dereference | AddrOfVar | IdExpr
+Expr = Literal | Dereference | AddrOfVar | IdExpr | VarDeclaration | Sizeof | FnCall
+
+VarDeclaration = LP 'var' - VarList RP
+VarList = (VarDecl -)+
+VarDecl = LP name:Id {
+    yy->ctx->exprStack.push_back(std::make_unique<VariableDeclaration>(name.str));
+} - Type {
+    assert(!yy->ctx->exprStack.empty());
+    auto varDecl = dynamic_cast<VariableDeclaration *>(yy->ctx->exprStack.back().get());
+    assert(varDecl != nullptr);
+    assert(yy->ctx->type != nullptr);
+    varDecl->type = yy->ctx->type.release();
+} - (Expr {
+    assert(!yy->ctx->exprStack.empty());
+    auto expr = std::move(yy->ctx->exprStack.back());
+    yy->ctx->exprStack.pop_back();
+    assert(!yy->ctx->exprStack.empty());
+    auto varDecl = dynamic_cast<VariableDeclaration *>(yy->ctx->exprStack.back().get());
+    assert(varDecl != nullptr);
+    varDecl->initialValue = std::move(expr);
+})? RP
+
+Sizeof = LP 'sizeof' Space+ - Type RP {
+    assert(yy->ctx->type != nullptr);
+    auto type = yy->ctx->type.release();
+    yy->ctx->exprStack.push_back(std::make_unique<Sizeof>(type));
+}
 
 FnCall = LP id:Id {
     yy->ctx->exprStack.push_back(std::make_unique<FunctionCall>(*yy->code, id.str));
@@ -168,7 +206,6 @@ FnCall = LP id:Id {
     fnCall->args.push_back(std::move(expr));
 } -)* RP
 
-# FieldAccess |
 IdExpr = id:Id {
     yy->ctx->exprStack.push_back(std::make_unique<VarAccess>(id.str));
 }
@@ -257,7 +294,7 @@ Eof = !.
 %%
 
 bool parse(CodegenContext *codegenCont) {
-    printf("parsing started\n");
+    std::cout << "parsing started\n";
 
     yycontext yy;
     memset(&yy, 0, sizeof(yy));
@@ -267,7 +304,7 @@ bool parse(CodegenContext *codegenCont) {
     bool res = false;
     while(yyparse(&yy)) {
         res = true;
-        printf("---- ---- ---- success! ---- ---- ---\n");
+        std::cout << "---- ---- ---- success! ---- ---- ---\n";
     }
     yy.ctx.release();
 

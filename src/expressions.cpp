@@ -268,7 +268,28 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
     return genCont.builder.CreateLoad(languageType(genCont)->llvmType(), target->llvmValue(genCont));
 }
 
-
 std::string Dereference::dump(int indent) {
     return fmt::format("{}@{}", indentSpaces(indent), target->dump(0));
+}
+
+VariableDeclaration::VariableDeclaration(const std::string& name)
+    : Expression(nullptr)
+    , name(name) { }
+
+std::string VariableDeclaration::dump(int indent) {
+    return fmt::format("{}($var {} {}",
+                       indentSpaces(indent),
+                       name,
+                       type->signature() +
+                       (initialValue == nullptr
+                        ? ")"
+                        : fmt::format(" {})", initialValue->dump(0))));
+}
+
+Sizeof::Sizeof(LanguageType *targetType)
+    : Expression(nullptr)
+    , targetType(targetType) { }
+
+std::string Sizeof::dump(int indent) {
+    return fmt::format("{}($sizeof {})", indentSpaces(indent), targetType->signature());
 }

@@ -57,6 +57,8 @@ struct ParseContext {
     bool isSigned; // for integer types and literals
 
     IntLiteral intLiteral;
+
+    size_t arraySize;
 };
 
 bool parse(CodegenContext *);
