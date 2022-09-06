@@ -60,7 +60,8 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     // Insert variables for arguments
     genContext.pushScope();
     for (auto i = 0; i < argumentNames.size(); i++) {
-        genContext.insertVariable(genContext, argumentNames[i], functionType()->arguments[i]);
+        auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
+        genContext.variableSet(varDef, function->getArg(i));
     }
 
     generateExpressions(genContext, body);
