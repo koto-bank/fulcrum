@@ -28,7 +28,8 @@ struct ExpressionGenContext {
     std::vector<std::map<std::string, VariableDefinition>> variableScopes;
 
     VariableDefinition *lookupVariable(std::string name);
-    VariableDefinition *insertVariable(ExpressionGenContext &genContext, std::string name, LanguageType *type);
+    VariableDefinition *insertVariable(std::string name, LanguageType *type);
+    void variableSet(VariableDefinition *var, llvm::Value *value);
     void pushScope() { variableScopes.push_back({}); }
     void popScope() { variableScopes.pop_back(); }
 };
@@ -240,13 +241,9 @@ public:
 };
 
 struct VarAccess : Expression {
-private:
-    CodegenContext &context;
-
-public:
     std::string name;
 
-    VarAccess(CodegenContext &codegenCont, const std::string& name);
+    VarAccess(const std::string& name);
     LanguageType *languageType(ExpressionGenContext &genCont) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
@@ -254,16 +251,21 @@ public:
 
 struct AddrOf : Expression {
 private:
+    CodegenContext &context;
     std::unique_ptr<Expression> target;
 
 public:
-    AddrOf(std::unique_ptr<Expression> &&target);
-    std::string dump(int indent);
+    AddrOf(CodegenContext &codegenCont, std::unique_ptr<Expression> &&target);
+    LanguageType *languageType(ExpressionGenContext &genCont) override;
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    std::string dump(int indent) override;
 };
 
 struct Dereference : Expression {
     std::unique_ptr<Expression> target;
 
     Dereference();
+    LanguageType *languageType(ExpressionGenContext &genCont) override;
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 };

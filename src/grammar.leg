@@ -170,7 +170,7 @@ FnCall = LP id:Id {
 
 # FieldAccess |
 IdExpr = id:Id {
-    yy->ctx->exprStack.push_back(std::make_unique<VarAccess>(*yy->code, id.str));
+    yy->ctx->exprStack.push_back(std::make_unique<VarAccess>(id.str));
 }
 
 AddrOfVar = '&'- IdExpr {
@@ -178,7 +178,7 @@ AddrOfVar = '&'- IdExpr {
     auto expr = std::move(yy->ctx->exprStack.back());
     yy->ctx->exprStack.pop_back();
 
-    yy->ctx->exprStack.push_back(std::make_unique<AddrOf>(std::move(expr)));
+    yy->ctx->exprStack.push_back(std::make_unique<AddrOf>(*yy->code, std::move(expr)));
 }
 
 Dereference = ('@' {
@@ -194,7 +194,7 @@ Dereference = ('@' {
     deref->target = std::move(expr);
 }
 
-DereferencableExpr = Id | FnCall
+DereferencableExpr = IdExpr | FnCall
 
 Literal = s:Str {
     auto strType = yy->code->getOrEmplaceType<StringType>("str");

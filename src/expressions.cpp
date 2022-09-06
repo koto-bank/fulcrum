@@ -10,17 +10,21 @@ VariableDefinition *ExpressionGenContext::lookupVariable(std::string name) {
     return nullptr;
 }
 
-VariableDefinition *ExpressionGenContext::insertVariable(ExpressionGenContext &genContext, std::string name, LanguageType *type) {
+VariableDefinition *ExpressionGenContext::insertVariable(std::string name, LanguageType *type) {
     if (lookupVariable(name) != nullptr)
         throw CodegenError(fmt::format("Variable {} already defined", name));
 
-    auto allocated = genContext.builder.CreateAlloca(type->llvmType(), 0, name);
+    auto allocated = builder.CreateAlloca(type->llvmType(), 0, name);
     auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
 
     auto varDef = &emplaced.first->second;
     varDef->value = allocated;
 
     return varDef;
+}
+
+void ExpressionGenContext::variableSet(VariableDefinition *var, llvm::Value *value) {
+    builder.CreateStore(value, var->value);
 }
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
@@ -194,8 +198,8 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
     return args[0]->languageType(genCont);
 }
 
-VarAccess::VarAccess(CodegenContext &codegenCont, const std::string& name)
-    : Expression(nullptr), context(codegenCont), name(name) { }
+VarAccess::VarAccess(const std::string& name)
+    : Expression(nullptr), name(name) { }
 
 LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
     auto var = genCont.lookupVariable(name);
@@ -217,14 +221,53 @@ std::string VarAccess::dump(int indent) {
     return fmt::format("{}{}", indentSpaces(indent), name);
 }
 
-AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
-    : Expression(nullptr), target(std::move(target)) { }
+AddrOf::AddrOf(CodegenContext &codegenCont, std::unique_ptr<Expression> &&target)
+    : Expression(nullptr), context(codegenCont), target(std::move(target)) { }
+
+LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
+    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    if (maybeVar == nullptr)
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
+
+    auto varEntry = genCont.lookupVariable(maybeVar->name);
+    if (varEntry == nullptr)
+        throw CodegenError(fmt::format("Variable {} not defined", varEntry->name));
+
+    auto ptrTypeName = varEntry->type->signature() + "*";
+    return context.getOrEmplaceType<PointerType>(ptrTypeName, varEntry->type);
+}
+
+llvm::Value *AddrOf::llvmValue(ExpressionGenContext &genCont) {
+    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    if (maybeVar == nullptr)
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
+
+    auto varEntry = genCont.lookupVariable(maybeVar->name);
+    if (varEntry == nullptr)
+        throw CodegenError(fmt::format("Variable {} not defined", varEntry->name));
+
+    return varEntry->value;
+}
 
 std::string AddrOf::dump(int indent) {
     return fmt::format("{}&{}", indentSpaces(indent), target->dump(0));
 }
 
 Dereference::Dereference() : Expression(nullptr) { }
+
+LanguageType *Dereference::languageType(ExpressionGenContext &genCont) {
+    auto derefing = target->languageType(genCont);
+    auto ptrType = dynamic_cast<PointerType *>(derefing);
+    if (ptrType == nullptr)
+        throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", derefing->signature()));
+
+    return ptrType->pointerTo;
+}
+
+llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
+    return genCont.builder.CreateLoad(languageType(genCont)->llvmType(), target->llvmValue(genCont));
+}
+
 
 std::string Dereference::dump(int indent) {
     return fmt::format("{}@{}", indentSpaces(indent), target->dump(0));
