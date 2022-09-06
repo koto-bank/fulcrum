@@ -4,6 +4,8 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 
+#include <fmt/format.h>
+
 using llvm::LLVMContext;
 using llvm::Type;
 
@@ -194,5 +196,25 @@ public:
         }
 
         return returnType->signature() + " (" + argSignatures + ")";
+    }
+};
+
+struct ArrayType : LanguageType {
+private:
+    LanguageType *targetType;
+    size_t size;
+
+public:
+    ArrayType(LLVMContext &context, LanguageType *targetType, size_t size)
+        : LanguageType(context)
+        , targetType(targetType)
+        , size(size) { }
+
+    Type* llvmType() override {
+        return llvm::ArrayType::get(targetType->llvmType(), size);
+    }
+
+    std::string signature() override {
+        return fmt::format("{}[{}]", targetType->signature(), size);
     }
 };
