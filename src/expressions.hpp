@@ -14,9 +14,23 @@
 
 using llvm::Type;
 
+struct VariableDefinition {
+    std::string name;
+    LanguageType *type;
+    llvm::Value *value;
+
+    VariableDefinition(std::string name, LanguageType *type) : name(name), type(type) { }
+};
+
 struct ExpressionGenContext {
     llvm::IRBuilder<> &builder;
     Function *function;
+    std::vector<std::map<std::string, VariableDefinition>> variableScopes;
+
+    VariableDefinition *lookupVariable(std::string name);
+    VariableDefinition *insertVariable(ExpressionGenContext &genContext, std::string name, LanguageType *type);
+    void pushScope() { variableScopes.push_back({}); }
+    void popScope() { variableScopes.pop_back(); }
 };
 
 struct Expression {
@@ -32,8 +46,8 @@ protected:
 public:
     Expression(LanguageType *type) : type(type) { }
 
-    virtual LanguageType *languageType() { return type; }
-    virtual Type *llvmType() { return languageType()->llvmType(); }
+    virtual LanguageType *languageType(ExpressionGenContext &genCont) { return type; }
+    virtual Type *llvmType(ExpressionGenContext &genCont) { return languageType(genCont)->llvmType(); }
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext) { return value; }
     virtual std::string dump(int indent = 0) = 0;
 
@@ -143,8 +157,8 @@ private:
     llvm::Value *ifProcessor(ExpressionGenContext &genContext);
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
 
-    LanguageType *arithmeticsProcessorType();
-    LanguageType *voidProcessorType() { return context.getType("void"); }
+    LanguageType *arithmeticsProcessorType(ExpressionGenContext &genCont);
+    LanguageType *voidProcessorType(ExpressionGenContext &genCont) { return context.getType("void"); }
 public:
     std::string name;
     std::vector<std::unique_ptr<Expression>> args;
@@ -157,7 +171,7 @@ public:
         : Expression(nullptr), context(codegenCont), name(name), args(std::move(args))  { }
 
     using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
-    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *)>;
+    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
 
     std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions {
         {"return", {&FunctionCall::returnProcessor, &FunctionCall::voidProcessorType}},
@@ -170,10 +184,10 @@ public:
         {"%", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
     };
 
-    LanguageType *languageType() override {
+    LanguageType *languageType(ExpressionGenContext &genCont) override {
         if (type == nullptr) {
             if (specialFunctions.contains(name)) {
-                type = specialFunctions[name].second(this);
+                type = specialFunctions[name].second(this, genCont);
             } else {
                 if (!context.functions.contains(name)) {
                     throw CodegenError(fmt::format("Undefined function {}", name));
@@ -197,7 +211,7 @@ public:
 
         std::vector<llvm::Value *> argValues;
         for (auto i = 0; i < args.size(); i++) {
-            LanguageType *argType = args[i]->languageType();
+            LanguageType *argType = args[i]->languageType(genContext);
             LanguageType *expectedType = calledFunction.functionType()->arguments[i];
             if (argType->llvmType() != expectedType->llvmType()) {
                 throw CodegenError(
@@ -233,6 +247,8 @@ public:
     std::string name;
 
     VarAccess(CodegenContext &codegenCont, const std::string& name);
+    LanguageType *languageType(ExpressionGenContext &genCont) override;
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 };
 
