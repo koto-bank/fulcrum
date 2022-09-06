@@ -1,6 +1,28 @@
 #include "expressions.hpp"
 #include "types.hpp"
 
+VariableDefinition *ExpressionGenContext::lookupVariable(std::string name) {
+    for (auto scope = variableScopes.rbegin(); scope != variableScopes.rend(); ++scope) {
+        if (scope->contains(name))
+            return &scope->at(name);
+    }
+
+    return nullptr;
+}
+
+VariableDefinition *ExpressionGenContext::insertVariable(ExpressionGenContext &genContext, std::string name, LanguageType *type) {
+    if (lookupVariable(name) != nullptr)
+        throw CodegenError(fmt::format("Variable {} already defined", name));
+
+    auto allocated = genContext.builder.CreateAlloca(type->llvmType(), 0, name);
+    auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
+
+    auto varDef = &emplaced.first->second;
+    varDef->value = allocated;
+
+    return varDef;
+}
+
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     if (args.size() != 0 && args.size() != 1) {
         throw CodegenError("Return must have 0 or 1 arguments");
@@ -9,12 +31,12 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     auto returnType = genContext.function->functionType()->returnType;
     if (args.size() == 0 && returnType != context.types.at("void").get()) {
         throw CodegenError("Only void function can return nothing");
-    } else if (args.size() == 1 && returnType != args[0]->languageType()) {
+    } else if (args.size() == 1 && returnType != args[0]->languageType(genContext)) {
         throw CodegenError(
             fmt::format(
                 "Function expected to return {}, but returns {}",
                 returnType->signature(),
-                args[0]->languageType()->signature()
+                args[0]->languageType(genContext)->signature()
             )
         );
     }
@@ -37,7 +59,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 2 || args.size() > 3) {
         throw CodegenError("If must have from 2 to 3 arguments");
     }
-    if (args[0]->languageType() != context.types.at("bool").get()) {
+    if (args[0]->languageType(genContext) != context.types.at("bool").get()) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -81,7 +103,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         );
     }
 
-    auto expectedType = args[0]->languageType();
+    auto expectedType = args[0]->languageType(genContext);
     auto intType = dynamic_cast<IntegerType *>(expectedType);
     auto floatType = intType == nullptr ? nullptr : dynamic_cast<FloatType*>(expectedType);
 
@@ -97,14 +119,14 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
     for (auto i = 0; i< args.size(); i++) {
         auto &arg = args[i];
-        if (arg->languageType() != expectedType) {
+        if (arg->languageType(genContext) != expectedType) {
             throw CodegenError(
                 fmt::format(
                     "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
                     name,
                     expectedType->signature(),
                     i,
-                    arg->languageType()->signature()
+                    arg->languageType(genContext)->signature()
                 )
             );
         }
@@ -162,18 +184,34 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     return result;
 }
 
-LanguageType *FunctionCall::arithmeticsProcessorType() {
+LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
     if (args.size() == 0) {
         throw CodegenError(
             fmt::format("Expected at least 1 argument to {}, but got 0", name)
         );
     }
 
-    return args[0]->languageType();
+    return args[0]->languageType(genCont);
 }
 
 VarAccess::VarAccess(CodegenContext &codegenCont, const std::string& name)
     : Expression(nullptr), context(codegenCont), name(name) { }
+
+LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
+    auto var = genCont.lookupVariable(name);
+    if (var == nullptr)
+        throw CodegenError(fmt::format("Variable {} not defined", name));
+
+    return var->type;
+}
+
+llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genCont) {
+    auto var = genCont.lookupVariable(name);
+    if (var == nullptr)
+        throw CodegenError(fmt::format("Variable {} not defined", name));
+
+    return genCont.builder.CreateLoad(var->type->llvmType(), var->value);
+}
 
 std::string VarAccess::dump(int indent) {
     return fmt::format("{}{}", indentSpaces(indent), name);
@@ -183,12 +221,11 @@ AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
     : Expression(nullptr), target(std::move(target)) { }
 
 std::string AddrOf::dump(int indent) {
-    return fmt::format("{}&", indentSpaces(indent));
+    return fmt::format("{}&{}", indentSpaces(indent), target->dump(0));
 }
 
 Dereference::Dereference() : Expression(nullptr) { }
 
 std::string Dereference::dump(int indent) {
-    return fmt::format("{}@", indentSpaces(indent));
+    return fmt::format("{}@{}", indentSpaces(indent), target->dump(0));
 }
-

@@ -57,7 +57,15 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context.context, "enter", function);
     genContext.builder.SetInsertPoint(bb);
 
+    // Insert variables for arguments
+    genContext.pushScope();
+    for (auto i = 0; i < argumentNames.size(); i++) {
+        genContext.insertVariable(genContext, argumentNames[i], functionType()->arguments[i]);
+    }
+
     generateExpressions(genContext, body);
+
+    genContext.popScope();
 
     if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
         // If the function is not void, insert unreachable at the end, since the user must return something
