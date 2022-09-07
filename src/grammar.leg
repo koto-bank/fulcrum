@@ -190,7 +190,7 @@ VarDecl = LP name:Id {
 Sizeof = LP 'sizeof' Space+ - Type RP {
     assert(yy->ctx->type != nullptr);
     auto type = yy->ctx->type.release();
-    yy->ctx->exprStack.push_back(std::make_unique<Sizeof>(type));
+    yy->ctx->exprStack.push_back(std::make_unique<Sizeof>(*yy->code, type));
 }
 
 FnCall = LP id:Id {

@@ -3,6 +3,6 @@
 
 (fn main i32 ((argc i32) (argv (array 100 *u8)))
   (var (i i32 (+ 12 24 5))
-       (j u8 (sizeof void)))
+       (j u32 (sizeof i32)))
   (puts "Hello, world!")
   (return 0))

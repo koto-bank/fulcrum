@@ -276,6 +276,26 @@ VariableDeclaration::VariableDeclaration(const std::string& name)
     : Expression(nullptr)
     , name(name) { }
 
+llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
+    auto varDef = genContext.insertVariable(name, type);
+    if (initialValue != nullptr) {
+        auto initialValType = initialValue->languageType(genContext);
+        if (initialValType != type) {
+            throw CodegenError(
+                fmt::format(
+                    "Tried to assign a value ot type {} to {}, which is a variable of type {}",
+                    initialValType->signature(),
+                    name,
+                    type->signature()
+                ));
+        }
+
+        genContext.variableSet(varDef, initialValue->llvmValue(genContext));
+    }
+
+    return nullptr;
+}
+
 std::string VariableDeclaration::dump(int indent) {
     return fmt::format("{}($var {} {}",
                        indentSpaces(indent),
@@ -286,9 +306,15 @@ std::string VariableDeclaration::dump(int indent) {
                         : fmt::format(" {})", initialValue->dump(0))));
 }
 
-Sizeof::Sizeof(LanguageType *targetType)
-    : Expression(nullptr)
-    , targetType(targetType) { }
+Sizeof::Sizeof(CodegenContext &context, LanguageType *targetType)
+    : Expression(context.getType("u32"))
+    , targetType(targetType) {
+
+    value = llvm::ConstantInt::get(
+        type->llvmType(),
+        context.module.getDataLayout().getTypeAllocSize(targetType->llvmType())
+    );
+}
 
 std::string Sizeof::dump(int indent) {
     return fmt::format("{}($sizeof {})", indentSpaces(indent), targetType->signature());
