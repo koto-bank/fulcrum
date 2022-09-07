@@ -303,6 +303,27 @@ int main() {
 
     llvm::Module module("main", context);
 
+    llvm::TargetMachine *targetMachine;
+    {
+        llvm::InitializeAllTargetInfos();
+        llvm::InitializeAllTargets();
+        llvm::InitializeAllTargetMCs();
+
+        auto targetTriple = llvm::sys::getDefaultTargetTriple();
+        std::string err;
+        auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
+        if (!target) {
+            llvm::errs() << err;
+            return 1;
+        }
+
+        llvm::TargetOptions options;
+        auto rm = llvm::Optional<llvm::Reloc::Model>();
+        targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
+        module.setDataLayout(targetMachine->createDataLayout());
+        module.setTargetTriple(targetTriple);
+    }
+
     CodegenContext codegenCont = { .context = context, .module = module };
 
     codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Float));
@@ -406,24 +427,6 @@ int main() {
     }
 
     // Object file generation
-
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-
-    auto targetTriple = llvm::sys::getDefaultTargetTriple();
-    std::string err;
-    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
-    if (!target) {
-        llvm::errs() << err;
-        return 1;
-    }
-
-    llvm::TargetOptions options;
-    auto rm = llvm::Optional<llvm::Reloc::Model>();
-    auto targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
-    module.setDataLayout(targetMachine->createDataLayout());
-    module.setTargetTriple(targetTriple);
 
     auto filename = "output.o";
     std::error_code EC;
