@@ -36,15 +36,14 @@ public:
     FunctionType *functionType() { return type.get(); }
     llvm::Function *llvmFunction() { return function; }
 
-
-    bool generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions) {
+    bool generateTerminates = false;
+    void generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions) {
         std::vector<Expression *> args;
         for (auto &expr : expressions)
             args.push_back(expr.get());
-        return generateExpressions(genContext, args);
+        generateExpressions(genContext, args);
     }
-    // Returns true if the function returned early because of "return"
-    bool generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
+    void generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
     void generateBody(ExpressionGenContext &builder);
 
     std::string dump();

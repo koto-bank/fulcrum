@@ -51,6 +51,7 @@ public:
     virtual Type *llvmType(ExpressionGenContext &genContext) { return languageType(genContext)->llvmType(); }
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext) { return value; }
     virtual std::string dump(int indent = 0) = 0;
+    virtual bool isTerminator() { return false; }
 
     virtual ~Expression() = default;
 };
@@ -182,6 +183,17 @@ public:
         {"/", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
         {"%", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
     };
+
+    virtual bool isTerminator() override {
+        if (name == "return") return true;
+        if (name == "do") {
+            for (auto &arg : args)
+                if (arg->isTerminator())
+                    return true;
+        }
+
+        return false;
+    }
 
     LanguageType *languageType(ExpressionGenContext &genContext) override {
         if (type == nullptr) {

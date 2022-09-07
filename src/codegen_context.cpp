@@ -79,16 +79,10 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     }
 }
 
-bool Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
+void Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
     for (auto &expr : expressions) {
         expr->llvmValue(genContext);
-
-        auto maybeRet = dynamic_cast<FunctionCall *>(expr);
-        if (maybeRet != nullptr && maybeRet->name == "return") {
-            // Don't continue generating after a return
-            return true;
-        }
+        if (expr->isTerminator())
+            return;
     }
-
-    return false;
 }
