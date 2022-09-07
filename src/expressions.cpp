@@ -54,7 +54,9 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::doProcessor(ExpressionGenContext &genContext) {
+    genContext.pushScope();
     genContext.function->generateExpressions(genContext, args);
+    genContext.popScope();
 
     return nullptr;
 }
@@ -84,16 +86,20 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
 
     builder.SetInsertPoint(thenBlock);
 
+    genContext.pushScope();
     genContext.function->generateExpressions(genContext, {args[1].get()});
     if (!args[1]->isTerminator())
         builder.CreateBr(afterIfBlock);
+    genContext.popScope();
 
     if (args.size() == 3) {
         builder.SetInsertPoint(elseBlock);
 
+        genContext.pushScope();
         genContext.function->generateExpressions(genContext, {args[2].get()});
         if (!args[2]->isTerminator())
             builder.CreateBr(afterIfBlock);
+        genContext.popScope();
     }
     builder.SetInsertPoint(afterIfBlock);
 
