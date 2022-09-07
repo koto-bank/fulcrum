@@ -271,17 +271,19 @@ struct Dereference : Expression {
 struct VariableDeclaration : Expression {
     std::unique_ptr<Expression> initialValue = nullptr;
     std::string name;
-    LanguageType *type;
 
     VariableDeclaration(const std::string& name);
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
 
     std::string dump(int indent) override;
+
+    void setType(LanguageType *newType) { type = newType; }
 };
 
 struct Sizeof : Expression {
     LanguageType *targetType;
 
-    Sizeof(LanguageType *targetType);
+    Sizeof(CodegenContext &context, LanguageType *targetType);
 
     std::string dump(int indent) override;
 };
