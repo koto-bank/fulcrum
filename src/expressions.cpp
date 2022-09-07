@@ -84,16 +84,16 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
 
     builder.SetInsertPoint(thenBlock);
 
-    if (!genContext.function->generateExpressions(genContext, {args[1].get()})) {
+    genContext.function->generateExpressions(genContext, {args[1].get()});
+    if (!args[1]->isTerminator())
         builder.CreateBr(afterIfBlock);
-    }
 
     if (args.size() == 3) {
         builder.SetInsertPoint(elseBlock);
 
-        if (!genContext.function->generateExpressions(genContext, {args[2].get()})) {
+        genContext.function->generateExpressions(genContext, {args[2].get()});
+        if (!args[2]->isTerminator())
             builder.CreateBr(afterIfBlock);
-        }
     }
     builder.SetInsertPoint(afterIfBlock);
 
