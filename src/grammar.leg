@@ -63,7 +63,7 @@ StructField = LP id:Id - Type {
     yy->ctx->structDef->fields.emplace_back(id.str, yy->ctx->type.release());
 } RP
 
-Fn = ( LP FnType - id:Id {
+Fn = (LP FnType - id:Id {
     assert(yy->ctx->fnDef != nullptr);
     yy->ctx->fnDef->name = id.str;
 } - Type {
@@ -75,11 +75,11 @@ Fn = ( LP FnType - id:Id {
     assert(yy->ctx->fnDef != nullptr);
     auto& body = yy->ctx->fnDef->body;
     auto& exprs = yy->ctx->exprStack;
-    while (yy->ctx->exprStack.size() > 0) {
-        body.push_back(std::move(yy->ctx->exprStack.back()));
-        yy->ctx->exprStack.pop_back();
-    }
-} -)* RP ) {
+    body.insert(body.end(),
+                std::make_move_iterator(exprs.begin()),
+                std::make_move_iterator(exprs.end()));
+    exprs.clear();
+} -)* RP) {
     assert(yy->ctx->fnDef != nullptr);
     auto fn = std::move(yy->ctx->fnDef);
     yy->code->emplaceFn(fn->name, fn->arguments,
@@ -176,7 +176,7 @@ VarDecl = LP name:Id {
     auto varDecl = dynamic_cast<VariableDeclaration *>(yy->ctx->exprStack.back().get());
     assert(varDecl != nullptr);
     assert(yy->ctx->type != nullptr);
-    varDecl->type = yy->ctx->type.release();
+    varDecl->setType(yy->ctx->type.release());
 } - (Expr {
     assert(!yy->ctx->exprStack.empty());
     auto expr = std::move(yy->ctx->exprStack.back());
