@@ -6,13 +6,16 @@
 
 #include "fmt/format.h"
 
-#include "codegen_context.hpp"
 #include "types.hpp"
 
 #include <iostream>
 #include <variant>
+#include <map>
 
 using llvm::Type;
+
+struct CodegenContext;
+struct Function;
 
 struct VariableDefinition {
     std::string name;
@@ -26,6 +29,7 @@ struct ExpressionGenContext {
     llvm::IRBuilder<> &builder;
     Function *function;
     std::vector<std::map<std::string, VariableDefinition>> variableScopes;
+    CodegenContext &codegenContext;
 
     VariableDefinition *lookupVariable(std::string name);
     VariableDefinition *insertVariable(std::string name, LanguageType *type);
@@ -62,13 +66,7 @@ concept IsLongInteger = std::same_as<T, uint64_t> || std::same_as<T, int64_t>;
 struct IntegerConstant : Expression {
     std::variant<uint64_t, int64_t> constValue;
 
-    IntegerConstant(IntegerType *type, IsLongInteger auto _constValue) : Expression(type), constValue(_constValue) {
-        if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
-            throw CodegenError(fmt::format("Integer {} does not fit into its type", _constValue));
-        }
-
-        value = llvm::ConstantInt::get(type->llvmType(), _constValue);
-    }
+    IntegerConstant(IntegerType *type, IsLongInteger auto _constValue);
 
     std::string dump(int indent) override {
         auto isSigned = static_cast<IntegerType *>(type)->isSigned;
@@ -87,13 +85,7 @@ concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
 struct FloatConstant : Expression {
     std::variant<float, double> constValue;
 
-    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_) : Expression(type), constValue(constValue_) {
-        auto apFloat = llvm::APFloat(constValue_);
-        if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
-            throw CodegenError(fmt::format("Float {} does not fit into its type", constValue_));
-        }
-        value = llvm::ConstantFP::get(type->llvmType(), apFloat);
-    }
+    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_);
 
     std::string dump(int indent) override {
         auto floatbits = ((FloatType*)type)->bits;
@@ -158,7 +150,7 @@ private:
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(ExpressionGenContext &genContext);
-    LanguageType *voidProcessorType(ExpressionGenContext &genContext) { return context.getType("void"); }
+    LanguageType *voidProcessorType(ExpressionGenContext &genContext);
 public:
     std::string name;
     std::vector<std::unique_ptr<Expression>> args;
@@ -195,46 +187,9 @@ public:
         return false;
     }
 
-    LanguageType *languageType(ExpressionGenContext &genContext) override {
-        if (type == nullptr) {
-            if (specialFunctions.contains(name)) {
-                type = specialFunctions[name].second(this, genContext);
-            } else {
-                if (!context.functions.contains(name)) {
-                    throw CodegenError(fmt::format("Undefined function {}", name));
-                }
+    LanguageType *languageType(ExpressionGenContext &genContext) override;
 
-                type = context.functions.at(name).functionType()->returnType;
-            }
-        }
-
-        return type;
-    }
-
-    llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
-        if (specialFunctions.contains(name))
-            return specialFunctions[name].first(this, genContext);
-
-        if (!context.functions.contains(name)) {
-            throw CodegenError(fmt::format("Undefined function {}", name));
-        }
-        auto &calledFunction = context.functions.at(name);
-
-        std::vector<llvm::Value *> argValues;
-        for (auto i = 0; i < args.size(); i++) {
-            LanguageType *argType = args[i]->languageType(genContext);
-            LanguageType *expectedType = calledFunction.functionType()->arguments[i];
-            if (argType->llvmType() != expectedType->llvmType()) {
-                throw CodegenError(
-                    fmt::format("Incompatible argument type in {}: for argument #{} "
-                                " expected {}, but received {}", name, i, expectedType->signature(), argType->signature())
-                );
-            }
-            argValues.push_back(args[i]->llvmValue(genContext));
-        }
-
-        return genContext.builder.CreateCall(calledFunction.llvmFunction(), argValues);
-    }
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
 
     std::string dump(int indent) override {
         std::vector<std::string> argDumps;

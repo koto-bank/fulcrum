@@ -131,11 +131,14 @@ PtrType = '*' - Type {
 
 TypeName = BuiltInType | CustomType
 CustomType = id:Id {
-    if (!yy->code->types.contains(id.str)) {
-        yy->code->unresolvedCustomTypes.emplace(id.str, std::make_unique<CustomType>(yy->code->context, id.str));
-    }
     assert(yy->ctx->type == nullptr);
-    yy->ctx->type.reset(yy->code->getType(id.str));
+    if (yy->code->getType(id.str) == nullptr) {
+        if (!yy->code->unresolvedCustomTypes.contains(id.str))
+            yy->code->unresolvedCustomTypes.emplace(id.str, std::make_unique<CustomType>(*yy->code, id.str));
+        yy->ctx->type.reset(yy->code->unresolvedCustomTypes.at(id.str).get());
+    } else {
+        yy->ctx->type.reset(yy->code->getType(id.str));
+    }
 }
 
 BuiltInType = ( 'f32' {

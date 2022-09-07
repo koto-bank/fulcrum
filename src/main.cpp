@@ -38,9 +38,22 @@ std::string cxToString(CXString &&str) {
 }
 
 LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
-    auto &context = codegenCont.context;
+    std::function<std::string(CXType)>actualTpName = [&actualTpName](CXType clangTp) {
+        if (clangTp.kind == CXType_Elaborated) {
+            auto namedType = clang_Type_getNamedType(clangTp);
+            auto name = cxToString(clang_getCursorDisplayName(clang_getTypeDeclaration(namedType)));
+            if (name != "") {
+                return name;
+            } else {
+                return cxToString(clang_getTypeSpelling(clang_Type_getNamedType(clangTp)));
+            }
+        } else if (clangTp.kind == CXType_Pointer) {
+            return actualTpName(clang_getPointeeType(clangTp)) + "*";
+        }
 
-    auto typeName = cxToString(clang_getTypeSpelling(clangTp));
+        return cxToString(clang_getTypeSpelling(clangTp));
+    };
+    auto typeName = actualTpName(clangTp);
 
     if (codegenCont.types.contains(typeName))
         return codegenCont.types[typeName].get();
@@ -52,29 +65,29 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     case CXType_LongLong:
     case CXType_Short:
     case CXType_Int128:
-        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp) * 8, true);
+        result = std::make_unique<IntegerType>(codegenCont, clang_Type_getSizeOf(clangTp) * 8, true);
         break;
     case CXType_UInt:
     case CXType_ULong:
     case CXType_ULongLong:
     case CXType_UShort:
     case CXType_UInt128:
-        result = std::make_unique<IntegerType>(context, clang_Type_getSizeOf(clangTp) * 8, false);
+        result = std::make_unique<IntegerType>(codegenCont, clang_Type_getSizeOf(clangTp) * 8, false);
         break;
     case CXType_Float:
-        result = std::make_unique<FloatType>(context, FloatType::Bits::Float);
+        result = std::make_unique<FloatType>(codegenCont, FloatType::Bits::Float);
         break;
     case CXType_Double:
-        result = std::make_unique<FloatType>(context, FloatType::Bits::Double);
+        result = std::make_unique<FloatType>(codegenCont, FloatType::Bits::Double);
         break;
     case CXType_SChar:
     case CXType_UChar:
     case CXType_Char_S:
     case CXType_Char_U:
-        result = std::make_unique<CharType>(context);
+        result = std::make_unique<CharType>(codegenCont);
         break;
     case CXType_Void:
-        result = std::make_unique<VoidType>(context);
+        result = std::make_unique<VoidType>(codegenCont);
         break;
     case CXType_Pointer:
     case CXType_ConstantArray:
@@ -90,13 +103,13 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         if (dynamic_cast<VoidType *>(pointee) != nullptr) {
             // Synthesize a type if needed
             if (!codegenCont.types.contains("void_internal")) {
-                codegenCont.types.emplace("void_internal", std::make_unique<IntegerType>(context, 8, true));
+                codegenCont.types.emplace("void_internal", std::make_unique<IntegerType>(codegenCont, 8, true));
             }
 
             pointee = codegenCont.types["void_internal"].get();
         }
 
-        result = std::make_unique<PointerType>(context, pointee);
+        result = std::make_unique<PointerType>(codegenCont, pointee);
         break;
     }
     case CXType_Typedef: {
@@ -104,17 +117,15 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         if (aliasTo == nullptr)
             return nullptr;
 
-        result = std::make_unique<AliasType>(context, typeName, aliasTo);
+        result = std::make_unique<AliasType>(codegenCont, typeName, aliasTo);
         break;
     }
     case CXType_Elaborated: {
         auto namedType = clang_Type_getNamedType(clangTp);
 
         if (namedType.kind == CXType_Record) {
-            auto name = cxToString(clang_getCursorDisplayName(clang_getTypeDeclaration(namedType)));
-
             // Create and insert the type early, in case the type is recursive
-            result = std::make_unique<StructType>(context, name, decltype(StructType::fields){}, true);
+            result = std::make_unique<StructType>(codegenCont, typeName, decltype(StructType::fields){}, true);
             codegenCont.types[typeName] = std::move(result);
 
             struct VisitData {
@@ -139,6 +150,51 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             // Now insert the fields into the struct
             ((StructType*)codegenCont.types[typeName].get())->fields =
                 std::move(data.fields);
+
+            break;
+        } else if (namedType.kind == CXType_Enum) {
+            auto enumDecl = clang_getTypeDeclaration(namedType);
+
+            auto enumName = cxToString(clang_getTypeSpelling(namedType));
+
+            auto enumIntType = (IntegerType*)clangToLanguageType(codegenCont, clang_getEnumDeclIntegerType(enumDecl));
+            result = std::make_unique<AliasType>(codegenCont, enumName, enumIntType);
+
+            struct EnumParseContext {
+                CodegenContext &codegenCont;
+                AliasType *enumIntType;
+            };
+            EnumParseContext parseContext = { .codegenCont = codegenCont, .enumIntType = (AliasType*)result.get() };
+
+            clang_visitChildren(
+                enumDecl,
+                [](CXCursor c, CXCursor parent, CXClientData client_data_) {
+                    EnumParseContext *parseContext = (EnumParseContext*)client_data_;
+
+                    auto variantName = cxToString(clang_getCursorSpelling(c));
+                    VariableDefinition varDef(variantName, parseContext->enumIntType);
+
+                    auto intType = (IntegerType*)parseContext->enumIntType->aliasTo;
+                    llvm::Constant *numberConstant = intType->isSigned
+                        ? llvm::ConstantInt::getSigned(intType->llvmType(), clang_getEnumConstantDeclValue(c))
+                        : llvm::ConstantInt::get(intType->llvmType(), clang_getEnumConstantDeclUnsignedValue(c));
+
+                    auto llvmGlobal = new llvm::GlobalVariable(
+                        parseContext->codegenCont.module,
+                        intType->llvmType(),
+                        false,
+                        llvm::GlobalVariable::PrivateLinkage,
+                        numberConstant,
+                        variantName
+                    );
+                    varDef.value = llvmGlobal;
+
+                    parseContext->codegenCont.globalVariables.emplace(variantName, varDef);
+
+                    return CXChildVisit_Continue;
+                },
+                &parseContext
+            );
 
             break;
         } else {
@@ -170,7 +226,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             std::cout << "Skipped " << typeName << std::endl;
             return nullptr;
         }
-        result = std::make_unique<FunctionType>(context, std::move(arguments), returnType);
+        result = std::make_unique<FunctionType>(codegenCont, std::move(arguments), returnType);
 
         break;
     }
@@ -272,10 +328,20 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     auto macroStr = cxToString(clang_getTokenSpelling(tu, tokens[1]));
                     try {
                         auto parsed = std::stoll(macroStr, nullptr, 0);
-                        client_data->globalVariables.emplace(
-                            name,
-                            std::make_unique<IntegerConstant>((IntegerType*)client_data->getType("i32"), (int64_t)parsed)
+
+                        VariableDefinition varDef(name, client_data->getType("i32"));
+
+                        auto llvmGlobal = new llvm::GlobalVariable(
+                            client_data->module,
+                            varDef.type->llvmType(),
+                            false,
+                            llvm::GlobalVariable::PrivateLinkage,
+                            llvm::ConstantInt::get(client_data->getType("i32")->llvmType(), (int64_t)parsed),
+                            name
                         );
+                        varDef.value = llvmGlobal;
+
+                        client_data->globalVariables.emplace(name, varDef);
                     } catch (std::exception &) {
                         // Not a number, it seems
                     }
@@ -326,12 +392,12 @@ int main() {
 
     CodegenContext codegenCont = { .context = context, .module = module };
 
-    codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Float));
-    codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont.context, FloatType::Bits::Double));
-    codegenCont.types.emplace("void", std::make_unique<VoidType>(codegenCont.context));
-    codegenCont.types.emplace("bool", std::make_unique<BoolType>(codegenCont.context));
-    codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont.context, 32, true));
-    codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont.context, 32, false));
+    codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Float));
+    codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Double));
+    codegenCont.types.emplace("void", std::make_unique<VoidType>(codegenCont));
+    codegenCont.types.emplace("bool", std::make_unique<BoolType>(codegenCont));
+    codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont, 32, true));
+    codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont, 32, false));
 
     if (!parse(&codegenCont)) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
@@ -360,7 +426,8 @@ int main() {
     std::cout << codegenCont.functions.at("main").dump() << std::endl;
 
     ExpressionGenContext exprGenContext = {
-        .builder = builder
+        .builder = builder,
+        .codegenContext = codegenCont
     };
     for (auto &f : codegenCont.functions) {
         try {
@@ -419,7 +486,7 @@ int main() {
 
     //builder.CreateRet(x.llvmValue());
 
-    // llvm::errs() << module;
+    llvm::errs() << module;
 
     if (llvm::verifyModule(module, &llvm::errs())) {
         // Exit early if there's an error

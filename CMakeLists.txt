@@ -13,7 +13,8 @@ find_package(Clang REQUIRED)
 add_executable(fulcrum
   "src/main.cpp"
   "src/codegen_context.cpp"
-  "src/expressions.cpp")
+  "src/expressions.cpp"
+  "src/types.cpp")
 target_include_directories(fulcrum PUBLIC "src")
 
 target_include_directories(fulcrum PUBLIC

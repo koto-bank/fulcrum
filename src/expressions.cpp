@@ -1,11 +1,14 @@
 #include "expressions.hpp"
 #include "types.hpp"
+#include "codegen_context.hpp"
 
 VariableDefinition *ExpressionGenContext::lookupVariable(std::string name) {
     for (auto scope = variableScopes.rbegin(); scope != variableScopes.rend(); ++scope) {
         if (scope->contains(name))
             return &scope->at(name);
     }
+    if (codegenContext.globalVariables.contains(name))
+        return &codegenContext.globalVariables.at(name);
 
     return nullptr;
 }
@@ -27,15 +30,35 @@ void ExpressionGenContext::variableSet(VariableDefinition *var, llvm::Value *val
     builder.CreateStore(value, var->value);
 }
 
+IntegerConstant::IntegerConstant(IntegerType *type, IsLongInteger auto _constValue) : Expression(type), constValue(_constValue) {
+    if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
+        throw CodegenError(fmt::format("Integer {} does not fit into its type", _constValue));
+    }
+
+    value = llvm::ConstantInt::get(type->llvmType(), _constValue);
+}
+template IntegerConstant::IntegerConstant(IntegerType *type, int64_t _constValue);
+template IntegerConstant::IntegerConstant(IntegerType *type, uint64_t _constValue);
+
+FloatConstant::FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_) : Expression(type), constValue(constValue_) {
+    auto apFloat = llvm::APFloat(constValue_);
+    if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
+        throw CodegenError(fmt::format("Float {} does not fit into its type", constValue_));
+    }
+    value = llvm::ConstantFP::get(type->llvmType(), apFloat);
+}
+template FloatConstant::FloatConstant(LanguageType *type, float constValue_);
+template FloatConstant::FloatConstant(LanguageType *type, double constValue_);
+
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     if (args.size() != 0 && args.size() != 1) {
         throw CodegenError("Return must have 0 or 1 arguments");
     }
 
     auto returnType = genContext.function->functionType()->returnType;
-    if (args.size() == 0 && returnType != context.types.at("void").get()) {
+    if (args.size() == 0 && returnType->llvmType() != context.types.at("void")->llvmType()) {
         throw CodegenError("Only void function can return nothing");
-    } else if (args.size() == 1 && returnType != args[0]->languageType(genContext)) {
+    } else if (args.size() == 1 && returnType->llvmType() != args[0]->languageType(genContext)->llvmType()) {
         throw CodegenError(
             fmt::format(
                 "Function expected to return {}, but returns {}",
@@ -65,7 +88,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 2 || args.size() > 3) {
         throw CodegenError("If must have from 2 to 3 arguments");
     }
-    if (args[0]->languageType(genContext) != context.types.at("bool").get()) {
+    if (args[0]->languageType(genContext)->llvmType() != context.types.at("bool")->llvmType()) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -129,7 +152,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
     for (auto i = 0; i< args.size(); i++) {
         auto &arg = args[i];
-        if (arg->languageType(genContext) != expectedType) {
+        if (arg->languageType(genContext)->llvmType() != expectedType->llvmType()) {
             throw CodegenError(
                 fmt::format(
                     "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
@@ -194,6 +217,10 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     return result;
 }
 
+LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) {
+    return context.getType("void");
+}
+
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
     if (args.size() == 0) {
         throw CodegenError(
@@ -202,6 +229,47 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
     }
 
     return args[0]->languageType(genCont);
+}
+
+LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
+    if (type == nullptr) {
+        if (specialFunctions.contains(name)) {
+            type = specialFunctions[name].second(this, genContext);
+        } else {
+            if (!context.functions.contains(name)) {
+                throw CodegenError(fmt::format("Undefined function {}", name));
+            }
+
+            type = context.functions.at(name).functionType()->returnType;
+        }
+    }
+
+    return type;
+}
+
+llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
+    if (specialFunctions.contains(name))
+        return specialFunctions[name].first(this, genContext);
+
+    if (!context.functions.contains(name)) {
+        throw CodegenError(fmt::format("Undefined function {}", name));
+    }
+    auto &calledFunction = context.functions.at(name);
+
+    std::vector<llvm::Value *> argValues;
+    for (auto i = 0; i < args.size(); i++) {
+        LanguageType *argType = args[i]->languageType(genContext);
+        LanguageType *expectedType = calledFunction.functionType()->arguments[i];
+        if (argType->llvmType() != expectedType->llvmType()) {
+            throw CodegenError(
+                fmt::format("Incompatible argument type in {}: for argument #{} "
+                            " expected {}, but received {}", name, i, expectedType->signature(), argType->signature())
+            );
+        }
+        argValues.push_back(args[i]->llvmValue(genContext));
+    }
+
+    return genContext.builder.CreateCall(calledFunction.llvmFunction(), argValues);
 }
 
 VarAccess::VarAccess(const std::string& name)
@@ -286,7 +354,7 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     auto varDef = genContext.insertVariable(name, type);
     if (initialValue != nullptr) {
         auto initialValType = initialValue->languageType(genContext);
-        if (initialValType != type) {
+        if (initialValType->llvmType() != type->llvmType()) {
             throw CodegenError(
                 fmt::format(
                     "Tried to assign a value ot type {} to {}, which is a variable of type {}",

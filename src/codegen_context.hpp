@@ -7,10 +7,13 @@
 #include "fmt/format.h"
 
 #include "types.hpp"
+#include "expressions.hpp"
 
-struct Expression;
 struct ExpressionGenContext;
 struct CodegenContext;
+struct VariableDefinition;
+
+using llvm::LLVMContext;
 
 class Function {
     CodegenContext &context;
@@ -58,14 +61,14 @@ struct CodegenContext {
     LLVMContext &context;
     llvm::Module &module;
 
-    std::map<std::string, std::unique_ptr<Expression>> globalVariables;
+    std::map<std::string, VariableDefinition> globalVariables;
     std::string moduleName;
     std::vector<Import> imports;
 
     template <typename Type, typename ...Args>
     Type *getOrEmplaceType(const std::string& name, Args &&...args) {
         if (!types.contains(name)) {
-            types.emplace(name, std::make_unique<Type>(context, std::forward<Args>(args)...));
+            types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
         }
         return static_cast<Type *>(types.at(name).get());
     }
@@ -73,7 +76,7 @@ struct CodegenContext {
     template <typename Type, typename ...Args>
     void emplaceType(const std::string& name, Args &&...args) {
         assert(!types.contains(name));
-        types.emplace(name, std::make_unique<Type>(context, std::forward<Args>(args)...));
+        types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
     }
 
     template <typename Expr, typename Type, typename ...Args>

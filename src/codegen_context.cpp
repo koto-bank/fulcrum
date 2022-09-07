@@ -13,7 +13,7 @@ Function::Function(CodegenContext &context, llvm::Module &module,
             argumentNames.push_back(nm);
             argumentTypes.push_back(tp);
         }
-        type = std::make_unique<FunctionType>(context.context, argumentTypes, returnType);
+        type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
 
         auto funcType = (llvm::FunctionType*)type->llvmType();
         function =
@@ -48,6 +48,7 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
     if (types.contains(name)) {
         return types.at(name).get();
     }
+
     return nullptr;
 }
 
