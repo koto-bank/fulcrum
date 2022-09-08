@@ -135,7 +135,6 @@ struct CodegenContext {
     LanguageType *getType(const std::string &&name) const;
 
     std::map<std::string, std::unique_ptr<LanguageType>> types;
-    std::map<std::string, std::unique_ptr<CustomType>> unresolvedCustomTypes;
 
     void emplaceFn(const std::string &name, const Function::Args &args,
                    LanguageType *returnType, Function::Body &&body,
