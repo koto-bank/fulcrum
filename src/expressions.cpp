@@ -56,7 +56,7 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     }
 
     auto returnType = genContext.function->functionType()->returnType;
-    if (args.size() == 0 && returnType->llvmType() != context.types.at("void")->llvmType()) {
+    if (args.size() == 0 && returnType->llvmType() != genContext.codegenContext.types.at("void")->llvmType()) {
         throw CodegenError("Only void function can return nothing");
     } else if (args.size() == 1 && returnType->llvmType() != args[0]->languageType(genContext)->llvmType()) {
         throw CodegenError(
@@ -85,6 +85,8 @@ llvm::Value *FunctionCall::doProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
+    auto &context = genContext.codegenContext;
+
     if (args.size() < 2 || args.size() > 3) {
         throw CodegenError("If must have from 2 to 3 arguments");
     }
@@ -218,7 +220,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 }
 
 LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) {
-    return context.getType("void");
+    return genContext.codegenContext.getType("void");
 }
 
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
@@ -236,11 +238,11 @@ LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
         if (specialFunctions.contains(name)) {
             type = specialFunctions[name].second(this, genContext);
         } else {
-            if (!context.functions.contains(name)) {
+            if (!genContext.codegenContext.functions.contains(name)) {
                 throw CodegenError(fmt::format("Undefined function {}", name));
             }
 
-            type = context.functions.at(name).functionType()->returnType;
+            type = genContext.codegenContext.functions.at(name).functionType()->returnType;
         }
     }
 
@@ -251,10 +253,10 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     if (specialFunctions.contains(name))
         return specialFunctions[name].first(this, genContext);
 
-    if (!context.functions.contains(name)) {
+    if (!genContext.codegenContext.functions.contains(name)) {
         throw CodegenError(fmt::format("Undefined function {}", name));
     }
-    auto &calledFunction = context.functions.at(name);
+    auto &calledFunction = genContext.codegenContext.functions.at(name);
 
     std::vector<llvm::Value *> argValues;
     for (auto i = 0; i < args.size(); i++) {
@@ -295,8 +297,8 @@ std::string VarAccess::dump(int indent) {
     return fmt::format("{}{}", indentSpaces(indent), name);
 }
 
-AddrOf::AddrOf(CodegenContext &codegenCont, std::unique_ptr<Expression> &&target)
-    : Expression(nullptr), context(codegenCont), target(std::move(target)) { }
+AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
+    : Expression(nullptr), target(std::move(target)) { }
 
 LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
@@ -308,7 +310,7 @@ LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
         throw CodegenError(fmt::format("Variable {} not defined", varEntry->name));
 
     auto ptrTypeName = varEntry->type->signature() + "*";
-    return context.getOrEmplaceType<PointerType>(ptrTypeName, varEntry->type);
+    return genCont.codegenContext.getOrEmplaceType<PointerType>(ptrTypeName, varEntry->type);
 }
 
 llvm::Value *AddrOf::llvmValue(ExpressionGenContext &genCont) {
@@ -327,8 +329,6 @@ std::string AddrOf::dump(int indent) {
     return fmt::format("{}&{}", indentSpaces(indent), target->dump(0));
 }
 
-Dereference::Dereference() : Expression(nullptr) { }
-
 LanguageType *Dereference::languageType(ExpressionGenContext &genCont) {
     auto derefing = target->languageType(genCont);
     auto ptrType = dynamic_cast<PointerType *>(derefing);
@@ -345,10 +345,6 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
 std::string Dereference::dump(int indent) {
     return fmt::format("{}@{}", indentSpaces(indent), target->dump(0));
 }
-
-VariableDeclaration::VariableDeclaration(const std::string& name)
-    : Expression(nullptr)
-    , name(name) { }
 
 llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     auto varDef = genContext.insertVariable(name, type);
