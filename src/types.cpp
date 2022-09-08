@@ -15,10 +15,6 @@ Type* StringType::llvmType() {
     return Type::getIntNPtrTy(context.context, 8);
 }
 
-StructType::StructType(CodegenContext &codegenContext, std::string name, const Fields &fields_, bool isPublic)
-    : LanguageType(codegenContext), name(name), fields(fields_), isPublic(isPublic) {
-}
-
 Type *StructType::llvmType() {
     if (structType == nullptr) {
         std::vector<Type *> fieldTypes;

@@ -48,6 +48,15 @@ struct ParseHeaderContext {
 };
 
 std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clangTp) {
+    if (clang_isConstQualifiedType(clangTp)) {
+        auto RemoveConstFromType = [](CXCursor c, CXCursor, CXClientData d)
+            {
+                *(CXType*)d = clang_getCursorType(c);
+                return (clang_isConstQualifiedType(*(CXType*)d) ? CXChildVisit_Recurse : CXChildVisit_Break);
+            };
+        clang_visitChildren(clang_getTypeDeclaration(clangTp), RemoveConstFromType, &clangTp);
+    }
+
     std::function<std::string(CXType)>actualTpName = [&actualTpName](CXType clangTp) {
         if (clangTp.kind == CXType_Elaborated) {
             auto namedType = clang_Type_getNamedType(clangTp);
@@ -216,6 +225,10 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 // Skip internal functions
                 if (funcName.starts_with("__")) return CXChildVisit_Continue;
 
+                if (std::find_if(parseHeaderContext->module->functions.begin(), parseHeaderContext->module->functions.end(),
+                                 [&funcName](auto &node) { return node->name == funcName; }) != parseHeaderContext->module->functions.end())
+                    break;
+
                 //std::cout << "Function decl: " << funcName << std::endl;
 
                 auto funcType = clang_getCursorType(c);
@@ -294,6 +307,11 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
             }
             case CXCursor_TypedefDecl: {
                 auto name = cxToString(clang_getCursorSpelling(c));
+
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
+                                 [&name](auto &node) { return node->name == name; }) != parseHeaderContext->module->structs.end())
+                    break;
+
                 auto aliasTo = clangToASTType(*parseHeaderContext, clang_getTypedefDeclUnderlyingType(c));
                 if (aliasTo == nullptr) break;
 
@@ -303,9 +321,57 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
 
                 break;
             }
+            case CXCursor_UnionDecl: {
+                auto unionType = clang_getCursorType(c);
+                auto unionName = cxToString(clang_getTypeSpelling(unionType));
+
+                // Skip forward declarations
+                if (!clang_equalCursors(c, clang_getCursorDefinition(c)))
+                    break;
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
+                                 [&unionName](auto &node) { return node->name == unionName; }) != parseHeaderContext->module->structs.end())
+                    break;
+
+                struct VisitData {
+                    ParseHeaderContext &parseHeaderContext;
+
+                    long long biggestSize = 0;
+                    CXType biggestType;
+                };
+                VisitData data = { .parseHeaderContext = *parseHeaderContext };
+                clang_Type_visitFields(
+                    unionType,
+                    [](CXCursor cursor, CXClientData client_data) {
+                        VisitData *visitData = (VisitData*)client_data;
+
+                        auto type = clang_getCursorType(cursor);
+                        auto typeSize = clang_Type_getSizeOf(type);
+                        if (typeSize > visitData->biggestSize) {
+                            visitData->biggestSize = typeSize;
+                            visitData->biggestType = type;
+                        }
+
+                        return CXVisit_Continue;
+                    },
+                    &data
+                );
+
+                auto biggestType = clangToASTType(*parseHeaderContext, data.biggestType);
+
+                StructNode::Fields fields;
+                fields.emplace_back("anon", std::move(biggestType));
+
+                parseHeaderContext->module->structs.emplace_back(
+                    std::make_unique<StructNode>(unionName, std::move(fields), true)
+                );
+
+                break;
+            }
             case CXCursor_StructDecl: {
                 auto structType = clang_getCursorType(c);
-                auto structName = cxToString(clang_getTypeSpelling(structType));
+                auto structName = cxToString(clang_getCursorDisplayName(c));
+                if (structName == "")
+                    structName = cxToString(clang_getTypeSpelling(structType));
 
                 // Skip forward declarations
                 if (!clang_equalCursors(c, clang_getCursorDefinition(c)))
@@ -427,14 +493,6 @@ int main() {
         codegenCont.module.setDataLayout(targetMachine->createDataLayout());
         codegenCont.module.setTargetTriple(targetTriple);
     }
-
-    codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Float));
-    codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Double));
-    codegenCont.types.emplace("void", std::make_unique<VoidType>(codegenCont));
-    codegenCont.types.emplace("bool", std::make_unique<BoolType>(codegenCont));
-    codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont, 32, true));
-    codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont, 32, false));
-    codegenCont.types.emplace("char",  std::make_unique<CharType>(codegenCont));
 
     std::unique_ptr<ModuleNode> moduleAST = parse(&codegenCont);
     if (moduleAST == nullptr) {
