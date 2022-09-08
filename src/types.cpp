@@ -17,13 +17,20 @@ Type* StringType::llvmType() {
 
 StructType::StructType(CodegenContext &codegenContext, std::string name, const Fields &fields_, bool isPublic)
     : LanguageType(codegenContext), name(name), fields(fields_), isPublic(isPublic) {
-    std::vector<Type *> fieldTypes;
-    std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {
-        auto &[_, tp] = type;
-        return tp->llvmType();
-    });
+}
 
-    structType = llvm::StructType::create(context.context, fieldTypes, name);
+Type *StructType::llvmType() {
+    if (structType == nullptr) {
+        std::vector<Type *> fieldTypes;
+        std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {
+            auto &[_, tp] = type;
+            return tp->llvmType();
+        });
+
+        structType = llvm::StructType::create(context.context, fieldTypes, name);
+    }
+
+    return structType;
 }
 
 Type *CharType::llvmType() {

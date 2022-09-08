@@ -7,16 +7,29 @@ Function::Function(CodegenContext &context, llvm::Module &module,
          const std::string &name, const Args &arguments,
          LanguageType *returnType, Body &&body,
          bool isPublic)
-    : context(context), module(module), name(name),
-      arguments(arguments), returnType(returnType),
-      body(std::move(body)), isPublic(isPublic) { }
+    : name(name), body(std::move(body)), isPublic(isPublic) {
+    std::vector<LanguageType *> argumentTypes;
+    for (auto &&[nm, tp] : arguments) {
+        argumentNames.push_back(nm);
+        argumentTypes.push_back(tp);
+    }
+    type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
+
+    auto funcType = (llvm::FunctionType*)type->llvmType();
+    function =
+        llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
+
+    for (auto i = 0; i < function->arg_size(); i++)
+        function->getArg(i)->setName(argumentNames[i]);
+}
 
 std::string Function::dump() {
         std::vector<std::string> argumentDumps, expressionDumps;
-        for (auto &[name, type] : arguments)
+        for (auto i = 0; i < function->arg_size(); i++)
             argumentDumps.push_back(
-                fmt::format("({} {})", name, type->signature())
+                fmt::format("({} {})", argumentNames[i], type->arguments[i]->signature())
             );
+
         for (auto &expr : body) {
             // Indent by 4
             expressionDumps.push_back(expr->dump(4));
@@ -26,7 +39,7 @@ std::string Function::dump() {
             "({} {} {} ({})\n{})",
             isPublic ? "fn" : "fn-",
             name,
-            returnType->signature(),
+            type->returnType->signature(),
             fmt::join(argumentDumps, " "),
             fmt::join(expressionDumps, "\n")
         );
@@ -40,31 +53,17 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
     return nullptr;
 }
 
-void Function::generateDeclaration() {
-    std::vector<LanguageType *> argumentTypes;
-    for (auto &&[nm, tp] : arguments) {
-        argumentTypes.push_back(tp);
-    }
-    type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
-
-    auto funcType = (llvm::FunctionType*)type->llvmType();
-    function =
-        llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
-
-    for (auto i = 0; i < function->arg_size(); i++)
-        function->getArg(i)->setName(arguments[i].first);
-}
-
 void Function::generateBody(ExpressionGenContext &genContext) {
     if (body.size() == 0) return;
 
+    auto &context = genContext.codegenContext;
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context.context, "enter", function);
     genContext.builder.SetInsertPoint(bb);
 
     // Insert variables for arguments
     genContext.pushScope();
-    for (auto i = 0; i < arguments.size(); i++) {
-        auto varDef = genContext.insertVariable(arguments[i].first, functionType()->arguments[i]);
+    for (auto i = 0; i < argumentNames.size(); i++) {
+        auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
         genContext.variableSet(varDef, function->getArg(i));
     }
 
