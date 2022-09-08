@@ -286,7 +286,7 @@ Eof = !.
 
 %%
 
-bool parse(CodegenContext *codegenCont) {
+std::unique_ptr<ModuleNode> parse(CodegenContext *codegenCont) {
     std::cout << "parsing started\n";
 
     yycontext yy;
@@ -299,8 +299,13 @@ bool parse(CodegenContext *codegenCont) {
         res = true;
         std::cout << "---- ---- ---- success! ---- ---- ---\n";
     }
-    yy.ctx.release();
 
+    std::unique_ptr<ModuleNode> moduleAST;
+    if (res) {
+       moduleAST = std::move(yy.ctx->module);
+    }
+    yy.ctx.release();
     yyrelease(&yy);
-    return res;
+
+    return moduleAST;
 }

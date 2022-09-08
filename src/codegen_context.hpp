@@ -9,6 +9,7 @@
 #include "types.hpp"
 #include "expressions.hpp"
 
+struct ASTModuleNode;
 struct ExpressionGenContext;
 struct CodegenContext;
 struct VariableDefinition;
@@ -21,14 +22,11 @@ public:
     using Body = std::vector<std::unique_ptr<Expression>>;
 
 private:
-    CodegenContext &context;
-    llvm::Module &module;
     llvm::Function *function;
 
     std::string name;
 
-    Args arguments;
-    LanguageType *returnType;
+    std::vector<std::string> argumentNames;
     std::unique_ptr<FunctionType> type;
 
     std::vector<std::unique_ptr<Expression>> body;
@@ -53,7 +51,6 @@ public:
     }
     void generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
 
-    void generateDeclaration();
     void generateBody(ExpressionGenContext &builder);
 
     std::string dump();
@@ -104,10 +101,11 @@ public:
 
 struct CodegenContext {
     LLVMContext &context;
-    llvm::Module &module;
+    llvm::Module module;
+
+    CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) { }
 
     std::map<std::string, VariableDefinition> globalVariables;
-    std::string moduleName;
 
     template <typename Type, typename ...Args>
     Type *getOrEmplaceType(const std::string& name, Args &&...args) {

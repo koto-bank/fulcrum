@@ -37,7 +37,17 @@ std::string cxToString(CXString &&str) {
     return res;
 }
 
-LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
+struct ParseHeaderContext {
+    std::unique_ptr<ModuleNode> module;
+    std::unique_ptr<CodegenContext> codegenContext;
+
+    ParseHeaderContext(std::string name, CodegenContext &parentContext) {
+        module = std::make_unique<ModuleNode>(name);
+        codegenContext = std::make_unique<CodegenContext>(name, parentContext.context);
+    }
+};
+
+std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clangTp) {
     std::function<std::string(CXType)>actualTpName = [&actualTpName](CXType clangTp) {
         if (clangTp.kind == CXType_Elaborated) {
             auto namedType = clang_Type_getNamedType(clangTp);
@@ -55,39 +65,46 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
     };
     auto typeName = actualTpName(clangTp);
 
-    if (codegenCont.types.contains(typeName))
-        return codegenCont.types[typeName].get();
-
-    std::unique_ptr<LanguageType> result;
+    std::unique_ptr<ASTType> result;
     switch (clangTp.kind) {
     case CXType_Int:
     case CXType_Long:
     case CXType_LongLong:
     case CXType_Short:
-    case CXType_Int128:
-        result = std::make_unique<IntegerType>(codegenCont, clang_Type_getSizeOf(clangTp) * 8, true);
+    case CXType_Int128: {
+        auto size = clang_Type_getSizeOf(clangTp) * 8;
+        auto signature = "i" + std::to_string(size);
+        context.codegenContext->getOrEmplaceType<IntegerType>(signature, size, true);
+
+        result = std::make_unique<ASTBuiltinType>(signature);
         break;
+    }
     case CXType_UInt:
     case CXType_ULong:
     case CXType_ULongLong:
     case CXType_UShort:
-    case CXType_UInt128:
-        result = std::make_unique<IntegerType>(codegenCont, clang_Type_getSizeOf(clangTp) * 8, false);
+    case CXType_UInt128: {
+        auto size = clang_Type_getSizeOf(clangTp) * 8;
+        auto signature = "u" + std::to_string(size);
+        context.codegenContext->getOrEmplaceType<IntegerType>(signature, size, false);
+
+        result = std::make_unique<ASTBuiltinType>(signature);
         break;
+    }
     case CXType_Float:
-        result = std::make_unique<FloatType>(codegenCont, FloatType::Bits::Float);
+        result = std::make_unique<ASTBuiltinType>("f32");
         break;
     case CXType_Double:
-        result = std::make_unique<FloatType>(codegenCont, FloatType::Bits::Double);
+        result = std::make_unique<ASTBuiltinType>("f64");
         break;
     case CXType_SChar:
     case CXType_UChar:
     case CXType_Char_S:
     case CXType_Char_U:
-        result = std::make_unique<CharType>(codegenCont);
+        result = std::make_unique<ASTBuiltinType>("char");
         break;
     case CXType_Void:
-        result = std::make_unique<VoidType>(codegenCont);
+        result = std::make_unique<ASTBuiltinType>("void");
         break;
     case CXType_Pointer:
     case CXType_ConstantArray:
@@ -96,125 +113,56 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             ? clang_getPointeeType(clangTp)
             : clang_getArrayElementType(clangTp);
 
-        auto pointee = clangToLanguageType(codegenCont, internalType);
-        if (pointee == nullptr) {
-            return nullptr;
-        }
-        if (dynamic_cast<VoidType *>(pointee) != nullptr) {
-            // Synthesize a type if needed
-            if (!codegenCont.types.contains("void_internal")) {
-                codegenCont.types.emplace("void_internal", std::make_unique<IntegerType>(codegenCont, 8, true));
-            }
+        auto pointee = clangToASTType(context, internalType);
+        if (pointee == nullptr) return nullptr;
 
-            pointee = codegenCont.types["void_internal"].get();
+        auto maybeBuiltin = dynamic_cast<ASTBuiltinType *>(pointee.get());
+        if (maybeBuiltin != nullptr && maybeBuiltin->builtinName == "void") {
+            // Replace void pointer with i8*
+
+            context.codegenContext->getOrEmplaceType<IntegerType>("i8", 8, true);
+            pointee = std::make_unique<ASTBuiltinType>("i8");
         }
 
-        result = std::make_unique<PointerType>(codegenCont, pointee);
+        result = std::make_unique<ASTPointerType>(std::move(pointee));
         break;
     }
     case CXType_Typedef: {
-        auto aliasTo = clangToLanguageType(codegenCont, clang_getTypedefDeclUnderlyingType(clang_getTypeDeclaration(clangTp)));
-        if (aliasTo == nullptr)
-            return nullptr;
+        auto aliasTo = clangToASTType(context, clang_getTypedefDeclUnderlyingType(clang_getTypeDeclaration(clangTp)));
+        if (aliasTo == nullptr) return nullptr;
 
-        result = std::make_unique<AliasType>(codegenCont, typeName, aliasTo);
+        result = std::make_unique<ASTNamedType>(typeName);
         break;
     }
     case CXType_Elaborated: {
         auto namedType = clang_Type_getNamedType(clangTp);
 
         if (namedType.kind == CXType_Record) {
-            // Create and insert the type early, in case the type is recursive
-            result = std::make_unique<StructType>(codegenCont, typeName, decltype(StructType::fields){}, true);
-            codegenCont.types[typeName] = std::move(result);
-
-            struct VisitData {
-                CodegenContext &codegenContext;
-                std::vector<std::tuple<std::string, LanguageType *>> fields;
-            };
-            VisitData data = { .codegenContext = codegenCont };
-            clang_Type_visitFields(
-                namedType,
-                [](CXCursor cursor, CXClientData client_data) {
-                    VisitData *visitData = (VisitData*)client_data;
-
-                    auto type = clang_getCursorType(cursor);
-                    auto fieldName = cxToString(clang_getCursorSpelling(cursor));
-
-                    visitData->fields.emplace_back(fieldName, clangToLanguageType(visitData->codegenContext, type));
-
-                    return CXVisit_Continue;
-                },
-                &data
-            );
-            // Now insert the fields into the struct
-            ((StructType*)codegenCont.types[typeName].get())->fields =
-                std::move(data.fields);
-
-            break;
+            result = std::make_unique<ASTNamedType>(typeName);
         } else if (namedType.kind == CXType_Enum) {
             auto enumDecl = clang_getTypeDeclaration(namedType);
 
-            auto enumName = cxToString(clang_getTypeSpelling(namedType));
-
-            auto enumIntType = (IntegerType*)clangToLanguageType(codegenCont, clang_getEnumDeclIntegerType(enumDecl));
-            result = std::make_unique<AliasType>(codegenCont, enumName, enumIntType);
-
-            struct EnumParseContext {
-                CodegenContext &codegenCont;
-                AliasType *enumIntType;
-            };
-            EnumParseContext parseContext = { .codegenCont = codegenCont, .enumIntType = (AliasType*)result.get() };
-
-            clang_visitChildren(
-                enumDecl,
-                [](CXCursor c, CXCursor parent, CXClientData client_data_) {
-                    EnumParseContext *parseContext = (EnumParseContext*)client_data_;
-
-                    auto variantName = cxToString(clang_getCursorSpelling(c));
-                    VariableDefinition varDef(variantName, parseContext->enumIntType);
-
-                    auto intType = (IntegerType*)parseContext->enumIntType->aliasTo;
-                    llvm::Constant *numberConstant = intType->isSigned
-                        ? llvm::ConstantInt::getSigned(intType->llvmType(), clang_getEnumConstantDeclValue(c))
-                        : llvm::ConstantInt::get(intType->llvmType(), clang_getEnumConstantDeclUnsignedValue(c));
-
-                    auto llvmGlobal = new llvm::GlobalVariable(
-                        parseContext->codegenCont.module,
-                        intType->llvmType(),
-                        false,
-                        llvm::GlobalVariable::PrivateLinkage,
-                        numberConstant,
-                        variantName
-                    );
-                    varDef.value = llvmGlobal;
-
-                    parseContext->codegenCont.globalVariables.emplace(variantName, varDef);
-
-                    return CXChildVisit_Continue;
-                },
-                &parseContext
-            );
-
-            break;
+            result = clangToASTType(context, clang_getEnumDeclIntegerType(enumDecl));
         } else {
             auto kindName = cxToString(clang_getTypeKindSpelling(namedType.kind));
             std::cout << "Unknown elaborate type: " << kindName << std::endl;
 
             return nullptr;
         }
+
+        break;
     }
     case CXType_FunctionProto: {
         auto resType = clang_getResultType(clangTp);
-        LanguageType *returnType = clangToLanguageType(codegenCont, resType);
+        auto returnType = clangToASTType(context, resType);
 
         bool unknownType = returnType == nullptr;
 
-        std::vector<LanguageType *> arguments;
+        ASTFunctionType::Args arguments;
         for (auto i = 0; i < clang_getNumArgTypes(clangTp); i++) {
             auto argType = clang_getArgType(clangTp, i);
 
-            auto langArgType = clangToLanguageType(codegenCont, argType);
+            auto langArgType = clangToASTType(context, argType);
             if (langArgType == nullptr) {
                 unknownType = true;
                 break;
@@ -226,7 +174,7 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
             std::cout << "Skipped " << typeName << std::endl;
             return nullptr;
         }
-        result = std::make_unique<FunctionType>(codegenCont, std::move(arguments), returnType);
+        result = std::make_unique<ASTFunctionType>(std::move(arguments), std::move(returnType));
 
         break;
     }
@@ -237,14 +185,12 @@ LanguageType *clangToLanguageType(CodegenContext &codegenCont, CXType clangTp) {
         return nullptr;
     }
 
-    // Check if the type hasn't been added early
-    if (!codegenCont.types.contains(typeName))
-        codegenCont.types[typeName] = std::move(result);
-
-    return codegenCont.types[typeName].get();
+    return result;
 }
 
-void parseHeader(CodegenContext &codegenCont, std::string path) {
+std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext &parentContext) {
+    auto parseHeaderContext = std::make_unique<ParseHeaderContext>(path, parentContext);
+
     CXIndex index = clang_createIndex(0, 0);
     CXTranslationUnit unit = clang_parseTranslationUnit(
         index,
@@ -253,14 +199,14 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
     );
     if (unit == nullptr) {
         std::cout << "Could not parse " << path;
-        return;
+        return nullptr;
     }
 
     CXCursor cursor = clang_getTranslationUnitCursor(unit);
     clang_visitChildren(
         cursor,
         [](CXCursor c, CXCursor parent, CXClientData client_data_) {
-            auto client_data = (CodegenContext *)client_data_;
+            auto parseHeaderContext = (ParseHeaderContext *)client_data_;
             auto cursorKind = clang_getCursorKind(c);
 
             switch (cursorKind) {
@@ -276,10 +222,10 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                 bool variadic = clang_isFunctionTypeVariadic(funcType);
 
                 auto resType = clang_getResultType(funcType);
-                LanguageType *returnType = clangToLanguageType(*client_data, resType);
+                auto returnType = clangToASTType(*parseHeaderContext, resType);
 
                 bool unknownType = returnType == nullptr;
-                Function::Args arguments;
+                FunctionNode::Args arguments;
 
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {
                     auto argCursor = clang_Cursor_getArgument(c, i);
@@ -287,7 +233,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     auto argName = cxToString(clang_getCursorSpelling(argCursor));
 
                     auto argType = clang_getCursorType(argCursor);
-                    auto langArgType = clangToLanguageType(*client_data, argType);
+                    auto langArgType = clangToASTType(*parseHeaderContext, argType);
                     if (langArgType == nullptr) {
                         unknownType = true;
                         break;
@@ -300,7 +246,11 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     return CXChildVisit_Continue;
                 }
 
-                client_data->emplaceFn(funcName, arguments, returnType, {}, true);
+                parseHeaderContext->module->functions.push_back(
+                    std::make_unique<FunctionNode>(
+                        funcName, std::move(arguments), std::move(returnType), FunctionNode::Body{}, true
+                    )
+                );
 
                 return CXChildVisit_Continue;
             }
@@ -322,19 +272,18 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     try {
                         auto parsed = std::stoll(macroStr, nullptr, 0);
 
-                        VariableDefinition varDef(name, client_data->getType("i32"));
+                        auto variantName = cxToString(clang_getCursorSpelling(c));
+                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
+                        varDef->type = std::make_unique<ASTBuiltinType>("i32");
 
-                        auto llvmGlobal = new llvm::GlobalVariable(
-                            client_data->module,
-                            varDef.type->llvmType(),
-                            false,
-                            llvm::GlobalVariable::PrivateLinkage,
-                            llvm::ConstantInt::get(client_data->getType("i32")->llvmType(), (int64_t)parsed),
-                            name
+                        varDef->initialValue = std::make_unique<ConstantIntNode>(
+                            ASTBuiltinType("i32"),
+                            (int64_t)parsed
                         );
-                        varDef.value = llvmGlobal;
 
-                        client_data->globalVariables.emplace(name, varDef);
+                        parseHeaderContext->module->globalVariables.push_back(
+                            std::move(varDef)
+                        );
                     } catch (std::exception &) {
                         // Not a number, it seems
                     }
@@ -343,24 +292,120 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
 
                 break;
             }
+            case CXCursor_TypedefDecl: {
+                auto name = cxToString(clang_getCursorSpelling(c));
+                auto aliasTo = clangToASTType(*parseHeaderContext, clang_getTypedefDeclUnderlyingType(c));
+                if (aliasTo == nullptr) break;
+
+                parseHeaderContext->module->aliases.push_back(
+                    std::make_unique<AliasNode>(name, std::move(aliasTo))
+                );
+
+                break;
+            }
+            case CXCursor_StructDecl: {
+                auto structType = clang_getCursorType(c);
+                auto structName = cxToString(clang_getTypeSpelling(structType));
+
+                // Skip forward declarations
+                if (!clang_equalCursors(c, clang_getCursorDefinition(c)))
+                    break;
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
+                                 [&structName](auto &node) { return node->name == structName; }) != parseHeaderContext->module->structs.end())
+                    break;
+
+                struct VisitData {
+                    ParseHeaderContext &parseHeaderContext;
+                    StructNode::Fields fields;
+                };
+                VisitData data = { .parseHeaderContext = *parseHeaderContext };
+                clang_Type_visitFields(
+                    structType,
+                    [](CXCursor cursor, CXClientData client_data) {
+                        VisitData *visitData = (VisitData*)client_data;
+
+                        auto type = clang_getCursorType(cursor);
+                        auto fieldName = cxToString(clang_getCursorSpelling(cursor));
+
+                        visitData->fields.emplace_back(
+                            fieldName, clangToASTType(visitData->parseHeaderContext, type)
+                        );
+
+                        return CXVisit_Continue;
+                    },
+                    &data
+                );
+                parseHeaderContext->module->structs.emplace_back(
+                    std::make_unique<StructNode>(structName, std::move(data.fields), true)
+                );
+
+                break;
+            }
+            case CXCursor_EnumDecl: {
+                auto namedType = clang_getCursorType(c);
+                auto enumName = cxToString(clang_getTypeSpelling(namedType));
+
+                auto enumIntType = clangToASTType(*parseHeaderContext, clang_getEnumDeclIntegerType(c));
+
+                struct EnumParseContext {
+                    std::string enumTypeName;
+                    ParseHeaderContext &parseHeaderContext;
+                };
+                EnumParseContext parseContext = {
+                    .enumTypeName = ((ASTBuiltinType*)enumIntType.get())->builtinName,
+                    .parseHeaderContext = *parseHeaderContext
+                };
+
+                clang_visitChildren(
+                    c,
+                    [](CXCursor c, CXCursor parent, CXClientData client_data_) {
+                        EnumParseContext *parseContext = (EnumParseContext*)client_data_;
+
+                        auto variantName = cxToString(clang_getCursorSpelling(c));
+                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
+                        varDef->type = std::make_unique<ASTBuiltinType>(parseContext->enumTypeName);
+
+                        if (parseContext->enumTypeName[0] == 'i')
+                            varDef->initialValue = std::make_unique<ConstantIntNode>(
+                                ASTBuiltinType(parseContext->enumTypeName),
+                                (int64_t)clang_getEnumConstantDeclValue(c)
+                            );
+                        else
+                            varDef->initialValue = std::make_unique<ConstantIntNode>(
+                                ASTBuiltinType(parseContext->enumTypeName),
+                                (uint64_t)clang_getEnumConstantDeclUnsignedValue(c)
+                            );
+                        parseContext->parseHeaderContext.module->globalVariables.push_back(
+                            std::move(varDef)
+                        );
+
+                        return CXChildVisit_Continue;
+                    },
+                    &parseContext
+                );
+            }
             default: break;
             };
 
 
             return CXChildVisit_Recurse;
         },
-        &codegenCont
+        parseHeaderContext.get()
     );
 
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
+
+    parseHeaderContext->module->generate(*parseHeaderContext->codegenContext);
+
+    return std::move(parseHeaderContext);
 }
 
 int main() {
     LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
-    llvm::Module module("main", context);
+    CodegenContext codegenCont("main", context);
 
     llvm::TargetMachine *targetMachine;
     {
@@ -379,11 +424,9 @@ int main() {
         llvm::TargetOptions options;
         auto rm = llvm::Optional<llvm::Reloc::Model>();
         targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
-        module.setDataLayout(targetMachine->createDataLayout());
-        module.setTargetTriple(targetTriple);
+        codegenCont.module.setDataLayout(targetMachine->createDataLayout());
+        codegenCont.module.setTargetTriple(targetTriple);
     }
-
-    CodegenContext codegenCont = { .context = context, .module = module };
 
     codegenCont.types.emplace("f32", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Float));
     codegenCont.types.emplace("f64", std::make_unique<FloatType>(codegenCont, FloatType::Bits::Double));
@@ -391,39 +434,20 @@ int main() {
     codegenCont.types.emplace("bool", std::make_unique<BoolType>(codegenCont));
     codegenCont.types.emplace("i32",  std::make_unique<IntegerType>(codegenCont, 32, true));
     codegenCont.types.emplace("u32",  std::make_unique<IntegerType>(codegenCont, 32, false));
+    codegenCont.types.emplace("char",  std::make_unique<CharType>(codegenCont));
 
-    if (!parse(&codegenCont)) {
+    std::unique_ptr<ModuleNode> moduleAST = parse(&codegenCont);
+    if (moduleAST == nullptr) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
         return 1;
     }
 
-    /*
-    for (auto &import : codegenCont.imports) {
+    for (auto &import : moduleAST->imports) {
         if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-            parseHeader(codegenCont, import.target);
+            parseHeader(import.target, codegenCont);
         }
     }
-
-    std::cout << "Module " << codegenCont.moduleName << std::endl;
-    std::cout << "Imports: " << std::endl;
-    for (const auto &i : codegenCont.imports) {
-        std::cout << i.target;
-        if (!i.keywords.empty()) {
-            std::cout << " keywords:";
-        }
-
-        for (const auto &kw : i.keywords) {
-            std::cout << ' ' << kw;
-        }
-        std::cout << std::endl;
-    }
-    std::cout << codegenCont.functions.at("main").dump() << std::endl;
-    */
-
-    // Now that all types are known, function declrations can actually be generated
-    for (auto &[name, knownFn] : codegenCont.functions) {
-        knownFn.generateDeclaration();
-    }
+    moduleAST->generate(codegenCont);
 
     ExpressionGenContext exprGenContext = {
         .builder = builder,
@@ -486,9 +510,9 @@ int main() {
 
     //builder.CreateRet(x.llvmValue());
 
-    llvm::errs() << module;
+    llvm::errs() << codegenCont.module;
 
-    if (llvm::verifyModule(module, &llvm::errs())) {
+    if (llvm::verifyModule(codegenCont.module, &llvm::errs())) {
         // Exit early if there's an error
         return 1;
     }
@@ -501,7 +525,7 @@ int main() {
 
     llvm::legacy::PassManager passManager;
     targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
-    passManager.run(module);
+    passManager.run(codegenCont.module);
     dest.flush();
 
     return 0;

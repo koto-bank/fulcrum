@@ -77,7 +77,7 @@ struct AliasType : LanguageType {
 
 struct StructType : LanguageType {
 private:
-    llvm::StructType *structType;
+    llvm::StructType *structType = nullptr;
 
 public:
     std::string name;
@@ -88,9 +88,7 @@ public:
 
     StructType(CodegenContext &codegenContext, std::string name, const Fields &fields_, bool isPublic);
 
-    Type* llvmType() override {
-        return structType;
-    }
+    Type* llvmType() override;
 
     std::string signature() override {
         return name;
@@ -165,7 +163,7 @@ public:
         return funcType;
     }
 
-    std::string signature() override {
+    static std::string signatureFrom(const std::vector<LanguageType *> &arguments, LanguageType *returnType) {
         std::string argSignatures;
         for (int i = 0; i < arguments.size(); i++) {
             if (i != 0)
@@ -174,6 +172,10 @@ public:
         }
 
         return returnType->signature() + " (" + argSignatures + ")";
+    }
+
+    std::string signature() override {
+        return signatureFrom(arguments, returnType);
     }
 };
 

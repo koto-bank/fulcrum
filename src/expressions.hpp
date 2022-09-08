@@ -230,13 +230,12 @@ struct Dereference : Expression {
 struct VariableDeclaration : Expression {
     std::unique_ptr<Expression> initialValue = nullptr;
 
-    LanguageType *variableType;
     std::string name;
 
     VariableDeclaration(const std::string& name, LanguageType *type, std::unique_ptr<Expression> &&initialValue)
-        : Expression(nullptr), name(name), variableType(type),
-          initialValue(std::move(initialValue)) { }
+        : Expression(type), name(name), initialValue(std::move(initialValue)) { }
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    Type *llvmType(ExpressionGenContext &genContext) override { return nullptr; }
 
     std::string dump(int indent) override;
 };

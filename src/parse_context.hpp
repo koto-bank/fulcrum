@@ -78,6 +78,27 @@ struct ASTArrayType : ASTType {
     };
 };
 
+struct ASTFunctionType : ASTType {
+    using Args = std::vector<std::unique_ptr<ASTType>>;
+    Args arguments;
+
+    std::unique_ptr<ASTType> returnType;
+
+    ASTFunctionType(Args &&arguments, std::unique_ptr<ASTType> &&returnType)
+        : arguments(std::move(arguments)), returnType(std::move(returnType)) { }
+
+    LanguageType *languageType(CodegenContext &context) override {
+        std::vector<LanguageType *> exprArgs;
+        for (auto &astType : arguments)
+            exprArgs.emplace_back(astType->languageType(context));
+
+        return context.getOrEmplaceType<FunctionType>(
+            FunctionType::signatureFrom(exprArgs, returnType->languageType(context)),
+            exprArgs, returnType->languageType(context)
+        );
+    }
+};
+
 // Nodes
 
 struct ASTNode {
@@ -87,11 +108,15 @@ struct ASTNode {
 };
 
 struct StructNode : ASTNode {
+    using Fields = std::vector<std::tuple<std::string, std::unique_ptr<ASTType>>>;
+
     std::string name;
     bool isPublic;
-    std::vector<std::tuple<std::string, std::unique_ptr<ASTType>>> fields;
+    Fields fields;
 
     StructNode() = default;
+    StructNode(std::string name, Fields &&fields, bool isPublic)
+        : name(name), fields(std::move(fields)), isPublic(isPublic) { }
 
     std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
 
@@ -104,12 +129,26 @@ struct StructNode : ASTNode {
     }
 };
 
+struct AliasNode : ASTNode {
+    std::string name;
+    std::unique_ptr<ASTType> target;
+
+    AliasNode(std::string name, std::unique_ptr<ASTType> &&target)
+        : name(name), target(std::move(target)) { }
+
+    std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
+
+    void emplaceAliasType(CodegenContext &context) {
+        context.emplaceType<AliasType>(name, name, target->languageType(context));
+    }
+};
+
 struct FunctionNode : ASTNode {
     using Args = std::vector<std::pair<std::string, std::unique_ptr<ASTType>>>;
     using Body = std::vector<std::unique_ptr<ASTNode>>;
 
-    bool isPublic;
     std::string name;
+    bool isPublic;
 
     Args arguments;
     std::unique_ptr<ASTType> returnType;
@@ -117,6 +156,9 @@ struct FunctionNode : ASTNode {
     Body body;
 
     FunctionNode() = default;
+    FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic)
+        : name(name), isPublic(isPublic), arguments(std::move(arguments)),
+          returnType(std::move(returnType)) { }
 
     std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
 
@@ -228,6 +270,37 @@ struct VariableDeclarationNode : ASTNode {
             initialValue ? initialValue->expression(context) : nullptr
         );
     }
+
+   void emplaceGlobalVar(CodegenContext &context) {
+       VariableDefinition varDef(name, type->languageType(context));
+       auto varType = type->languageType(context);
+
+       if (initialValue != nullptr) {
+           auto expr = initialValue->expression(context);
+
+           // FIXME: This is a mess
+           auto maybeInt = dynamic_cast<IntegerConstant *>(expr.get());
+           if (maybeInt != nullptr) {
+               auto isSigned = std::holds_alternative<int64_t>(maybeInt->constValue);
+               llvm::Constant *numberConstant = isSigned
+                   ? llvm::ConstantInt::getSigned(varType->llvmType(), std::get<int64_t>(maybeInt->constValue))
+                   : llvm::ConstantInt::get(varType->llvmType(), std::get<uint64_t>(maybeInt->constValue));
+
+               auto llvmGlobal = new llvm::GlobalVariable(
+                   context.module,
+                   varType->llvmType(),
+                   false,
+                   llvm::GlobalVariable::PrivateLinkage,
+                   numberConstant,
+                   name
+               );
+               varDef.value = llvmGlobal;
+               context.globalVariables.emplace(name, varDef);
+           } else {
+               throw CodegenError(fmt::format("Global variables of type {} are not supported", varType->signature()));
+           }
+       }
+    }
 };
 
 struct SizeofNode : ASTNode {
@@ -248,12 +321,27 @@ struct ModuleNode : ASTNode {
         std::vector<std::string> keywords;
     };
     std::vector<Import> imports;
+
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
+    std::vector<std::unique_ptr<AliasNode>> aliases;
+    std::vector<std::unique_ptr<VariableDeclarationNode>> globalVariables;
 
     ModuleNode(std::string name) : name(name) { };
 
     std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
+
+    void generate(CodegenContext &codegenContext) {
+        for (auto &moduleStruct : structs)
+            moduleStruct->emplaceStructType(codegenContext);
+        for (auto &moduleAlias : aliases)
+            moduleAlias->emplaceAliasType(codegenContext);
+        for (auto &globalVar : globalVariables)
+            globalVar->emplaceGlobalVar(codegenContext);
+
+        for (auto &functions : functions)
+            functions->emplaceFunction(codegenContext);
+    }
 };
 
 struct ParseContext {
@@ -284,4 +372,4 @@ struct ParseContext {
     size_t arraySize;
 };
 
-bool parse(CodegenContext *);
+std::unique_ptr<ModuleNode> parse(CodegenContext *);
