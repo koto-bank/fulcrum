@@ -59,39 +59,29 @@ struct StringType : LanguageType {
     }
 };
 
-struct CustomType : LanguageType {
-private:
-    LanguageType *resolved;
-    CodegenContext &codegenContext;
-public:
+struct AliasType : LanguageType {
     std::string name;
-
-    CustomType(CodegenContext &codegenContext, std::string name)
-        : LanguageType(codegenContext), codegenContext(codegenContext), name(name) { }
-
-    Type* llvmType() override;
-
-    std::string signature() override {
-        return name;
-    }
-};
-
-struct AliasType : CustomType {
     LanguageType *aliasTo;
 
     AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
-        : CustomType(codegenContext, name), aliasTo(aliasTo_) { }
+        : LanguageType(codegenContext), aliasTo(aliasTo_) { }
 
     Type* llvmType() override {
         return aliasTo->llvmType();
     }
+
+    std::string signature() override {
+        return fmt::format("{} (alias of {})", name, aliasTo->signature());
+    }
 };
 
-struct StructType : CustomType {
+struct StructType : LanguageType {
 private:
     llvm::StructType *structType;
 
 public:
+    std::string name;
+
     using Fields = std::vector<std::tuple<std::string, LanguageType *>>;
     Fields fields;
     bool isPublic;
@@ -100,6 +90,10 @@ public:
 
     Type* llvmType() override {
         return structType;
+    }
+
+    std::string signature() override {
+        return name;
     }
 };
 
