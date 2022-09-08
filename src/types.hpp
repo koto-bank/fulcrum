@@ -86,7 +86,13 @@ public:
     Fields fields;
     bool isPublic;
 
-    StructType(CodegenContext &codegenContext, std::string name, const Fields &fields_, bool isPublic);
+    StructType(CodegenContext &codegenContext, std::string name, bool isPublic)
+        : LanguageType(codegenContext), name(name), isPublic(isPublic) {
+    }
+
+    void fillFields(const Fields &fields_) {
+        fields = fields_;
+    }
 
     Type* llvmType() override;
 

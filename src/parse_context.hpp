@@ -121,11 +121,12 @@ struct StructNode : ASTNode {
     std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
 
     void emplaceStructType(CodegenContext &context) {
+        context.emplaceType<StructType>(name, name, isPublic);
+    }
+    void fillStructTypeFields(CodegenContext &context) {
         StructType::Fields exprFields;
         for (auto &[name, astType] : fields)
             exprFields.emplace_back(name, astType->languageType(context));
-
-        context.emplaceType<StructType>(name, name, exprFields, isPublic);
     }
 };
 
@@ -332,10 +333,19 @@ struct ModuleNode : ASTNode {
     std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
 
     void generate(CodegenContext &codegenContext) {
+        // First insert all the structure types
         for (auto &moduleStruct : structs)
             moduleStruct->emplaceStructType(codegenContext);
+        // Now insert all alias types
         for (auto &moduleAlias : aliases)
             moduleAlias->emplaceAliasType(codegenContext);
+
+        // Now fill structure type fields, which could possibly refer
+        // to other structures or aliases
+        for (auto &moduleStruct : structs)
+            moduleStruct->fillStructTypeFields(codegenContext);
+
+
         for (auto &globalVar : globalVariables)
             globalVar->emplaceGlobalVar(codegenContext);
 

@@ -103,7 +103,15 @@ struct CodegenContext {
     LLVMContext &context;
     llvm::Module module;
 
-    CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) { }
+    CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) {
+        emplaceType<FloatType>("f32", FloatType::Bits::Float);
+        emplaceType<FloatType>("f64", FloatType::Bits::Double);
+        emplaceType<VoidType>("void");
+        emplaceType<BoolType>("bool");
+        emplaceType<IntegerType>("i32", 32, true);
+        emplaceType<IntegerType>("u32",  32, false);
+        emplaceType<CharType>("char");
+    }
 
     std::map<std::string, VariableDefinition> globalVariables;
 
