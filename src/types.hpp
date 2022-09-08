@@ -150,22 +150,24 @@ struct BoolType : LanguageType {
 
 struct FunctionType : LanguageType {
 private:
-    llvm::FunctionType *funcType;
+    llvm::FunctionType *funcType = nullptr;
 
 public:
     std::vector<LanguageType *> arguments;
     LanguageType *returnType;
 
     FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType_)
-        : LanguageType(context), arguments(args), returnType(returnType_) {
-        std::vector<Type *> argTypes;
-        std::transform(arguments.begin(), arguments.end(), std::back_inserter(argTypes), [](auto &type) { return type->llvmType(); });
-        Type *retType = returnType->llvmType();
-
-        funcType = llvm::FunctionType::get(retType, argTypes, false);
-    }
+        : LanguageType(context), arguments(args), returnType(returnType_) { }
 
     Type* llvmType() override {
+        if (funcType == nullptr) {
+            std::vector<Type *> argTypes;
+            std::transform(arguments.begin(), arguments.end(), std::back_inserter(argTypes), [](auto &type) { return type->llvmType(); });
+            Type *retType = returnType->llvmType();
+
+            funcType = llvm::FunctionType::get(retType, argTypes, false);
+        }
+
         return funcType;
     }
 

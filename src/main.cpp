@@ -279,7 +279,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                 LanguageType *returnType = clangToLanguageType(*client_data, resType);
 
                 bool unknownType = returnType == nullptr;
-                std::vector<std::tuple<std::string, LanguageType *>> arguments;
+                Function::Args arguments;
 
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {
                     auto argCursor = clang_Cursor_getArgument(c, i);
@@ -300,14 +300,7 @@ void parseHeader(CodegenContext &codegenCont, std::string path) {
                     return CXChildVisit_Continue;
                 }
 
-                client_data->functions.emplace(funcName, Function(*client_data, client_data->module, funcName, arguments, returnType, {}, true));
-                llvm::Function *llvmFnc = client_data->functions.at(funcName).llvmFunction();
-                for (auto i = 0; i < llvmFnc->arg_size(); i++) {
-                    auto &[name, _] = arguments[i];
-
-                    llvmFnc->getArg(i)->setName(name);
-                }
-
+                client_data->emplaceFn(funcName, arguments, returnType, {}, true);
 
                 return CXChildVisit_Continue;
             }
@@ -404,6 +397,7 @@ int main() {
         return 1;
     }
 
+    /*
     for (auto &import : codegenCont.imports) {
         if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
             parseHeader(codegenCont, import.target);
@@ -424,15 +418,21 @@ int main() {
         std::cout << std::endl;
     }
     std::cout << codegenCont.functions.at("main").dump() << std::endl;
+    */
+
+    // Now that all types are known, function declrations can actually be generated
+    for (auto &[name, knownFn] : codegenCont.functions) {
+        knownFn.generateDeclaration();
+    }
 
     ExpressionGenContext exprGenContext = {
         .builder = builder,
         .codegenContext = codegenCont
     };
-    for (auto &f : codegenCont.functions) {
+    for (auto &[name, f] : codegenCont.functions) {
         try {
-            exprGenContext.function = &f.second;
-            f.second.generateBody(exprGenContext);
+            exprGenContext.function = &f;
+            f.generateBody(exprGenContext);
         } catch (const CodegenError &err) {
             std::cout << fmt::format(
                 "{}\n{}",

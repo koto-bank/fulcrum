@@ -101,22 +101,18 @@ struct FloatConstant : Expression {
 
 struct StringConstant : Expression {
 private:
-    llvm::GlobalVariable *llvmConst;
+    llvm::GlobalVariable *llvmConst = nullptr;
 
 public:
     std::string constValue;
 
-    StringConstant(LanguageType *type, llvm::Module &mod, const std::string& constValue) : Expression(type), constValue(constValue) {
-        auto constStr = llvm::ConstantDataArray::getString(type->llvmType()->getContext(), constValue.data());
-
-        // New here is overriden in llvm, so supposedly it's not just allocating on the heap
-        llvmConst = new llvm::GlobalVariable(
-            mod, constStr->getType(), true,
-            llvm::GlobalValue::PrivateLinkage, constStr
-        );
-    }
+    StringConstant(LanguageType *type, const std::string& constValue) : Expression(type), constValue(constValue) { }
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override {
+        if (llvmConst == nullptr) {
+            llvmConst = genContext.builder.CreateGlobalString(constValue);
+        }
+
         auto Zero = llvm::ConstantInt::get(Type::getInt32Ty(type->llvmType()->getContext()), 0);
         llvm::Constant *Indices[] = {Zero, Zero};
         return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
@@ -142,8 +138,6 @@ public:
 
 struct FunctionCall : Expression {
 private:
-    CodegenContext &context;
-
     llvm::Value *returnProcessor(ExpressionGenContext &genContext);
     llvm::Value *doProcessor(ExpressionGenContext &genContext);
     llvm::Value *ifProcessor(ExpressionGenContext &genContext);
@@ -152,15 +146,14 @@ private:
     LanguageType *arithmeticsProcessorType(ExpressionGenContext &genContext);
     LanguageType *voidProcessorType(ExpressionGenContext &genContext);
 public:
+    using Args = std::vector<std::unique_ptr<Expression>>;
+
     std::string name;
-    std::vector<std::unique_ptr<Expression>> args;
+    Args args;
 
-    FunctionCall(CodegenContext &codegenContext, std::string name)
-        : Expression(nullptr), context(codegenContext), name(name) { }
-
-    FunctionCall(CodegenContext &codegenContext, std::string name, std::vector<std::unique_ptr<Expression>> &&args)
+    FunctionCall(std::string name, Args &&args)
         // Initialize type with nullptr for now, since we don't know the return type yet
-        : Expression(nullptr), context(codegenContext), name(name), args(std::move(args))  { }
+        : Expression(nullptr), name(name), args(std::move(args))  { }
 
     using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
     using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
@@ -216,11 +209,10 @@ struct VarAccess : Expression {
 
 struct AddrOf : Expression {
 private:
-    CodegenContext &context;
     std::unique_ptr<Expression> target;
 
 public:
-    AddrOf(CodegenContext &codegenContext, std::unique_ptr<Expression> &&target);
+    AddrOf(std::unique_ptr<Expression> &&target);
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
@@ -229,7 +221,7 @@ public:
 struct Dereference : Expression {
     std::unique_ptr<Expression> target;
 
-    Dereference();
+    Dereference(std::unique_ptr<Expression> &&target) : Expression(nullptr), target(std::move(target)) { }
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
@@ -237,14 +229,16 @@ struct Dereference : Expression {
 
 struct VariableDeclaration : Expression {
     std::unique_ptr<Expression> initialValue = nullptr;
+
+    LanguageType *variableType;
     std::string name;
 
-    VariableDeclaration(const std::string& name);
+    VariableDeclaration(const std::string& name, LanguageType *type, std::unique_ptr<Expression> &&initialValue)
+        : Expression(nullptr), name(name), variableType(type),
+          initialValue(std::move(initialValue)) { }
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
 
     std::string dump(int indent) override;
-
-    void setType(LanguageType *newType) { type = newType; }
 };
 
 struct Sizeof : Expression {
