@@ -71,7 +71,12 @@ struct AliasType : LanguageType {
     }
 
     std::string signature() override {
-        return fmt::format("{}", name);
+        return fmt::format("{} ({})", name, realType());
+    }
+private:
+    std::string realType() {
+        auto maybeAlias = dynamic_cast<AliasType *>(aliasTo);
+        return maybeAlias ? maybeAlias->realType() : aliasTo->signature();
     }
 };
 

@@ -264,7 +264,7 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
         LanguageType *expectedType = calledFunction.functionType()->arguments[i];
         if (argType->llvmType() != expectedType->llvmType()) {
             throw CodegenError(
-                fmt::format("Incompatible argument type in {}: for argument #{} "
+                fmt::format("Incompatible argument type in {}: for argument #{}"
                             " expected {}, but received {}", name, i, expectedType->signature(), argType->signature())
             );
         }
