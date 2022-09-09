@@ -293,10 +293,10 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
 
                         auto variantName = cxToString(clang_getCursorSpelling(c));
                         auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
-                        varDef->type = std::make_unique<ASTBuiltinType>("i32");
+                        varDef->type = std::make_unique<ASTBuiltinType>("i64");
 
                         varDef->initialValue = std::make_unique<ConstantIntNode>(
-                            ASTBuiltinType("i32"),
+                            ASTBuiltinType("i64"),
                             (int64_t)parsed
                         );
 
