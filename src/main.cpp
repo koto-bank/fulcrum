@@ -19,6 +19,7 @@
 
 #include "fmt/color.h"
 
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <tuple>
@@ -470,7 +471,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     return std::move(parseHeaderContext);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
@@ -497,7 +498,20 @@ int main() {
         codegenCont.module.setTargetTriple(targetTriple);
     }
 
-    std::unique_ptr<ModuleNode> moduleAST = parse(&codegenCont);
+
+    std::unique_ptr<ModuleNode> moduleAST;
+    if (argc < 2) {
+        moduleAST = parse(&codegenCont, &std::cin);
+    } else {
+        std::ifstream file(argv[1]);
+        if (!file.is_open()) {
+            std::cout << fmt::format("Could not open {}", std::string(argv[1]));
+            return 1;
+        }
+
+        moduleAST = parse(&codegenCont, &file);
+    }
+
     if (moduleAST == nullptr) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
         return 1;

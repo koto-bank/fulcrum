@@ -382,4 +382,4 @@ struct ParseContext {
     size_t arraySize;
 };
 
-std::unique_ptr<ModuleNode> parse(CodegenContext *);
+std::unique_ptr<ModuleNode> parse(CodegenContext *, std::istream *input);

@@ -12,7 +12,19 @@
 #define YY_CTX_LOCAL 1
 #define YY_CTX_MEMBERS \
     CodegenContext *code = nullptr; \
-    std::unique_ptr<ParseContext> ctx;
+    std::unique_ptr<ParseContext> ctx; \
+    std::istream *inputStream;
+
+#define YY_INPUT(ctx, buf, result, max_size) { \
+    result = 0; \
+    char c; \
+    if (ctx->inputStream->get(c)) {\
+        if (c != EOF) { \
+            *(buf) = c; \
+            result = 1; \
+        } \
+    } \
+}
 %}
 
 Program = - Module - (Statement -)* Eof
@@ -286,13 +298,14 @@ Eof = !.
 
 %%
 
-std::unique_ptr<ModuleNode> parse(CodegenContext *codegenCont) {
+std::unique_ptr<ModuleNode> parse(CodegenContext *codegenCont, std::istream *input) {
     std::cout << "parsing started\n";
 
     yycontext yy;
     memset(&yy, 0, sizeof(yy));
     yy.code = codegenCont;
     yy.ctx = std::make_unique<ParseContext>();
+    yy.inputStream = input;
 
     bool res = false;
     while(yyparse(&yy)) {
