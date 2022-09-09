@@ -30,6 +30,11 @@ void ExpressionGenContext::variableSet(VariableDefinition *var, llvm::Value *val
     builder.CreateStore(value, var->value);
 }
 
+void Expression::assumeExpression(ExpressionGenContext &genContext, Expression *expr, std::string errorMessage) {
+    if (expr->llvmType(genContext) == genContext.codegenContext.getType("void")->llvmType())
+        throw CodegenError(errorMessage);
+}
+
 IntegerConstant::IntegerConstant(IntegerType *type, IsLongInteger auto _constValue) : Expression(type), constValue(_constValue) {
     if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
         throw CodegenError(fmt::format("Integer {} does not fit into its type", _constValue));
@@ -245,6 +250,39 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
     return args[0]->languageType(genCont);
 }
 
+llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
+    if (args.size() % 2 != 0) {
+        throw CodegenError(
+            fmt::format("Expected an even number of arguments to set, but got {}", args.size())
+        );
+    }
+
+    for (auto i = 0; i < args.size(); i++) {
+        auto varExpr = dynamic_cast<VarAccess *>(args[i].get());
+        if (varExpr == nullptr)
+            throw CodegenError(
+                fmt::format("Expected argument #{} to set to be a variable name, but got {}", i, args[i]->dump())
+            );
+        auto newValue = args[++i].get();
+        assumeExpression(genContext, newValue, fmt::format("Expected argument #{} to set to be an expression, but it's a statement", i));
+
+        auto declaredVar = genContext.lookupVariable(varExpr->name);
+        if (declaredVar == nullptr)
+            throw CodegenError(fmt::format("Variable {} not defined", varExpr->name));
+
+        auto declType = declaredVar->type;
+        auto newValType = newValue->languageType(genContext);
+        if (declType->llvmType() != newValType->llvmType())
+            throw CodegenError(
+                fmt::format("Variable {} is of type {}, argument to set is of type {}",
+                            varExpr->name, declType->signature(), newValType->signature()));
+
+        genContext.variableSet(declaredVar, newValue->llvmValue(genContext));
+    }
+
+    return nullptr;
+}
+
 LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
     if (type == nullptr) {
         if (specialFunctions.contains(name)) {
@@ -372,6 +410,8 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
                 ));
         }
 
+        assumeExpression(genContext, initialValue.get(),
+                         fmt::format("Expected value for #{} to to be an expression, but it's a statement", name));
         genContext.variableSet(varDef, initialValue->llvmValue(genContext));
     }
 

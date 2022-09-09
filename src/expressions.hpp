@@ -48,6 +48,7 @@ protected:
 
     LanguageType *type = nullptr;
 
+    void assumeExpression(ExpressionGenContext &genContext, Expression *expr, std::string errorMessage);
 public:
     Expression(LanguageType *type) : type(type) { }
 
@@ -142,6 +143,7 @@ private:
     llvm::Value *doProcessor(ExpressionGenContext &genContext);
     llvm::Value *ifProcessor(ExpressionGenContext &genContext);
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
+    llvm::Value *setProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(ExpressionGenContext &genContext);
     LanguageType *voidProcessorType(ExpressionGenContext &genContext);
@@ -162,6 +164,7 @@ public:
         {"return", {&FunctionCall::returnProcessor, &FunctionCall::voidProcessorType}},
         {"if", {&FunctionCall::ifProcessor, &FunctionCall::voidProcessorType}},
         {"do", {&FunctionCall::doProcessor, &FunctionCall::voidProcessorType}},
+        {"set", {&FunctionCall::setProcessor, &FunctionCall::voidProcessorType}},
 
         {"+", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
         {"-", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
