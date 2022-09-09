@@ -103,6 +103,11 @@ struct CodegenContext {
     LLVMContext &context;
     llvm::Module module;
 
+
+    std::map<std::string, Function> functions;
+    std::map<std::string, VariableDefinition> globalVariables;
+    std::map<std::string, std::unique_ptr<LanguageType>> types;
+
     CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) {
         emplaceType<FloatType>("f32", FloatType::Bits::Float);
         emplaceType<FloatType>("f64", FloatType::Bits::Double);
@@ -112,8 +117,6 @@ struct CodegenContext {
         emplaceType<IntegerType>("u32",  32, false);
         emplaceType<CharType>("char");
     }
-
-    std::map<std::string, VariableDefinition> globalVariables;
 
     template <typename Type, typename ...Args>
     Type *getOrEmplaceType(const std::string& name, Args &&...args) {
@@ -139,14 +142,12 @@ struct CodegenContext {
         types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
     }
 
+    LanguageType *getType(const std::string &&name) const;
+
     template <typename Expr, typename Type, typename ...Args>
     std::unique_ptr<Expr> makeExpression(Type *type, Args &&...args) {
         return std::make_unique<Expr>(context, type, std::forward<Args>(args)...);
     }
-
-    LanguageType *getType(const std::string &&name) const;
-
-    std::map<std::string, std::unique_ptr<LanguageType>> types;
 
     void emplaceFn(const std::string &name, const Function::Args &args,
                    LanguageType *returnType, Function::Body &&body,
@@ -157,6 +158,4 @@ struct CodegenContext {
         functions.emplace(name, Function(*this, module, name, args, returnType,
                                          std::move(body), isPublic));
     }
-
-    std::map<std::string, Function> functions;
 };

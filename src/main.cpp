@@ -41,11 +41,10 @@ std::string cxToString(CXString &&str) {
 
 struct ParseHeaderContext {
     std::unique_ptr<ModuleNode> module;
-    std::unique_ptr<CodegenContext> codegenContext;
+    CodegenContext &codegenContext;
 
-    ParseHeaderContext(std::string name, CodegenContext &parentContext) {
+    ParseHeaderContext(std::string name, CodegenContext &parentContext): codegenContext(parentContext) {
         module = std::make_unique<ModuleNode>(name);
-        codegenContext = std::make_unique<CodegenContext>(name, parentContext.context);
     }
 
     std::string getAnonName(CXCursor cur) {
@@ -84,7 +83,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
     case CXType_Int128: {
         auto size = clang_Type_getSizeOf(clangTp) * 8;
         auto signature = "i" + std::to_string(size);
-        context.codegenContext->ensureType<IntegerType>(signature, size, true);
+        context.codegenContext.ensureType<IntegerType>(signature, size, true);
 
         result = std::make_unique<ASTBuiltinType>(signature);
         break;
@@ -96,7 +95,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
     case CXType_UInt128: {
         auto size = clang_Type_getSizeOf(clangTp) * 8;
         auto signature = "u" + std::to_string(size);
-        context.codegenContext->ensureType<IntegerType>(signature, size, false);
+        context.codegenContext.ensureType<IntegerType>(signature, size, false);
 
         result = std::make_unique<ASTBuiltinType>(signature);
         break;
@@ -130,7 +129,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         if (maybeBuiltin != nullptr && maybeBuiltin->builtinName == "void") {
             // Replace void pointer with i8*
 
-            context.codegenContext->ensureType<IntegerType>("i8", 8, true);
+            context.codegenContext.ensureType<IntegerType>("i8", 8, true);
             pointee = std::make_unique<ASTBuiltinType>("i8");
         }
 
@@ -275,7 +274,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 return CXChildVisit_Continue;
             }
             case CXCursor_MacroDefinition: {
-                break;
                 auto name = cxToString(clang_getCursorSpelling(c));
                 // Skip internals
                 if (name.starts_with("__")) return CXChildVisit_Continue;
@@ -469,8 +467,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
 
-    parseHeaderContext->module->generate(*parseHeaderContext->codegenContext);
-
     return std::move(parseHeaderContext);
 }
 
@@ -509,7 +505,8 @@ int main() {
 
     for (auto &import : moduleAST->imports) {
         if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-            parseHeader(import.target, codegenCont);
+            auto resultContext = parseHeader(import.target, codegenCont);
+            resultContext->module->generate(codegenCont);
         }
     }
     moduleAST->generate(codegenCont);
