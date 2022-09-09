@@ -124,6 +124,12 @@ struct CodegenContext {
     }
 
     template <typename Type, typename ...Args>
+    void ensureType(const std::string& name, Args &&...args) {
+        if (!types.contains(name))
+            types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
+    }
+
+    template <typename Type, typename ...Args>
     void emplaceType(const std::string& name, Args &&...args) {
         if (types.contains(name))
             throw CodegenError(fmt::format("Type {} already defined", name));
