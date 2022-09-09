@@ -167,6 +167,7 @@ public:
         {"-", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
         {"/", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
         {"%", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
+        {"=", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
     };
 
     virtual bool isTerminator() override {

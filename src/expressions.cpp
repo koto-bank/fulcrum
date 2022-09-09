@@ -137,6 +137,10 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             fmt::format("Expected at least 1 argument to {}, but got 0", name)
         );
     }
+    if (name == "=" && args.size() != 2)
+        throw CodegenError(
+            fmt::format("Expected exactly 2 argument to =, but got {}", args.size())
+        );
 
     auto expectedType = args[0]->languageType(genContext);
     auto intType = dynamic_cast<IntegerType *>(expectedType);
@@ -206,6 +210,12 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         else
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateFRem, _1, _2, _3, "", nullptr);
         break;
+    case '=':
+        if (intType)
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpEQ, _1, _2, _3, "");
+        else
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOEQ, _1, _2, _3, "", nullptr);
+        break;
     }
 
     llvm::Value * result = nullptr;
@@ -229,6 +239,8 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
             fmt::format("Expected at least 1 argument to {}, but got 0", name)
         );
     }
+    if (name == "=")
+        return genCont.codegenContext.getType("bool");
 
     return args[0]->languageType(genCont);
 }
