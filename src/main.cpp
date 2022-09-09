@@ -85,7 +85,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
     case CXType_Int128: {
         auto size = clang_Type_getSizeOf(clangTp) * 8;
         auto signature = "i" + std::to_string(size);
-        context.codegenContext->getOrEmplaceType<IntegerType>(signature, size, true);
+        context.codegenContext->ensureType<IntegerType>(signature, size, true);
 
         result = std::make_unique<ASTBuiltinType>(signature);
         break;
@@ -97,7 +97,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
     case CXType_UInt128: {
         auto size = clang_Type_getSizeOf(clangTp) * 8;
         auto signature = "u" + std::to_string(size);
-        context.codegenContext->getOrEmplaceType<IntegerType>(signature, size, false);
+        context.codegenContext->ensureType<IntegerType>(signature, size, false);
 
         result = std::make_unique<ASTBuiltinType>(signature);
         break;
@@ -131,7 +131,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         if (maybeBuiltin != nullptr && maybeBuiltin->builtinName == "void") {
             // Replace void pointer with i8*
 
-            context.codegenContext->getOrEmplaceType<IntegerType>("i8", 8, true);
+            context.codegenContext->ensureType<IntegerType>("i8", 8, true);
             pointee = std::make_unique<ASTBuiltinType>("i8");
         }
 

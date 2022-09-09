@@ -152,7 +152,7 @@ IntegerType = ('i' {
     auto signature = std::string(isSigned ? "i" : "u") + yytext;
 
     // The type may already exist
-    yy->code->getOrEmplaceType<IntegerType>(signature, std::atoi(yytext), isSigned);
+    yy->code->ensureType<IntegerType>(signature, std::atoi(yytext), isSigned);
     yy->ctx->type = std::make_unique<ASTBuiltinType>(signature);
 }
 Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
@@ -227,7 +227,7 @@ Dereference = ('@' {
 DereferencableExpr = IdExpr | FnCall
 
 Literal = s:Str {
-    auto strType = yy->code->getOrEmplaceType<StringType>("str");
+    yy->code->ensureType<StringType>("str");
     yy->ctx->exprStack.push_back(std::make_unique<ConstantStringNode>(s.str));
 } | IntLiteral {
     auto isSigned = yy->ctx->intLiteral.isSigned;
@@ -240,7 +240,7 @@ Literal = s:Str {
     signature += bits;
 
     // Make sure the type exists for the future
-    yy->code->getOrEmplaceType<IntegerType>(signature, std::stoi(bits), isSigned);
+    yy->code->ensureType<IntegerType>(signature, std::stoi(bits), isSigned);
     isSigned
        ? yy->ctx->exprStack.push_back(std::make_unique<ConstantIntNode>(ASTBuiltinType(signature), yy->ctx->intLiteral.num.i))
        : yy->ctx->exprStack.push_back(std::make_unique<ConstantIntNode>(ASTBuiltinType(signature), yy->ctx->intLiteral.num.u))
