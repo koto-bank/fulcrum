@@ -74,7 +74,6 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         if (typeName == "")
             typeName = prevName;
     }
-    std::cout << typeName << std::endl;
 
     std::unique_ptr<ASTType> result;
     switch (clangTp.kind) {
