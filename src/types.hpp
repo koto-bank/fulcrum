@@ -64,14 +64,14 @@ struct AliasType : LanguageType {
     LanguageType *aliasTo;
 
     AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
-        : LanguageType(codegenContext), aliasTo(aliasTo_) { }
+        : LanguageType(codegenContext), name(name), aliasTo(aliasTo_) { }
 
     Type* llvmType() override {
         return aliasTo->llvmType();
     }
 
     std::string signature() override {
-        return fmt::format("{} (alias of {})", name, aliasTo->signature());
+        return fmt::format("{}", name);
     }
 };
 
