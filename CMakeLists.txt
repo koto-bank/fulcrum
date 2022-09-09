@@ -17,7 +17,7 @@ add_executable(fulcrum
   "src/types.cpp")
 target_include_directories(fulcrum PUBLIC "src")
 
-target_include_directories(fulcrum PUBLIC
+target_include_directories(fulcrum SYSTEM PUBLIC
   ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND
   ${LLVM_DEFINITIONS} ${CLANG_DEFINITIONS})
@@ -25,7 +25,7 @@ target_compile_definitions(fulcrum PUBLIC ${LLVM_DEFINITIONS_LIST})
 
 llvm_map_components_to_libnames(llvm_libs support)
 
-target_link_libraries(fulcrum LLVM libclang ${llvm_libs})
+target_link_libraries(fulcrum LLVM libclang clang-cpp ${llvm_libs})
 
 set(GRAMMAR_DIR "${CMAKE_BINARY_DIR}/grammar")
 file(MAKE_DIRECTORY ${GRAMMAR_DIR})

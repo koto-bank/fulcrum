@@ -14,6 +14,8 @@
 #include <llvm/Target/TargetOptions.h>
 
 #include <clang-c/Index.h>
+#include <clang/AST/Type.h>
+#include <clang/AST/Decl.h>
 
 #include "fmt/color.h"
 
@@ -45,34 +47,34 @@ struct ParseHeaderContext {
         module = std::make_unique<ModuleNode>(name);
         codegenContext = std::make_unique<CodegenContext>(name, parentContext.context);
     }
+
+    std::string getAnonName(CXCursor cur) {
+        auto usr = cxToString(clang_getCursorUSR(cur));
+        if (anonymousNumbers.contains(usr)) {
+            auto n = anonymousNumbers.size();
+            anonymousNumbers.emplace(usr, n);
+        }
+
+        return fmt::format("anon{}", anonymousNumbers[usr]);
+    }
+private:
+    std::map<std::string, int> anonymousNumbers;
 };
 
 std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clangTp) {
-    if (clang_isConstQualifiedType(clangTp)) {
-        auto RemoveConstFromType = [](CXCursor c, CXCursor, CXClientData d)
-            {
-                *(CXType*)d = clang_getCursorType(c);
-                return (clang_isConstQualifiedType(*(CXType*)d) ? CXChildVisit_Recurse : CXChildVisit_Break);
-            };
-        clang_visitChildren(clang_getTypeDeclaration(clangTp), RemoveConstFromType, &clangTp);
+    auto qualType = clang::QualType::getFromOpaquePtr(clangTp.data[0]);
+
+    // FIXME: this is very bad
+    qualType = qualType.getAtomicUnqualifiedType();
+    auto typeName = qualType.getAsString();
+    if (qualType.getTypePtr()->isElaboratedTypeSpecifier()) {
+        auto prevName = typeName;
+
+        typeName = qualType.getTypePtr()->getAsTagDecl()->getDeclName().getAsString();
+        if (typeName == "")
+            typeName = prevName;
     }
-
-    std::function<std::string(CXType)>actualTpName = [&actualTpName](CXType clangTp) {
-        if (clangTp.kind == CXType_Elaborated) {
-            auto namedType = clang_Type_getNamedType(clangTp);
-            auto name = cxToString(clang_getCursorDisplayName(clang_getTypeDeclaration(namedType)));
-            if (name != "") {
-                return name;
-            } else {
-                return cxToString(clang_getTypeSpelling(clang_Type_getNamedType(clangTp)));
-            }
-        } else if (clangTp.kind == CXType_Pointer) {
-            return actualTpName(clang_getPointeeType(clangTp)) + "*";
-        }
-
-        return cxToString(clang_getTypeSpelling(clangTp));
-    };
-    auto typeName = actualTpName(clangTp);
+    std::cout << typeName << std::endl;
 
     std::unique_ptr<ASTType> result;
     switch (clangTp.kind) {
@@ -143,10 +145,16 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         result = std::make_unique<ASTNamedType>(typeName);
         break;
     }
-    case CXType_Elaborated: {
-        auto namedType = clang_Type_getNamedType(clangTp);
+    case CXType_Elaborated:
+    case CXType_Record:
+    case CXType_Enum: {
+        auto namedType = clangTp.kind == CXType_Elaborated ? clang_Type_getNamedType(clangTp) : clangTp;
 
         if (namedType.kind == CXType_Record) {
+            auto decl = clang_getTypeDeclaration(namedType);
+            if (clang_Cursor_isAnonymous(decl))
+                typeName = context.getAnonName(decl);
+
             result = std::make_unique<ASTNamedType>(typeName);
         } else if (namedType.kind == CXType_Enum) {
             auto enumDecl = clang_getTypeDeclaration(namedType);
@@ -268,6 +276,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 return CXChildVisit_Continue;
             }
             case CXCursor_MacroDefinition: {
+                break;
                 auto name = cxToString(clang_getCursorSpelling(c));
                 // Skip internals
                 if (name.starts_with("__")) return CXChildVisit_Continue;
@@ -323,11 +332,13 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
             }
             case CXCursor_UnionDecl: {
                 auto unionType = clang_getCursorType(c);
-                auto unionName = cxToString(clang_getTypeSpelling(unionType));
 
-                // Skip forward declarations
-                if (!clang_equalCursors(c, clang_getCursorDefinition(c)))
-                    break;
+                auto unionName = cxToString(clang_getCursorDisplayName(c));
+                if (unionName == "")
+                    unionName = cxToString(clang_getTypeSpelling(unionType));
+                if (clang_Cursor_isAnonymous(c))
+                    unionName = parseHeaderContext->getAnonName(c);
+
                 if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
                                  [&unionName](auto &node) { return node->name == unionName; }) != parseHeaderContext->module->structs.end())
                     break;
@@ -373,9 +384,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 if (structName == "")
                     structName = cxToString(clang_getTypeSpelling(structType));
 
-                // Skip forward declarations
-                if (!clang_equalCursors(c, clang_getCursorDefinition(c)))
-                    break;
                 if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
                                  [&structName](auto &node) { return node->name == structName; }) != parseHeaderContext->module->structs.end())
                     break;
