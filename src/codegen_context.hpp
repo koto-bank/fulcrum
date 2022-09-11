@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <filesystem>
 
 #include "llvm/IR/Function.h"
 
@@ -107,6 +108,8 @@ struct CodegenContext {
     std::map<std::string, Function> functions;
     std::map<std::string, VariableDefinition> globalVariables;
     std::map<std::string, std::unique_ptr<LanguageType>> types;
+
+    std::vector<std::filesystem::path> includeDirectories;
 
     CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) {
         emplaceType<FloatType>("f32", FloatType::Bits::Float);

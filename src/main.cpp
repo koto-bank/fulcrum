@@ -19,6 +19,8 @@
 
 #include "fmt/color.h"
 
+#include "args.hxx"
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -472,6 +474,24 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
 }
 
 int main(int argc, char* argv[]) {
+    args::ArgumentParser argParser("fulcrum");
+    args::Positional<std::string> fileArg(argParser, "file", "The file to compile");
+    args::ValueFlagList<std::string> includeArg(
+        argParser, "path",
+        "Directories to search modules in. Searched from last to first", {'I', "include"}
+    );
+    args::HelpFlag helpArg(argParser, "help", "Display help", {'h', "help"});
+    try {
+        argParser.ParseCLI(argc, argv);
+    } catch (const args::Help &) {
+        std::cout << argParser;
+        return 0;
+    } catch (const args::Error &e) {
+        std::cerr << e.what() << std::endl;
+        std::cerr << argParser;
+        return 1;
+    }
+
     LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
@@ -498,14 +518,21 @@ int main(int argc, char* argv[]) {
         codegenCont.module.setTargetTriple(targetTriple);
     }
 
+    if (includeArg) {
+        namespace fs = std::filesystem;
+        for (auto &path : includeArg.Get()) {
+            auto absPath = fs::absolute(fs::path(path));
+            codegenCont.includeDirectories.push_back(absPath);
+        }
+    }
 
     std::unique_ptr<ModuleNode> moduleAST;
-    if (argc < 2) {
+    if (!fileArg) {
         moduleAST = parse(&codegenCont, &std::cin);
     } else {
-        std::ifstream file(argv[1]);
+        std::ifstream file(fileArg.Get());
         if (!file.is_open()) {
-            std::cout << fmt::format("Could not open {}", std::string(argv[1]));
+            std::cout << fmt::format("Could not open {}", std::string(fileArg.Get()));
             return 1;
         }
 
@@ -517,11 +544,57 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    for (auto &import : moduleAST->imports) {
-        if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-            auto resultContext = parseHeader(import.target, codegenCont);
-            resultContext->module->generate(codegenCont);
+    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
+    std::function<void (std::vector<ModuleNode::Import>)> processImports = [&](std::vector<ModuleNode::Import> moduleImports) {
+        for (auto &import : moduleImports) {
+            if (includedModules.contains(import.target))
+                continue;
+
+            if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
+                auto resultContext = parseHeader(import.target, codegenCont);
+                includedModules.emplace(import.target, std::move(resultContext->module));
+            } else {
+                namespace fs = std::filesystem;
+
+                fs::path targetPath;
+                bool found = false;
+                for (auto inclDir = codegenCont.includeDirectories.rbegin();
+                     inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
+
+                    fs::path includePath(*inclDir);
+                    includePath.make_preferred();
+
+                    if (!fs::is_directory(includePath.string())) {
+                        std::cout << fmt::format("Include path {} does not exist or is not a directory", includePath.string());
+                        continue;
+                    }
+
+                    auto targetPathStr = import.target;
+                    std::replace(targetPathStr.begin(), targetPathStr.end(), '.', fs::path::preferred_separator);
+                    targetPath = includePath / targetPathStr;
+                    targetPath.replace_extension(".fl");
+                    if (fs::is_regular_file(targetPath)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    throw CodegenError(fmt::format("Could not find the module {}", import.target));
+
+                std::ifstream file(targetPath);
+                auto moduleAST = parse(&codegenCont, &file);
+                if (moduleAST == nullptr)
+                    throw CodegenError(fmt::format("Could not parse module {} ({})", import.target, targetPath.string()));
+
+                auto &emplaced = includedModules.emplace(import.target, std::move(moduleAST)).first->second;
+                processImports(emplaced->imports);
+            }
         }
+    };
+    processImports(moduleAST->imports);
+    for (auto &[name, ast] : includedModules) {
+        std::cout << fmt::format("Compiling {}", name) << std::endl;
+        ast->generate(codegenCont);
     }
     moduleAST->generate(codegenCont);
 

@@ -39,3 +39,8 @@ target_sources(fulcrum PUBLIC "${GRAMMAR_DIR}/generated_parser.cpp")
 
 add_subdirectory(deps/fmt)
 target_link_libraries(fulcrum fmt)
+
+set(ARGS_BUILD_EXAMPLE OFF)
+set(ARGS_BUILD_UNITTESTS OFF)
+add_subdirectory(deps/args)
+target_link_libraries(fulcrum args)
