@@ -1,6 +1,17 @@
 #include "expressions.hpp"
-#include "types.hpp"
+
 #include "codegen_context.hpp"
+#include "types.hpp"
+
+#include "fmt/format.h"
+
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/IRBuilder.h>
+
+#include <iostream>
+#include <map>
+#include <variant>
 
 VariableDefinition *ExpressionGenContext::lookupVariable(std::string name) {
     for (auto scope = variableScopes.rbegin(); scope != variableScopes.rend(); ++scope) {

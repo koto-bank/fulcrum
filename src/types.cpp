@@ -1,6 +1,8 @@
 #include "types.hpp"
 #include "codegen_context.hpp"
 
+using llvm::Type;
+
 Type* IntegerType::llvmType() {
     return Type::getIntNTy(context.context, bits);
 }
