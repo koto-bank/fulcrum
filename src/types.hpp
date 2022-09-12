@@ -6,8 +6,6 @@
 
 #include <fmt/format.h>
 
-using llvm::Type;
-
 struct CodegenContext;
 
 struct LanguageType {
@@ -15,7 +13,7 @@ protected:
     CodegenContext &context;
 
 public:
-    virtual Type* llvmType() = 0;
+    virtual llvm::Type* llvmType() = 0;
     virtual std::string signature() = 0;
 
     LanguageType(CodegenContext &context) : context(context) { }
@@ -29,7 +27,7 @@ struct IntegerType : LanguageType {
 
     IntegerType(CodegenContext &context, unsigned int bits, bool isSigned) : LanguageType(context), bits(bits), isSigned(isSigned) { }
 
-    Type* llvmType() override;
+    llvm::Type* llvmType() override;
 
     std::string signature() override {
         return std::string(isSigned ? "i" : "u") + std::to_string(bits);
@@ -42,7 +40,7 @@ struct FloatType : LanguageType {
 
     FloatType(CodegenContext &context, Bits bits) : LanguageType(context), bits(bits) { }
 
-    Type* llvmType() override;
+    llvm::Type* llvmType() override;
 
     std::string signature() override {
         return bits == Bits::Float ? "f32" : "f64";
@@ -52,7 +50,7 @@ struct FloatType : LanguageType {
 struct StringType : LanguageType {
     StringType(CodegenContext &context) : LanguageType(context) { }
 
-    Type* llvmType() override;
+    llvm::Type* llvmType() override;
 
     std::string signature() override {
         return "str";
@@ -66,7 +64,7 @@ struct AliasType : LanguageType {
     AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
         : LanguageType(codegenContext), name(name), aliasTo(aliasTo_) { }
 
-    Type* llvmType() override {
+    llvm::Type* llvmType() override {
         return aliasTo->llvmType();
     }
 
@@ -99,7 +97,7 @@ public:
         fields = fields_;
     }
 
-    Type* llvmType() override;
+    llvm::Type* llvmType() override;
 
     std::string signature() override {
         return name;
@@ -109,7 +107,7 @@ public:
 struct CharType : LanguageType {
     using LanguageType::LanguageType;
 
-    Type *llvmType() override;
+    llvm::Type *llvmType() override;
 
     std::string signature() override {
         return "char";
@@ -122,7 +120,7 @@ struct PointerType : LanguageType {
     PointerType(CodegenContext &context, LanguageType *pointerTo_)
         : LanguageType(context), pointerTo(pointerTo_) { }
 
-    Type* llvmType() override {
+    llvm::Type* llvmType() override {
         return llvm::PointerType::get(pointerTo->llvmType(), 0);
     }
 
@@ -134,7 +132,7 @@ struct PointerType : LanguageType {
 struct VoidType : LanguageType {
     using LanguageType::LanguageType;
 
-    Type *llvmType() override;
+    llvm::Type *llvmType() override;
 
     std::string signature() override {
         return "void";
@@ -144,7 +142,7 @@ struct VoidType : LanguageType {
 struct BoolType : LanguageType {
     using LanguageType::LanguageType;
 
-    Type *llvmType() override;
+    llvm::Type *llvmType() override;
 
     std::string signature() override {
         return "bool";
@@ -162,11 +160,11 @@ public:
     FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType_)
         : LanguageType(context), arguments(args), returnType(returnType_) { }
 
-    Type* llvmType() override {
+    llvm::Type* llvmType() override {
         if (funcType == nullptr) {
-            std::vector<Type *> argTypes;
+            std::vector<llvm::Type *> argTypes;
             std::transform(arguments.begin(), arguments.end(), std::back_inserter(argTypes), [](auto &type) { return type->llvmType(); });
-            Type *retType = returnType->llvmType();
+            llvm::Type *retType = returnType->llvmType();
 
             funcType = llvm::FunctionType::get(retType, argTypes, false);
         }
@@ -201,7 +199,7 @@ public:
         , targetType(targetType)
         , size(size) { }
 
-    Type* llvmType() override {
+    llvm::Type* llvmType() override {
         return llvm::ArrayType::get(targetType->llvmType(), size);
     }
 

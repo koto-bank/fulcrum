@@ -1,21 +1,21 @@
 #pragma once
 
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/IRBuilder.h"
+#include <llvm/IR/IRBuilder.h>
 
-#include "fmt/format.h"
-
-#include "types.hpp"
-
-#include <iostream>
-#include <variant>
 #include <map>
+#include <string>
+#include <vector>
 
-using llvm::Type;
+namespace llvm {
+    class Type;
+    class Value;
+} // namespace llvm
 
 struct CodegenContext;
 struct Function;
+struct LanguageType;
+struct IntegerType;
+struct FloatType;
 
 struct VariableDefinition {
     std::string name;
