@@ -1,0 +1,136 @@
+#!/usr/bin/env sh
+
+SILENT=0
+VERBOSE=0
+FIX=0
+FILES=""
+OPTS="--Werror -style=file"
+
+is_source() {
+    local src_extensions="cpp c hpp h"
+    local filename="$1"
+    local ext="${filename##*.}"
+    for target in $src_extensions; do
+        if [ "$ext" = "$target" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_file() {
+    local filename="$1"
+    if ! is_source "$filename"; then
+        if [ $VERBOSE -eq 1 ]; then
+            echo "Skipping file $filename as it's not a source"
+        fi
+        return 0
+    fi
+
+    if [ -z "$filename" ]; then
+        echo "No filename provided to check_file function" >&2
+        exit 3
+    fi
+
+    if [ $SILENT -eq 1 ]; then
+        # We don't care if the file has an issue,
+        # since we don't need to report it
+        local fix="-n"
+        if [ $FIX -eq 1 ]; then
+            fix="-i"
+        fi
+        clang-format $OPTS $fix "$filename" >/dev/null 2>&1
+    else
+        if [ $FIX -eq 1 ]; then
+            if ! clang-format $OPTS -n "$filename" >/dev/null 2>&1; then
+                echo "Fixing issues in '$filename'"
+            fi
+            clang-format $OPTS -i $filename
+        else
+            clang-format $OPTS -n $filename
+        fi
+    fi
+}
+
+check_dir() {
+    local dir="$1"
+    if [ -z "$dir" ]; then
+       dir="."
+    fi
+    for f in $(find "$dir" -type f); do
+        if ! check_file "$f"; then
+            FAILED=1
+        fi
+    done
+}
+
+check_files() {
+    for f in $FILES; do
+        if [ -d "$f" ]; then
+            check_dir "$f"
+        elif [ -f "$f" ]; then
+            if ! check_file "$f"; then
+                FAILED=1
+            fi
+        elif [ $VERBOSE -eq 1 ]; then
+            echo "$f is not a file or directory"
+        fi
+    done
+}
+
+error() {
+    echo >&2 $1
+}
+
+usage() {
+    echo "
+Call the script from inside the repository to check
+format of the source code files with clang-format.
+
+Returns
+0       No code format issues found
+1       There are files with wrong format
+2       Failed to find project root
+
+check-format [--silent] [--fix] [filename*]
+
+--help       show this help
+--silent     don't print format error reports
+--fix        fix all format errors
+--verbose    print diagnostic lines"
+}
+
+while [ $# -ne 0 ]; do
+    case $1 in
+        --help)
+            usage
+            exit 0
+            ;;
+        --silent)
+            SILENT=1
+            ;;
+        --fix)
+            FIX=1
+            ;;
+        --verbose)
+            VERBOSE=1
+            ;;
+        *)
+            FILES="${FILES} $1"
+            ;;
+    esac
+    shift 1
+done
+
+FAILED=0
+check_files
+
+if [ $SILENT -eq 0 ]; then
+    # Don't need to report that no issues found if we
+    # fixed them in the current run
+    if [ $FAILED -eq 0 -a $FIX -eq 0 ]; then
+        echo "No format issues found. Way to go!"
+    fi
+fi
+
+exit $FAILED
