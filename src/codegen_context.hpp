@@ -1,21 +1,22 @@
 #pragma once
 
-#include <map>
 #include <filesystem>
+#include <map>
 
-#include "llvm/IR/Function.h"
+#include <fmt/format.h>
 
-#include "fmt/format.h"
-
-#include "types.hpp"
 #include "expressions.hpp"
+#include "types.hpp"
 
 struct ASTModuleNode;
 struct ExpressionGenContext;
 struct CodegenContext;
 struct VariableDefinition;
 
-using llvm::LLVMContext;
+namespace llvm {
+class Function;
+class Module;
+} // namespace llvm
 
 class Function {
 public:
@@ -31,25 +32,18 @@ private:
     std::unique_ptr<FunctionType> type;
 
     std::vector<std::unique_ptr<Expression>> body;
+
 public:
     bool isPublic;
 
-    Function(CodegenContext &context, llvm::Module &module,
-             const std::string &name, const Args &arguments,
-             LanguageType *returnType, Body &&body,
-             bool isPublic);
+    Function(CodegenContext &context, llvm::Module &module, const std::string &name, const Args &arguments, LanguageType *returnType, Body &&body, bool isPublic);
 
-    const std::string &getName() const { return name; }
-    FunctionType *functionType() { return type.get(); }
-    llvm::Function *llvmFunction() { return function; }
+    const std::string &getName() const;
+    FunctionType *functionType();
+    llvm::Function *llvmFunction();
 
     bool generateTerminates = false;
-    void generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions) {
-        std::vector<Expression *> args;
-        for (auto &expr : expressions)
-            args.push_back(expr.get());
-        generateExpressions(genContext, args);
-    }
+    void generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions);
     void generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
 
     void generateBody(ExpressionGenContext &builder);
@@ -62,46 +56,28 @@ protected:
     std::string message;
     mutable std::string indentedMessage;
 
-    std::string indentSpaces(int n) const {
-        return fmt::format("{: >{}}", "", n);
-    }
+    std::string indentSpaces(int n) const;
+
 public:
-    CodegenError(std::string message) : message(message) { }
-
-    const char *what() const noexcept override {
-        return whatIndented(0);
-    }
-
-    virtual const char *whatIndented(int indent) const {
-        indentedMessage = fmt::format("{}{}", indentSpaces(indent), message.data());
-        return indentedMessage.data();
-    }
-
-    virtual ~CodegenError() { }
+    CodegenError(std::string message);
+    const char *what() const noexcept override;
+    virtual const char *whatIndented(int indent) const;
 };
 
 class StackedCodegenErrors : public CodegenError {
     std::vector<std::unique_ptr<CodegenError>> errors;
     mutable std::string indentedMsg;
+
 public:
-    StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors)
-        : CodegenError(message), errors(std::move(errors)) { }
+    StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors);
 
-    const char *what() const noexcept override {
-        return whatIndented(0);
-    }
+    const char *what() const noexcept override;
 
-    virtual const char *whatIndented(int indent) const override {
-        indentedMsg = fmt::format("{}{}\n", indentSpaces(indent), message);
-        for (auto &err : errors) {
-            indentedMsg += fmt::format("{}\n", err->whatIndented(indent + 2));
-        }
-        return indentedMsg.data();
-    }
+    const char *whatIndented(int indent) const override;
 };
 
 struct CodegenContext {
-    LLVMContext &context;
+    llvm::LLVMContext &context;
     llvm::Module module;
 
 
@@ -111,32 +87,24 @@ struct CodegenContext {
 
     std::vector<std::filesystem::path> includeDirectories;
 
-    CodegenContext(std::string moduleName, LLVMContext &context) : context(context), module(moduleName, context) {
-        emplaceType<FloatType>("f32", FloatType::Bits::Float);
-        emplaceType<FloatType>("f64", FloatType::Bits::Double);
-        emplaceType<VoidType>("void");
-        emplaceType<BoolType>("bool");
-        emplaceType<IntegerType>("i32", 32, true);
-        emplaceType<IntegerType>("u32",  32, false);
-        emplaceType<CharType>("char");
-    }
+    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
 
-    template <typename Type, typename ...Args>
-    Type *getOrEmplaceType(const std::string& name, Args &&...args) {
+    template<typename Type, typename... Args>
+    Type *getOrEmplaceType(const std::string &name, Args &&...args) {
         if (!types.contains(name)) {
             types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
         }
         return static_cast<Type *>(types.at(name).get());
     }
 
-    template <typename Type, typename ...Args>
-    void ensureType(const std::string& name, Args &&...args) {
+    template<typename Type, typename... Args>
+    void ensureType(const std::string &name, Args &&...args) {
         if (!types.contains(name))
             types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
     }
 
-    template <typename Type, typename ...Args>
-    void emplaceType(const std::string& name, Args &&...args) {
+    template<typename Type, typename... Args>
+    void emplaceType(const std::string &name, Args &&...args) {
         if (types.contains(name))
             throw CodegenError(fmt::format("Type {} already defined", name));
 
@@ -147,18 +115,10 @@ struct CodegenContext {
 
     LanguageType *getType(const std::string &&name) const;
 
-    template <typename Expr, typename Type, typename ...Args>
+    template<typename Expr, typename Type, typename... Args>
     std::unique_ptr<Expr> makeExpression(Type *type, Args &&...args) {
         return std::make_unique<Expr>(context, type, std::forward<Args>(args)...);
     }
 
-    void emplaceFn(const std::string &name, const Function::Args &args,
-                   LanguageType *returnType, Function::Body &&body,
-                   bool isPublic) {
-        if (functions.contains(name))
-            throw CodegenError(fmt::format("Function {} already defined", name));
-
-        functions.emplace(name, Function(*this, module, name, args, returnType,
-                                         std::move(body), isPublic));
-    }
+    void emplaceFn(const std::string &name, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic);
 };

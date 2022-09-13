@@ -66,7 +66,7 @@ Expression::Expression(LanguageType *type)
     : type(type) {
 }
 
-LanguageType *Expression::languageType(ExpressionGenContext &genContext) {
+LanguageType *Expression::languageType(ExpressionGenContext &) {
     return type;
 }
 
@@ -74,7 +74,7 @@ llvm::Type *Expression::llvmType(ExpressionGenContext &genContext) {
     return languageType(genContext)->llvmType();
 }
 
-llvm::Value *Expression::llvmValue(ExpressionGenContext &genContext) {
+llvm::Value *Expression::llvmValue(ExpressionGenContext &) {
     return value;
 }
 
@@ -140,7 +140,7 @@ llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
     }
 
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
-    llvm::Constant *Indices[] = {Zero, Zero};
+    llvm::Constant *Indices[] = { Zero, Zero };
     return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
 }
 
@@ -227,7 +227,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     builder.SetInsertPoint(thenBlock);
 
     genContext.pushScope();
-    genContext.function->generateExpressions(genContext, {args[1].get()});
+    genContext.function->generateExpressions(genContext, { args[1].get() });
     if (!args[1]->isTerminator())
         builder.CreateBr(afterIfBlock);
     genContext.popScope();
@@ -236,7 +236,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
         builder.SetInsertPoint(elseBlock);
 
         genContext.pushScope();
-        genContext.function->generateExpressions(genContext, {args[2].get()});
+        genContext.function->generateExpressions(genContext, { args[2].get() });
         if (!args[2]->isTerminator())
             builder.CreateBr(afterIfBlock);
         genContext.popScope();
@@ -271,7 +271,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         );
     }
 
-    for (auto i = 0; i < args.size(); i++) {
+    for (auto i = 0u; i < args.size(); i++) {
         auto &arg = args[i];
         if (arg->languageType(genContext)->llvmType() != expectedType->llvmType()) {
             throw CodegenError(
@@ -367,7 +367,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
         );
     }
 
-    for (auto i = 0; i < args.size(); i++) {
+    for (auto i = 0u; i < args.size(); i++) {
         auto varExpr = dynamic_cast<VarAccess *>(args[i].get());
         if (varExpr == nullptr)
             throw CodegenError(
@@ -422,7 +422,7 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     auto &calledFunction = genContext.codegenContext.functions.at(name);
 
     std::vector<llvm::Value *> argValues;
-    for (auto i = 0; i < args.size(); i++) {
+    for (auto i = 0u; i < args.size(); i++) {
         LanguageType *argType = args[i]->languageType(genContext);
         LanguageType *expectedType = calledFunction.functionType()->arguments[i];
         if (argType->llvmType() != expectedType->llvmType()) {
@@ -546,8 +546,8 @@ std::string Dereference::dump(int indent) {
 
 VariableDeclaration::VariableDeclaration(const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue)
     : Expression(type),
-      name(name),
-      initialValue(std::move(initialValue)) {
+      initialValue(std::move(initialValue)),
+      name(name) {
 }
 
 llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
@@ -572,7 +572,7 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     return nullptr;
 }
 
-llvm::Type *VariableDeclaration::llvmType(ExpressionGenContext &genContext) {
+llvm::Type *VariableDeclaration::llvmType(ExpressionGenContext &) {
     return nullptr;
 }
 
