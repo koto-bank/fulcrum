@@ -13,7 +13,7 @@ class Value;
 } // namespace llvm
 
 struct CodegenContext;
-struct Function;
+class Function;
 struct LanguageType;
 struct IntegerType;
 struct FloatType;
@@ -132,16 +132,16 @@ public:
     using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
 
     std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions{
-        {"return", {&FunctionCall::returnProcessor, &FunctionCall::voidProcessorType}},
-        {"if", {&FunctionCall::ifProcessor, &FunctionCall::voidProcessorType}},
-        {"do", {&FunctionCall::doProcessor, &FunctionCall::voidProcessorType}},
-        {"set", {&FunctionCall::setProcessor, &FunctionCall::voidProcessorType}},
+        { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
+        { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
+        { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
+        { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
 
-        {"+", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
-        {"-", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
-        {"/", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
-        {"%", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
-        {"=", {&FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType}},
+        { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "/", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "%", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
     };
 
     bool isTerminator() override;

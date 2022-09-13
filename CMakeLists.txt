@@ -14,6 +14,7 @@ add_executable(fulcrum
   "src/main.cpp"
   "src/codegen_context.cpp"
   "src/expressions.cpp"
+  "src/parse_context.cpp"
   "src/types.cpp")
 target_include_directories(fulcrum PUBLIC "src")
 

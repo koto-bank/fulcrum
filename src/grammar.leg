@@ -25,6 +25,10 @@
         } \
     } \
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-function"
 %}
 
 Program = - Module - (Statement -)* Eof
@@ -297,6 +301,8 @@ Eol = '\r\n' | '\n' | '\r'
 Eof = !.
 
 %%
+
+#pragma clang diagnostic pop
 
 std::unique_ptr<ModuleNode> parse(CodegenContext *codegenCont, std::istream *input) {
     std::cout << "parsing started\n";

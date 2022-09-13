@@ -1,8 +1,8 @@
 #pragma once
 
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 #include <stdint.h>
 
@@ -27,55 +27,34 @@ struct ASTType {
 struct ASTBuiltinType : ASTType {
     std::string builtinName;
 
-    ASTBuiltinType(std::string name) : builtinName(name) { }
+    ASTBuiltinType(std::string name);
 
-    LanguageType *languageType(CodegenContext &context) override {
-        assert(context.types.contains(builtinName));
-
-        return context.types.at(builtinName).get();
-    };
+    LanguageType *languageType(CodegenContext &context) override;
 };
 
 struct ASTNamedType : ASTType {
     std::string name;
 
-    ASTNamedType(std::string name) : name(name) { }
+    ASTNamedType(std::string name);
 
-    LanguageType *languageType(CodegenContext &context) override {
-        if (!context.types.contains(name))
-            throw CodegenError(fmt::format("Unknown named type {}", name));
-
-        return context.types.at(name).get();
-    };
+    LanguageType *languageType(CodegenContext &context) override;
 };
 
 struct ASTPointerType : ASTType {
     std::unique_ptr<ASTType> targetType;
 
-    ASTPointerType(std::unique_ptr<ASTType> &&targetType) : targetType(std::move(targetType)) { }
+    ASTPointerType(std::unique_ptr<ASTType> &&targetType);
 
-    LanguageType *languageType(CodegenContext &context) override {
-        auto targetLangType = targetType->languageType(context);
-
-        auto pointeeName = targetLangType->signature();
-        auto ptrName = pointeeName + "*";
-        return context.getOrEmplaceType<PointerType>(ptrName, targetLangType);
-    };
+    LanguageType *languageType(CodegenContext &context) override;
 };
 
 struct ASTArrayType : ASTType {
     std::unique_ptr<ASTType> targetType;
     size_t size;
 
-    ASTArrayType(std::unique_ptr<ASTType> &&targetType, size_t size) : targetType(std::move(targetType)), size(size) { }
+    ASTArrayType(std::unique_ptr<ASTType> &&targetType, size_t size);
 
-    LanguageType *languageType(CodegenContext &context) override {
-        auto targetLangType = targetType->languageType(context);
-
-        auto pointeeName = targetLangType->signature();
-        auto arrName = fmt::format("{}[{}]", pointeeName, size);
-        return context.getOrEmplaceType<ArrayType>(pointeeName, targetLangType, size);
-    };
+    LanguageType *languageType(CodegenContext &context) override;
 };
 
 struct ASTFunctionType : ASTType {
@@ -84,25 +63,15 @@ struct ASTFunctionType : ASTType {
 
     std::unique_ptr<ASTType> returnType;
 
-    ASTFunctionType(Args &&arguments, std::unique_ptr<ASTType> &&returnType)
-        : arguments(std::move(arguments)), returnType(std::move(returnType)) { }
+    ASTFunctionType(Args &&arguments, std::unique_ptr<ASTType> &&returnType);
 
-    LanguageType *languageType(CodegenContext &context) override {
-        std::vector<LanguageType *> exprArgs;
-        for (auto &astType : arguments)
-            exprArgs.emplace_back(astType->languageType(context));
-
-        return context.getOrEmplaceType<FunctionType>(
-            FunctionType::signatureFrom(exprArgs, returnType->languageType(context)),
-            exprArgs, returnType->languageType(context)
-        );
-    }
+    LanguageType *languageType(CodegenContext &context) override;
 };
 
 // Nodes
 
 struct ASTNode {
-    virtual ~ASTNode() {}
+    virtual ~ASTNode() = default;
 
     virtual std::unique_ptr<Expression> expression(CodegenContext &context) = 0;
 };
@@ -115,33 +84,22 @@ struct StructNode : ASTNode {
     Fields fields;
 
     StructNode() = default;
-    StructNode(std::string name, Fields &&fields, bool isPublic)
-        : name(name), fields(std::move(fields)), isPublic(isPublic) { }
+    StructNode(std::string name, Fields &&fields, bool isPublic);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 
-    void emplaceStructType(CodegenContext &context) {
-        context.emplaceType<StructType>(name, name, isPublic);
-    }
-    void fillStructTypeFields(CodegenContext &context) {
-        StructType::Fields exprFields;
-        for (auto &[name, astType] : fields)
-            exprFields.emplace_back(name, astType->languageType(context));
-    }
+    void emplaceStructType(CodegenContext &context);
+    void fillStructTypeFields(CodegenContext &context);
 };
 
 struct AliasNode : ASTNode {
     std::string name;
     std::unique_ptr<ASTType> target;
 
-    AliasNode(std::string name, std::unique_ptr<ASTType> &&target)
-        : name(name), target(std::move(target)) { }
+    AliasNode(std::string name, std::unique_ptr<ASTType> &&target);
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
-
-    void emplaceAliasType(CodegenContext &context) {
-        context.emplaceType<AliasType>(name, name, target->languageType(context));
-    }
+    void emplaceAliasType(CodegenContext &context);
 };
 
 struct FunctionNode : ASTNode {
@@ -157,33 +115,18 @@ struct FunctionNode : ASTNode {
     Body body;
 
     FunctionNode() = default;
-    FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic)
-        : name(name), isPublic(isPublic), arguments(std::move(arguments)),
-          returnType(std::move(returnType)) { }
+    FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
-
-    void emplaceFunction(CodegenContext &context) {
-        Function::Args exprArgs;
-        for (auto &[name, astType] : arguments)
-            exprArgs.emplace_back(name, astType->languageType(context));
-        Function::Body exprBody;
-        for (auto &node : body)
-            exprBody.push_back(node->expression(context));
-
-        context.emplaceFn(name, exprArgs, returnType->languageType(context),
-                          std::move(exprBody), isPublic);
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    void emplaceFunction(CodegenContext &context);
 };
 
 struct ConstantStringNode : ASTNode {
     std::string value;
 
-    ConstantStringNode(std::string value) : value(value) { }
+    ConstantStringNode(std::string value);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<StringConstant>(context.getType("str"), value);
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct ConstantIntNode : ASTNode {
@@ -191,61 +134,42 @@ struct ConstantIntNode : ASTNode {
     std::variant<uint64_t, int64_t> value;
     bool isSigned;
 
-    ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue_) : intType(intType), value(constValue_) {
-        isSigned = std::holds_alternative<int64_t>(value);
-    }
+    ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        auto tp = (IntegerType*)intType.languageType(context);
-        return isSigned
-            ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(value))
-            : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(value));
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct ConstantBoolNode : ASTNode {
     bool value;
 
-    ConstantBoolNode(bool value) : value(value) { }
+    ConstantBoolNode(bool value);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<BoolConstant>(context.getType("bool"), value);
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct FunctionCallNode : ASTNode {
     std::string name;
     std::vector<std::unique_ptr<ASTNode>> args;
 
-    FunctionCallNode(std::string name) : name(name) { }
+    FunctionCallNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        FunctionCall::Args argsExprs;
-        for (auto &arg : args)
-            argsExprs.push_back(arg->expression(context));
-
-        return std::make_unique<FunctionCall>(name, std::move(argsExprs));
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct VarAccessNode : ASTNode {
     std::string name;
 
-    VarAccessNode(std::string name) : name(name) { }
+    VarAccessNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<VarAccess>(name);
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct AddrOfNode : ASTNode {
     std::unique_ptr<ASTNode> target;
 
-    AddrOfNode(std::unique_ptr<ASTNode> &&target) : target(std::move(target)) { }
+    AddrOfNode(std::unique_ptr<ASTNode> &&target);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<AddrOf>(target->expression(context));
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct DereferenceNode : ASTNode {
@@ -253,9 +177,7 @@ struct DereferenceNode : ASTNode {
 
     DereferenceNode() = default;
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<Dereference>(target->expression(context));
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct VariableDeclarationNode : ASTNode {
@@ -263,55 +185,18 @@ struct VariableDeclarationNode : ASTNode {
     std::unique_ptr<ASTType> type;
     std::string name;
 
-    VariableDeclarationNode(std::string name) : name(name) { }
+    VariableDeclarationNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<VariableDeclaration>(
-            name, type->languageType(context),
-            initialValue ? initialValue->expression(context) : nullptr
-        );
-    }
-
-   void emplaceGlobalVar(CodegenContext &context) {
-       VariableDefinition varDef(name, type->languageType(context));
-       auto varType = type->languageType(context);
-
-       if (initialValue != nullptr) {
-           auto expr = initialValue->expression(context);
-
-           // FIXME: This is a mess
-           auto maybeInt = dynamic_cast<IntegerConstant *>(expr.get());
-           if (maybeInt != nullptr) {
-               auto isSigned = std::holds_alternative<int64_t>(maybeInt->constValue);
-               llvm::Constant *numberConstant = isSigned
-                   ? llvm::ConstantInt::getSigned(varType->llvmType(), std::get<int64_t>(maybeInt->constValue))
-                   : llvm::ConstantInt::get(varType->llvmType(), std::get<uint64_t>(maybeInt->constValue));
-
-               auto llvmGlobal = new llvm::GlobalVariable(
-                   context.module,
-                   varType->llvmType(),
-                   false,
-                   llvm::GlobalVariable::PrivateLinkage,
-                   numberConstant,
-                   name
-               );
-               varDef.value = llvmGlobal;
-               context.globalVariables.emplace(name, varDef);
-           } else {
-               throw CodegenError(fmt::format("Global variables of type {} are not supported", varType->signature()));
-           }
-       }
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    void emplaceGlobalVar(CodegenContext &context);
 };
 
 struct SizeofNode : ASTNode {
     std::unique_ptr<ASTType> targetType;
 
-    SizeofNode(std::unique_ptr<ASTType> &&targetType) : targetType(std::move(targetType)) { }
+    SizeofNode(std::unique_ptr<ASTType> &&targetType);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override {
-        return std::make_unique<Sizeof>(context, targetType->languageType(context));
-    }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 };
 
 struct ModuleNode : ASTNode {
@@ -328,30 +213,11 @@ struct ModuleNode : ASTNode {
     std::vector<std::unique_ptr<AliasNode>> aliases;
     std::vector<std::unique_ptr<VariableDeclarationNode>> globalVariables;
 
-    ModuleNode(std::string name) : name(name) { };
+    ModuleNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override { return nullptr; }
+    std::unique_ptr<Expression> expression(CodegenContext &context) override;
 
-    void generate(CodegenContext &codegenContext) {
-        // First insert all the structure types
-        for (auto &moduleStruct : structs)
-            moduleStruct->emplaceStructType(codegenContext);
-        // Now insert all alias types
-        for (auto &moduleAlias : aliases)
-            moduleAlias->emplaceAliasType(codegenContext);
-
-        // Now fill structure type fields, which could possibly refer
-        // to other structures or aliases
-        for (auto &moduleStruct : structs)
-            moduleStruct->fillStructTypeFields(codegenContext);
-
-
-        for (auto &globalVar : globalVariables)
-            globalVar->emplaceGlobalVar(codegenContext);
-
-        for (auto &functions : functions)
-            functions->emplaceFunction(codegenContext);
-    }
+    void generate(CodegenContext &codegenContext);
 };
 
 struct ParseContext {

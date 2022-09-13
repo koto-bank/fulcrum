@@ -1,42 +1,42 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Metadata.h>
-#include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Support/Host.h>
-#include <llvm/Support/TargetSelect.h>
+#include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include <clang-c/Index.h>
-#include <clang/AST/Type.h>
 #include <clang/AST/Decl.h>
+#include <clang/AST/Type.h>
 
 #include "fmt/color.h"
 
 #include "args.hxx"
 
+#include <algorithm>
+#include <concepts>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <tuple>
 #include <vector>
-#include <map>
-#include <algorithm>
-#include <concepts>
 
+#include "codegen_context.hpp"
+#include "expressions.hpp"
 #include "parse_context.hpp"
 #include "types.hpp"
-#include "expressions.hpp"
-#include "codegen_context.hpp"
 
 std::string cxToString(CXString &&str) {
-    auto res = std::string((char*)str.data);
+    auto res = std::string((char *)str.data);
     clang_disposeString(str);
 
     return res;
@@ -46,7 +46,8 @@ struct ParseHeaderContext {
     std::unique_ptr<ModuleNode> module;
     CodegenContext &codegenContext;
 
-    ParseHeaderContext(std::string name, CodegenContext &parentContext): codegenContext(parentContext) {
+    ParseHeaderContext(std::string name, CodegenContext &parentContext)
+        : codegenContext(parentContext) {
         module = std::make_unique<ModuleNode>(name);
     }
 
@@ -59,6 +60,7 @@ struct ParseHeaderContext {
 
         return fmt::format("anon{}", anonymousNumbers[usr]);
     }
+
 private:
     std::map<std::string, int> anonymousNumbers;
 };
@@ -223,7 +225,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     CXCursor cursor = clang_getTranslationUnitCursor(unit);
     clang_visitChildren(
         cursor,
-        [](CXCursor c, CXCursor parent, CXClientData client_data_) {
+        [](CXCursor c, CXCursor /*parent*/, CXClientData client_data_) {
             auto parseHeaderContext = (ParseHeaderContext *)client_data_;
             auto cursorKind = clang_getCursorKind(c);
 
@@ -234,14 +236,13 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 // Skip internal functions
                 if (funcName.starts_with("__")) return CXChildVisit_Continue;
 
-                if (std::find_if(parseHeaderContext->module->functions.begin(), parseHeaderContext->module->functions.end(),
-                                 [&funcName](auto &node) { return node->name == funcName; }) != parseHeaderContext->module->functions.end())
+                if (std::find_if(parseHeaderContext->module->functions.begin(), parseHeaderContext->module->functions.end(), [&funcName](auto &node) { return node->name == funcName; }) != parseHeaderContext->module->functions.end())
                     break;
 
-                //std::cout << "Function decl: " << funcName << std::endl;
+                // std::cout << "Function decl: " << funcName << std::endl;
 
                 auto funcType = clang_getCursorType(c);
-                bool variadic = clang_isFunctionTypeVariadic(funcType);
+                [[maybe_unused]] bool variadic = clang_isFunctionTypeVariadic(funcType);
 
                 auto resType = clang_getResultType(funcType);
                 auto returnType = clangToASTType(*parseHeaderContext, resType);
@@ -317,8 +318,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
             case CXCursor_TypedefDecl: {
                 auto name = cxToString(clang_getCursorSpelling(c));
 
-                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                                 [&name](auto &node) { return node->name == name; }) != parseHeaderContext->module->structs.end())
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(), [&name](auto &node) { return node->name == name; }) != parseHeaderContext->module->structs.end())
                     break;
 
                 auto aliasTo = clangToASTType(*parseHeaderContext, clang_getTypedefDeclUnderlyingType(c));
@@ -339,8 +339,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 if (clang_Cursor_isAnonymous(c))
                     unionName = parseHeaderContext->getAnonName(c);
 
-                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                                 [&unionName](auto &node) { return node->name == unionName; }) != parseHeaderContext->module->structs.end())
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(), [&unionName](auto &node) { return node->name == unionName; }) != parseHeaderContext->module->structs.end())
                     break;
 
                 struct VisitData {
@@ -353,7 +352,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 clang_Type_visitFields(
                     unionType,
                     [](CXCursor cursor, CXClientData client_data) {
-                        VisitData *visitData = (VisitData*)client_data;
+                        VisitData *visitData = (VisitData *)client_data;
 
                         auto type = clang_getCursorType(cursor);
                         auto typeSize = clang_Type_getSizeOf(type);
@@ -384,8 +383,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 if (structName == "")
                     structName = cxToString(clang_getTypeSpelling(structType));
 
-                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                                 [&structName](auto &node) { return node->name == structName; }) != parseHeaderContext->module->structs.end())
+                if (std::find_if(parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(), [&structName](auto &node) { return node->name == structName; }) != parseHeaderContext->module->structs.end())
                     break;
 
                 struct VisitData {
@@ -396,7 +394,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 clang_Type_visitFields(
                     structType,
                     [](CXCursor cursor, CXClientData client_data) {
-                        VisitData *visitData = (VisitData*)client_data;
+                        VisitData *visitData = (VisitData *)client_data;
 
                         auto type = clang_getCursorType(cursor);
                         auto fieldName = cxToString(clang_getCursorSpelling(cursor));
@@ -426,14 +424,14 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     ParseHeaderContext &parseHeaderContext;
                 };
                 EnumParseContext parseContext = {
-                    .enumTypeName = ((ASTBuiltinType*)enumIntType.get())->builtinName,
+                    .enumTypeName = ((ASTBuiltinType *)enumIntType.get())->builtinName,
                     .parseHeaderContext = *parseHeaderContext
                 };
 
                 clang_visitChildren(
                     c,
-                    [](CXCursor c, CXCursor parent, CXClientData client_data_) {
-                        EnumParseContext *parseContext = (EnumParseContext*)client_data_;
+                    [](CXCursor c, CXCursor /*parent*/, CXClientData client_data_) {
+                        EnumParseContext *parseContext = (EnumParseContext *)client_data_;
 
                         auto variantName = cxToString(clang_getCursorSpelling(c));
                         auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
@@ -458,7 +456,8 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     &parseContext
                 );
             }
-            default: break;
+            default:
+                break;
             };
 
 
@@ -470,17 +469,17 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
 
-    return std::move(parseHeaderContext);
+    return parseHeaderContext;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     args::ArgumentParser argParser("fulcrum");
     args::Positional<std::string> fileArg(argParser, "file", "The file to compile");
     args::ValueFlagList<std::string> includeArg(
         argParser, "path",
-        "Directories to search modules in. Searched from last to first", {'I', "include"}
+        "Directories to search modules in. Searched from last to first", { 'I', "include" }
     );
-    args::HelpFlag helpArg(argParser, "help", "Display help", {'h', "help"});
+    args::HelpFlag helpArg(argParser, "help", "Display help", { 'h', "help" });
     try {
         argParser.ParseCLI(argc, argv);
     } catch (const args::Help &) {
@@ -492,7 +491,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    LLVMContext context;
+    llvm::LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
     CodegenContext codegenCont("main", context);
@@ -545,7 +544,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
-    std::function<void (std::vector<ModuleNode::Import>)> processImports = [&](std::vector<ModuleNode::Import> moduleImports) {
+    std::function<void(std::vector<ModuleNode::Import>)> processImports = [&](std::vector<ModuleNode::Import> moduleImports) {
         for (auto &import : moduleImports) {
             if (includedModules.contains(import.target))
                 continue;
@@ -560,7 +559,6 @@ int main(int argc, char* argv[]) {
                 bool found = false;
                 for (auto inclDir = codegenCont.includeDirectories.rbegin();
                      inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
-
                     fs::path includePath(*inclDir);
                     includePath.make_preferred();
 
@@ -598,7 +596,7 @@ int main(int argc, char* argv[]) {
     }
     moduleAST->generate(codegenCont);
 
-    ExpressionGenContext exprGenContext = {
+    ExpressionGenContext exprGenContext{
         .builder = builder,
         .codegenContext = codegenCont
     };
@@ -617,7 +615,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //IntegerConstant x(codegenCont.types["int"].get(), 10l);
+    // IntegerConstant x(codegenCont.types["int"].get(), 10l);
 
     /*
     {
@@ -657,7 +655,7 @@ int main(int argc, char* argv[]) {
     auto res = builder.CreateCall(rand.llvmFunction()->getFunctionType(), rand.llvmFunction(), args, "result");
     */
 
-    //builder.CreateRet(x.llvmValue());
+    // builder.CreateRet(x.llvmValue());
 
     llvm::errs() << codegenCont.module;
 
