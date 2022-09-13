@@ -7,8 +7,8 @@
 
 using llvm::LLVMContext;
 
-Function::Function(CodegenContext &context, llvm::Module &module, const std::string &name, const Args &arguments, LanguageType *returnType, Body &&body, bool isPublic)
-    : name(name),
+Function::Function(CodegenContext &context, llvm::Module &module, const std::string &name_, const Args &arguments, LanguageType *returnType, Body &&body, bool isPublic)
+    : name(name_),
       body(std::move(body)),
       isPublic(isPublic) {
     std::vector<LanguageType *> argumentTypes;
@@ -17,6 +17,8 @@ Function::Function(CodegenContext &context, llvm::Module &module, const std::str
         argumentTypes.push_back(tp);
     }
     type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
+
+    std::replace(name.begin(), name.end(), '/', '_');
 
     auto funcType = (llvm::FunctionType *)type->llvmType();
     function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
@@ -147,9 +149,9 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
     return nullptr;
 }
 
-void CodegenContext::emplaceFn(const std::string &name, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic) {
-    if (functions.contains(name))
-        throw CodegenError(fmt::format("Function {} already defined", name));
+void CodegenContext::emplaceFn(const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic) {
+    if (functions.contains(langName))
+        throw CodegenError(fmt::format("Function {} already defined", langName));
 
-    functions.emplace(name, Function(*this, module, name, args, returnType, std::move(body), isPublic));
+    functions.emplace(langName, Function(*this, module, funcName, args, returnType, std::move(body), isPublic));
 }

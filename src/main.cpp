@@ -583,17 +583,34 @@ int main(int argc, char *argv[]) {
                 auto moduleAST = parse(&codegenCont, &file);
                 if (moduleAST == nullptr)
                     throw CodegenError(fmt::format("Could not parse module {} ({})", import.target, targetPath.string()));
+                if (moduleAST->name != import.target)
+                    throw CodegenError(
+                        fmt::format("Module was imported as {}, but the name declared in the module was {}", import.target, moduleAST->name)
+                    );
 
                 auto &emplaced = includedModules.emplace(import.target, std::move(moduleAST)).first->second;
                 processImports(emplaced->imports);
             }
         }
     };
+    auto importNames = [&includedModules](ModuleNode *importTo) {
+        for (auto &import : importTo->imports) {
+            // TODO: actually add import names, for now everything is imported
+            auto &importedAST = includedModules[import.target];
+            for (auto &[basename, fullname] : importedAST->allNames()) {
+                importTo->importName(basename, fullname);
+            }
+        }
+    };
+
     processImports(moduleAST->imports);
     for (auto &[name, ast] : includedModules) {
         std::cout << fmt::format("Compiling {}", name) << std::endl;
+
+        importNames(ast.get());
         ast->generate(codegenCont);
     }
+    importNames(moduleAST.get());
     moduleAST->generate(codegenCont);
 
     ExpressionGenContext exprGenContext{

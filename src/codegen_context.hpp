@@ -120,5 +120,5 @@ struct CodegenContext {
         return std::make_unique<Expr>(context, type, std::forward<Args>(args)...);
     }
 
-    void emplaceFn(const std::string &name, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic);
+    void emplaceFn(const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic);
 };
