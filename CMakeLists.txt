@@ -43,4 +43,7 @@ target_link_libraries(fulcrum fmt)
 option(ARGS_BUILD_EXAMPLE "" OFF)
 option(ARGS_BUILD_UNITTESTS "" OFF)
 add_subdirectory(deps/args)
+target_include_directories(fulcrum SYSTEM PUBLIC "deps/args")
 target_link_libraries(fulcrum args)
+
+target_compile_options(fulcrum PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
