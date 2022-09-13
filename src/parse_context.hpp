@@ -16,12 +16,14 @@ union ParsedLine {
     bool boolConst;
 };
 
+struct ModuleNode;
+
 // Types
 
 struct ASTType {
     virtual ~ASTType() {}
 
-    virtual LanguageType *languageType(CodegenContext &context) = 0;
+    virtual LanguageType *languageType(ModuleNode *module, CodegenContext &context) = 0;
 };
 
 struct ASTBuiltinType : ASTType {
@@ -29,7 +31,7 @@ struct ASTBuiltinType : ASTType {
 
     ASTBuiltinType(std::string name);
 
-    LanguageType *languageType(CodegenContext &context) override;
+    LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ASTNamedType : ASTType {
@@ -37,7 +39,7 @@ struct ASTNamedType : ASTType {
 
     ASTNamedType(std::string name);
 
-    LanguageType *languageType(CodegenContext &context) override;
+    LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ASTPointerType : ASTType {
@@ -45,7 +47,7 @@ struct ASTPointerType : ASTType {
 
     ASTPointerType(std::unique_ptr<ASTType> &&targetType);
 
-    LanguageType *languageType(CodegenContext &context) override;
+    LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ASTArrayType : ASTType {
@@ -54,7 +56,7 @@ struct ASTArrayType : ASTType {
 
     ASTArrayType(std::unique_ptr<ASTType> &&targetType, size_t size);
 
-    LanguageType *languageType(CodegenContext &context) override;
+    LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ASTFunctionType : ASTType {
@@ -65,7 +67,7 @@ struct ASTFunctionType : ASTType {
 
     ASTFunctionType(Args &&arguments, std::unique_ptr<ASTType> &&returnType);
 
-    LanguageType *languageType(CodegenContext &context) override;
+    LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
 
 // Nodes
@@ -73,7 +75,7 @@ struct ASTFunctionType : ASTType {
 struct ASTNode {
     virtual ~ASTNode() = default;
 
-    virtual std::unique_ptr<Expression> expression(CodegenContext &context) = 0;
+    virtual std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) = 0;
 };
 
 struct StructNode : ASTNode {
@@ -86,10 +88,10 @@ struct StructNode : ASTNode {
     StructNode() = default;
     StructNode(std::string name, Fields &&fields, bool isPublic);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
-    void emplaceStructType(CodegenContext &context);
-    void fillStructTypeFields(CodegenContext &context);
+    void emplaceStructType(ModuleNode *module, CodegenContext &context);
+    void fillStructTypeFields(ModuleNode *module, CodegenContext &context);
 };
 
 struct AliasNode : ASTNode {
@@ -97,9 +99,9 @@ struct AliasNode : ASTNode {
     std::unique_ptr<ASTType> target;
 
     AliasNode(std::string name, std::unique_ptr<ASTType> &&target);
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
-    void emplaceAliasType(CodegenContext &context);
+    void emplaceAliasType(ModuleNode *module, CodegenContext &context);
 };
 
 struct FunctionNode : ASTNode {
@@ -117,8 +119,8 @@ struct FunctionNode : ASTNode {
     FunctionNode() = default;
     FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
-    void emplaceFunction(CodegenContext &context);
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
+    void emplaceFunction(ModuleNode *module, CodegenContext &context);
 };
 
 struct ConstantStringNode : ASTNode {
@@ -126,7 +128,7 @@ struct ConstantStringNode : ASTNode {
 
     ConstantStringNode(std::string value);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ConstantIntNode : ASTNode {
@@ -136,7 +138,7 @@ struct ConstantIntNode : ASTNode {
 
     ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ConstantBoolNode : ASTNode {
@@ -144,7 +146,7 @@ struct ConstantBoolNode : ASTNode {
 
     ConstantBoolNode(bool value);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct FunctionCallNode : ASTNode {
@@ -153,7 +155,7 @@ struct FunctionCallNode : ASTNode {
 
     FunctionCallNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct VarAccessNode : ASTNode {
@@ -161,7 +163,7 @@ struct VarAccessNode : ASTNode {
 
     VarAccessNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct AddrOfNode : ASTNode {
@@ -169,7 +171,7 @@ struct AddrOfNode : ASTNode {
 
     AddrOfNode(std::unique_ptr<ASTNode> &&target);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct DereferenceNode : ASTNode {
@@ -177,7 +179,7 @@ struct DereferenceNode : ASTNode {
 
     DereferenceNode() = default;
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct VariableDeclarationNode : ASTNode {
@@ -187,8 +189,8 @@ struct VariableDeclarationNode : ASTNode {
 
     VariableDeclarationNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
-    void emplaceGlobalVar(CodegenContext &context);
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
+    void emplaceGlobalVar(ModuleNode *module, CodegenContext &context);
 };
 
 struct SizeofNode : ASTNode {
@@ -196,7 +198,7 @@ struct SizeofNode : ASTNode {
 
     SizeofNode(std::unique_ptr<ASTType> &&targetType);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct ModuleNode : ASTNode {
@@ -207,6 +209,7 @@ struct ModuleNode : ASTNode {
         std::vector<std::string> keywords;
     };
     std::vector<Import> imports;
+    std::map<std::string, std::string> importedNames;
 
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
@@ -215,9 +218,12 @@ struct ModuleNode : ASTNode {
 
     ModuleNode(std::string name);
 
-    std::unique_ptr<Expression> expression(CodegenContext &context) override;
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
     void generate(CodegenContext &codegenContext);
+
+    std::map<std::string, std::string> allNames();
+    void importName(const std::string &baseName, const std::string &fullName);
 };
 
 struct ParseContext {
@@ -249,3 +255,5 @@ struct ParseContext {
 };
 
 std::unique_ptr<ModuleNode> parse(CodegenContext *, std::istream *input);
+
+std::string resolveName(ModuleNode *module, const std::string &name);

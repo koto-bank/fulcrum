@@ -158,11 +158,16 @@ std::string BoolConstant::dump(int indent) {
     return fmt::format("{}{}", indentSpaces(indent), constValue);
 }
 
-FunctionCall::FunctionCall(const std::string &name, Args &&args)
+FunctionCall::FunctionCall(const std::string &name_, Args &&args)
     // Initialize type with nullptr for now, since we don't know the return type yet
     : Expression(nullptr),
-      name(name),
+      name(name_),
       args(std::move(args)) {
+    // De-namespace special functions
+    auto namespaceSep = name.find('/');
+    auto baseName = name.substr(namespaceSep + 1);
+    if (specialFunctions.contains(baseName))
+        name = baseName;
 }
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
