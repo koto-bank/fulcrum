@@ -150,8 +150,7 @@ LanguageType *CodegenContext::getType(const std::string &&name) const {
 }
 
 void CodegenContext::emplaceFn(const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic) {
-    if (functions.contains(langName))
-        throw CodegenError(fmt::format("Function {} already defined", langName));
+    assumeNamedDoesNotExist<NamedFunctionValue>(langName);
 
-    functions.emplace(langName, Function(*this, module, funcName, args, returnType, std::move(body), isPublic));
+    emplaceNamed<NamedFunctionValue>(langName, *this, module, funcName, args, returnType, std::move(body), isPublic);
 }
