@@ -406,11 +406,7 @@ LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
         if (specialFunctions.contains(name)) {
             type = specialFunctions[name].second(this, genContext);
         } else {
-            if (!genContext.codegenContext.functions.contains(name)) {
-                throw CodegenError(fmt::format("Undefined function {}", name));
-            }
-
-            type = genContext.codegenContext.functions.at(name).functionType()->returnType;
+            type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)->functionType()->returnType;
         }
     }
 
@@ -421,15 +417,12 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     if (specialFunctions.contains(name))
         return specialFunctions[name].first(this, genContext);
 
-    if (!genContext.codegenContext.functions.contains(name)) {
-        throw CodegenError(fmt::format("Undefined function {}", name));
-    }
-    auto &calledFunction = genContext.codegenContext.functions.at(name);
+    auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
 
     std::vector<llvm::Value *> argValues;
     for (auto i = 0u; i < args.size(); i++) {
         LanguageType *argType = args[i]->languageType(genContext);
-        LanguageType *expectedType = calledFunction.functionType()->arguments[i];
+        LanguageType *expectedType = calledFunction->functionType()->arguments[i];
         if (argType->llvmType() != expectedType->llvmType()) {
             throw CodegenError(
                 fmt::format("Incompatible argument type in {}: for argument #{}"
@@ -440,7 +433,7 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
         argValues.push_back(args[i]->llvmValue(genContext));
     }
 
-    return genContext.builder.CreateCall(calledFunction.llvmFunction(), argValues);
+    return genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
 }
 
 bool FunctionCall::isTerminator() {

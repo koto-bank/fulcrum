@@ -617,10 +617,11 @@ int main(int argc, char *argv[]) {
         .builder = builder,
         .codegenContext = codegenCont
     };
-    for (auto &[name, f] : codegenCont.functions) {
+    for (auto &[name, named] : codegenCont.names) {
         try {
-            exprGenContext.function = &f;
-            f.generateBody(exprGenContext);
+            auto f = named->as<NamedFunctionValue>()->value.get();
+            exprGenContext.function = f;
+            f->generateBody(exprGenContext);
         } catch (const CodegenError &err) {
             std::cout << fmt::format(
                 "{}\n{}",

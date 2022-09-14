@@ -1,5 +1,6 @@
 #pragma once
 
+#include <endian.h>
 #include <filesystem>
 #include <map>
 
@@ -76,12 +77,80 @@ public:
     const char *whatIndented(int indent) const override;
 };
 
+struct NamedValue {
+    virtual ~NamedValue() {}
+
+    virtual std::string valueNamedType() = 0;
+
+    template<typename T>
+    T *as() { return dynamic_cast<T *>(this); }
+};
+
+struct NamedFunctionValue : NamedValue {
+    using ValueType = Function;
+    std::unique_ptr<ValueType> value;
+
+    static std::string namedType() { return "function"; }
+    std::string valueNamedType() override { return namedType(); };
+
+    template<typename... Args>
+    NamedFunctionValue(Args &&...args) {
+        value = std::make_unique<Function>(std::forward<Args>(args)...);
+    }
+};
+
+struct NamedVariableValue : NamedValue {
+    using ValueType = VariableDefinition;
+
+    std::unique_ptr<ValueType> value;
+
+    static std::string namedType() { return "variable"; }
+    std::string valueNamedType() override { return namedType(); };
+};
+
+struct NamedTypeValue : NamedValue {
+    using ValueType = LanguageType;
+    std::unique_ptr<ValueType> value;
+
+    static std::string namedType() { return "type"; }
+    std::string valueNamedType() override { return namedType(); };
+};
+
 struct CodegenContext {
     llvm::LLVMContext &context;
     llvm::Module module;
 
+    std::map<std::string, std::unique_ptr<NamedValue>> names;
 
-    std::map<std::string, Function> functions;
+    template<typename T>
+    typename T::ValueType *getNamed(const std::string name) {
+        if (!names.contains(name))
+            throw CodegenError(fmt::format("Undefined {}: {}", T::namedType(), name));
+        auto namedValue = names[name].get();
+        auto maybeResultValue = dynamic_cast<T *>(namedValue);
+        if (maybeResultValue == nullptr)
+            throw CodegenError(fmt::format("Name {} is defined as a {}, not a {}", name, namedValue->valueNamedType(), T::namedType()));
+
+        return maybeResultValue->value.get();
+    }
+
+    template<typename T>
+    void assumeNamedDoesNotExist(const std::string &name) {
+        if (!names.contains(name)) return;
+
+        auto namedValue = names[name].get();
+        auto maybeResultValue = dynamic_cast<T *>(namedValue);
+        if (maybeResultValue == nullptr)
+            throw CodegenError(fmt::format("A {} named {} is already defined", T::namedType(), name));
+        else
+            throw CodegenError(fmt::format("Name {} is already defined as a {}", name, maybeResultValue->valueNamedType()));
+    }
+
+    template<typename T, typename... Args>
+    void emplaceNamed(const std::string &name, Args &&...args) {
+        names.emplace(name, std::make_unique<T>(std::forward<Args>(args)...));
+    }
+
     std::map<std::string, VariableDefinition> globalVariables;
     std::map<std::string, std::unique_ptr<LanguageType>> types;
 
