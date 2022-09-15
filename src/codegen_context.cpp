@@ -58,7 +58,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
 
     if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
         // If the function is not void, insert unreachable at the end, since the user must return something
-        if (genContext.function->functionType()->returnType != context.getType("void")) {
+        if (genContext.function->functionType()->returnType != context.getNamed<NamedTypeValue>("void")) {
             genContext.builder.CreateUnreachable();
         } else {
             // Otherwise, return void automatically
@@ -141,16 +141,20 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<CharType>("char");
 }
 
-LanguageType *CodegenContext::getType(const std::string &&name) const {
-    if (types.contains(name)) {
-        return types.at(name).get();
-    }
-
-    return nullptr;
-}
-
 void CodegenContext::emplaceFn(const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic) {
-    assumeNamedDoesNotExist<NamedFunctionValue>(langName);
-
     emplaceNamed<NamedFunctionValue>(langName, *this, module, funcName, args, returnType, std::move(body), isPublic);
 }
+
+std::string NamedFunctionValue::namedType() { return "function"; }
+std::string NamedFunctionValue::valueNamedType() const { return namedType(); };
+
+std::string NamedVariableValue::namedType() { return "variable"; }
+std::string NamedVariableValue::valueNamedType() const { return namedType(); };
+NamedVariableValue::NamedVariableValue(VariableDefinition varDef)
+    : value(std::make_unique<ValueType>(varDef)) {
+}
+
+std::string NamedTypeValue::namedType() { return "type"; }
+std::string NamedTypeValue::valueNamedType() const { return namedType(); };
+NamedTypeValue::NamedTypeValue(std::unique_ptr<ValueType> &&value)
+    : value(std::move(value)) {}
