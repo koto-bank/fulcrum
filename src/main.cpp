@@ -619,7 +619,10 @@ int main(int argc, char *argv[]) {
     };
     for (auto &[name, named] : codegenCont.names) {
         try {
-            auto f = named->as<NamedFunctionValue>()->value.get();
+            auto namedF = named->as<NamedFunctionValue>();
+            if (namedF == nullptr) continue;
+            auto f = namedF->value.get();
+
             exprGenContext.function = f;
             f->generateBody(exprGenContext);
         } catch (const CodegenError &err) {

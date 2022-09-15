@@ -22,8 +22,8 @@ VariableDefinition *ExpressionGenContext::lookupVariable(const std::string &name
         if (scope->contains(name))
             return &scope->at(name);
     }
-    if (codegenContext.globalVariables.contains(name))
-        return &codegenContext.globalVariables.at(name);
+    if (codegenContext.existsNamed(name))
+        return codegenContext.getNamed<NamedVariableValue>(name);
 
     return nullptr;
 }
@@ -54,7 +54,7 @@ void ExpressionGenContext::variableSet(VariableDefinition *var, llvm::Value *val
 }
 
 void Expression::assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage) {
-    if (expr->llvmType(genContext) == genContext.codegenContext.getType("void")->llvmType())
+    if (expr->llvmType(genContext) == genContext.codegenContext.getNamed<NamedTypeValue>("void")->llvmType())
         throw CodegenError(errorMessage);
 }
 
@@ -176,7 +176,7 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     }
 
     auto returnType = genContext.function->functionType()->returnType;
-    if (args.size() == 0 && returnType->llvmType() != genContext.codegenContext.types.at("void")->llvmType()) {
+    if (args.size() == 0 && returnType->llvmType() != genContext.codegenContext.getNamed<NamedTypeValue>("void")->llvmType()) {
         throw CodegenError("Only void function can return nothing");
     } else if (args.size() == 1 && returnType->llvmType() != args[0]->languageType(genContext)->llvmType()) {
         throw CodegenError(
@@ -210,7 +210,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 2 || args.size() > 3) {
         throw CodegenError("If must have from 2 to 3 arguments");
     }
-    if (args[0]->languageType(genContext)->llvmType() != context.types.at("bool")->llvmType()) {
+    if (args[0]->languageType(genContext)->llvmType() != context.getNamed<NamedTypeValue>("bool")->llvmType()) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -350,7 +350,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 }
 
 LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) {
-    return genContext.codegenContext.getType("void");
+    return genContext.codegenContext.getNamed<NamedTypeValue>("void");
 }
 
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
@@ -360,7 +360,7 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
         );
     }
     if (name == "=")
-        return genCont.codegenContext.getType("bool");
+        return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
 
     return args[0]->languageType(genCont);
 }
@@ -579,7 +579,7 @@ std::string VariableDeclaration::dump(int indent) {
 }
 
 Sizeof::Sizeof(CodegenContext &context, LanguageType *targetType)
-    : Expression(context.getType("u32")),
+    : Expression(context.getNamed<NamedTypeValue>("u32")),
       targetType(targetType) {
     value = llvm::ConstantInt::get(
         type->llvmType(),

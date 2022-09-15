@@ -78,9 +78,9 @@ public:
 };
 
 struct NamedValue {
-    virtual ~NamedValue() {}
+    virtual ~NamedValue() = default;
 
-    virtual std::string valueNamedType() = 0;
+    virtual std::string valueNamedType() const = 0;
 
     template<typename T>
     T *as() { return dynamic_cast<T *>(this); }
@@ -90,12 +90,12 @@ struct NamedFunctionValue : NamedValue {
     using ValueType = Function;
     std::unique_ptr<ValueType> value;
 
-    static std::string namedType() { return "function"; }
-    std::string valueNamedType() override { return namedType(); };
+    static std::string namedType();
+    std::string valueNamedType() const override;
 
     template<typename... Args>
     NamedFunctionValue(Args &&...args) {
-        value = std::make_unique<Function>(std::forward<Args>(args)...);
+        value = std::make_unique<ValueType>(std::forward<Args>(args)...);
     }
 };
 
@@ -104,16 +104,20 @@ struct NamedVariableValue : NamedValue {
 
     std::unique_ptr<ValueType> value;
 
-    static std::string namedType() { return "variable"; }
-    std::string valueNamedType() override { return namedType(); };
+    static std::string namedType();
+    std::string valueNamedType() const override;
+
+    NamedVariableValue(VariableDefinition varDef);
 };
 
 struct NamedTypeValue : NamedValue {
     using ValueType = LanguageType;
     std::unique_ptr<ValueType> value;
 
-    static std::string namedType() { return "type"; }
-    std::string valueNamedType() override { return namedType(); };
+    static std::string namedType();
+    std::string valueNamedType() const override;
+
+    NamedTypeValue(std::unique_ptr<ValueType> &&value);
 };
 
 struct CodegenContext {
@@ -122,11 +126,13 @@ struct CodegenContext {
 
     std::map<std::string, std::unique_ptr<NamedValue>> names;
 
+    bool existsNamed(const std::string &name) const { return names.contains(name); }
+
     template<typename T>
-    typename T::ValueType *getNamed(const std::string name) {
+    typename T::ValueType *getNamed(const std::string &name) const {
         if (!names.contains(name))
             throw CodegenError(fmt::format("Undefined {}: {}", T::namedType(), name));
-        auto namedValue = names[name].get();
+        auto namedValue = names.at(name).get();
         auto maybeResultValue = dynamic_cast<T *>(namedValue);
         if (maybeResultValue == nullptr)
             throw CodegenError(fmt::format("Name {} is defined as a {}, not a {}", name, namedValue->valueNamedType(), T::namedType()));
@@ -148,11 +154,10 @@ struct CodegenContext {
 
     template<typename T, typename... Args>
     void emplaceNamed(const std::string &name, Args &&...args) {
+        assumeNamedDoesNotExist<T>(name);
+
         names.emplace(name, std::make_unique<T>(std::forward<Args>(args)...));
     }
-
-    std::map<std::string, VariableDefinition> globalVariables;
-    std::map<std::string, std::unique_ptr<LanguageType>> types;
 
     std::vector<std::filesystem::path> includeDirectories;
 
@@ -160,29 +165,21 @@ struct CodegenContext {
 
     template<typename Type, typename... Args>
     Type *getOrEmplaceType(const std::string &name, Args &&...args) {
-        if (!types.contains(name)) {
-            types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
-        }
-        return static_cast<Type *>(types.at(name).get());
+        if (!existsNamed(name))
+            emplaceNamed<NamedTypeValue>(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
+        return static_cast<Type *>(getNamed<NamedTypeValue>(name));
     }
 
     template<typename Type, typename... Args>
     void ensureType(const std::string &name, Args &&...args) {
-        if (!types.contains(name))
-            types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
+        if (!existsNamed(name))
+            emplaceNamed<NamedTypeValue>(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
     }
 
     template<typename Type, typename... Args>
     void emplaceType(const std::string &name, Args &&...args) {
-        if (types.contains(name))
-            throw CodegenError(fmt::format("Type {} already defined", name));
-
-        assert(!types.contains(name));
-
-        types.emplace(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
+        emplaceNamed<NamedTypeValue>(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
     }
-
-    LanguageType *getType(const std::string &&name) const;
 
     template<typename Expr, typename Type, typename... Args>
     std::unique_ptr<Expr> makeExpression(Type *type, Args &&...args) {

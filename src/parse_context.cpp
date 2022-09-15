@@ -6,9 +6,9 @@ ASTBuiltinType::ASTBuiltinType(std::string name)
     : builtinName(name) {}
 
 LanguageType *ASTBuiltinType::languageType(ModuleNode *, CodegenContext &context) {
-    assert(context.types.contains(builtinName));
+    assert(context.existsNamed(builtinName));
 
-    return context.types.at(builtinName).get();
+    return context.getNamed<NamedTypeValue>(builtinName);
 };
 
 ASTNamedType::ASTNamedType(std::string name)
@@ -17,10 +17,7 @@ ASTNamedType::ASTNamedType(std::string name)
 LanguageType *ASTNamedType::languageType(ModuleNode *module, CodegenContext &context) {
     auto fullName = resolveName(module, name);
 
-    if (!context.types.contains(fullName))
-        throw CodegenError(fmt::format("Unknown named type {}", fullName));
-
-    return context.types.at(fullName).get();
+    return context.getNamed<NamedTypeValue>(fullName);
 }
 
 ASTPointerType::ASTPointerType(std::unique_ptr<ASTType> &&targetType)
@@ -118,7 +115,7 @@ ConstantStringNode::ConstantStringNode(std::string value)
     : value(value) {}
 
 std::unique_ptr<Expression> ConstantStringNode::expression(ModuleNode *, CodegenContext &context) {
-    return std::make_unique<StringConstant>(context.getType("str"), value);
+    return std::make_unique<StringConstant>(context.getNamed<NamedTypeValue>("str"), value);
 }
 
 ConstantIntNode::ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue_)
@@ -140,7 +137,7 @@ ConstantBoolNode::ConstantBoolNode(bool value)
     : value(value) {}
 
 std::unique_ptr<Expression> ConstantBoolNode::expression(ModuleNode *, CodegenContext &context) {
-    return std::make_unique<BoolConstant>(context.getType("bool"), value);
+    return std::make_unique<BoolConstant>(context.getNamed<NamedTypeValue>("bool"), value);
 }
 
 FunctionCallNode::FunctionCallNode(std::string name)
@@ -209,7 +206,7 @@ void VariableDeclarationNode::emplaceGlobalVar(ModuleNode *module, CodegenContex
                 fullName
             );
             varDef.value = llvmGlobal;
-            context.globalVariables.emplace(fullName, varDef);
+            context.emplaceNamed<NamedVariableValue>(fullName, varDef);
         } else {
             throw CodegenError(fmt::format("Global variables of type {} are not supported", varType->signature()));
         }

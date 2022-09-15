@@ -55,7 +55,7 @@ Import = LP 'import' {
 
 Struct = LP StructType id:Id {
     assert(yy->ctx->structDef != nullptr);
-    assert(yy->code->getType(id.str) == nullptr && "Structure already defined");
+    assert(!yy->code->existsNamed(id.str) && "Structure already defined");
     yy->ctx->structDef->name = id.str;
 } (StructField -)* - RP {
     assert(yy->ctx->structDef != nullptr);
