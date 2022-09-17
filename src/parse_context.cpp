@@ -74,6 +74,10 @@ void StructNode::fillStructTypeFields(ModuleNode *module, CodegenContext &contex
     StructType::Fields exprFields;
     for (auto &[name, astType] : fields)
         exprFields.emplace_back(name, astType->languageType(module, context));
+
+    auto fullName = resolveName(module, name);
+    auto structType = static_cast<StructType *>(context.getNamed<NamedTypeValue>(fullName));
+    structType->fillFields(exprFields);
 }
 
 AliasNode::AliasNode(std::string name, std::unique_ptr<ASTType> &&target)
