@@ -38,8 +38,7 @@ struct IntegerType : LanguageType {
 };
 
 struct FloatType : LanguageType {
-    enum class Bits { Float,
-                      Double };
+    enum class Bits { Float, Double };
     Bits bits;
 
     FloatType(CodegenContext &context, Bits bits);
@@ -86,6 +85,8 @@ public:
 
     llvm::Type *llvmType() override;
     std::string signature() override;
+
+    int fieldIndex(const std::string &fieldName);
 };
 
 struct CharType : LanguageType {
@@ -128,12 +129,15 @@ public:
     std::vector<LanguageType *> arguments;
     LanguageType *returnType;
 
-    FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType);
+    FunctionType(
+        CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType
+    );
 
     llvm::Type *llvmType() override;
     std::string signature() override;
 
-    static std::string signatureFrom(const std::vector<LanguageType *> &arguments, LanguageType *returnType);
+    static std::string
+    signatureFrom(const std::vector<LanguageType *> &arguments, LanguageType *returnType);
 };
 
 struct ArrayType : LanguageType {

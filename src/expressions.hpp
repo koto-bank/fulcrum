@@ -37,7 +37,6 @@ struct ExpressionGenContext {
     VariableDefinition *lookupVariable(const std::string &name);
     VariableDefinition *insertVariable(const std::string &name, LanguageType *type);
 
-    void variableSet(VariableDefinition *var, llvm::Value *value);
     void pushScope();
     void popScope();
 };
@@ -50,7 +49,9 @@ protected:
 
     LanguageType *type = nullptr;
 
-    void assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage);
+    void assumeExpression(
+        ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage
+    );
 
 public:
     Expression(LanguageType *type);
@@ -128,21 +129,29 @@ public:
 
     FunctionCall(const std::string &name, Args &&args);
 
-    using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
-    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
+    using SpecialFunctionProcessor
+        = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
+    using SpecialFunctionTyping
+        = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
 
-    std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions{
-        { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
-        { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
-        { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
-        { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
+    std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>>
+        specialFunctions{
+            { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
+            { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
+            { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
+            { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
 
-        { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-        { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-        { "/", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-        { "%", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-        { "=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-    };
+            { "+",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "-",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "/",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "%",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "=",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        };
 
     bool isTerminator() override;
 
@@ -154,12 +163,19 @@ public:
 };
 
 struct VarAccess : Expression {
+private:
+    std::vector<std::string> varPath;
+
+public:
     std::string name;
 
     VarAccess(const std::string &name);
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
+
+    const std::vector<std::string> &path();
+    llvm::Value *varAddress(ExpressionGenContext &genContext);
 };
 
 struct AddrOf : Expression {
@@ -187,7 +203,9 @@ struct VariableDeclaration : Expression {
 
     std::string name;
 
-    VariableDeclaration(const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue);
+    VariableDeclaration(
+        const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue
+    );
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Type *llvmType(ExpressionGenContext &genContext) override;
 

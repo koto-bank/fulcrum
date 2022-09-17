@@ -74,10 +74,14 @@ StructType = ('struct-' -) {
     yy->ctx->structDef->isPublic = true;
 }
 
-StructField = LP id:Id - Type {
+StructField = LP (id:Id {
+    yy->ctx->structFieldName = id.str;
+} -) Type {
     assert(yy->ctx->structDef != nullptr);
     assert(yy->ctx->type != nullptr);
-    yy->ctx->structDef->fields.emplace_back(id.str, std::move(yy->ctx->type));
+
+    yy->ctx->structDef->fields.emplace_back(yy->ctx->structFieldName, std::move(yy->ctx->type));
+    yy->ctx->structFieldName.clear();
 } RP
 
 Fn = (LP FnType - id:Id {
@@ -291,7 +295,7 @@ RP = - ')'
 Char = ( !Space . )
 Str = ["] < ( !["] . )* > ["] - { $$.str = yytext; }
 
-Id = ( < ( ![./] !LP !RP !Space Char )+ > &( Space | Comment | [.] | LP | RP )- { $$.str = yytext; }
+Id = ( < ( !LP !RP !Space Char )+ > &( Space | Comment | LP | RP )- { $$.str = yytext; }
    | < '/' > - ){ $$.str = yytext; } # division
 
 - = ( Space | Comment )*

@@ -7,7 +7,10 @@
 
 using llvm::LLVMContext;
 
-Function::Function(CodegenContext &context, llvm::Module &module, const std::string &name_, const Args &arguments, LanguageType *returnType, Body &&body, bool isPublic)
+Function::Function(
+    CodegenContext &context, llvm::Module &module, const std::string &name_, const Args &arguments,
+    LanguageType *returnType, Body &&body, bool isPublic
+)
     : name(name_),
       body(std::move(body)),
       isPublic(isPublic) {
@@ -21,7 +24,8 @@ Function::Function(CodegenContext &context, llvm::Module &module, const std::str
     std::replace(name.begin(), name.end(), '/', '_');
 
     auto funcType = (llvm::FunctionType *)type->llvmType();
-    function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
+    function
+        = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
 
     for (auto i = 0u; i < function->arg_size(); i++)
         function->getArg(i)->setName(argumentNames[i]);
@@ -31,7 +35,9 @@ const std::string &Function::getName() const { return name; }
 FunctionType *Function::functionType() { return type.get(); }
 llvm::Function *Function::llvmFunction() { return function; }
 
-void Function::generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions) {
+void Function::generateExpressions(
+    ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions
+) {
     std::vector<Expression *> args;
     for (auto &expr : expressions)
         args.push_back(expr.get());
@@ -49,7 +55,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     genContext.pushScope();
     for (auto i = 0u; i < argumentNames.size(); i++) {
         auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
-        genContext.variableSet(varDef, function->getArg(i));
+        genContext.builder.CreateStore(function->getArg(i), varDef->value);
     }
 
     generateExpressions(genContext, body);
@@ -57,8 +63,10 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     genContext.popScope();
 
     if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
-        // If the function is not void, insert unreachable at the end, since the user must return something
-        if (genContext.function->functionType()->returnType != context.getNamed<NamedTypeValue>("void")) {
+        // If the function is not void, insert unreachable at the end, since the user must return
+        // something
+        if (genContext.function->functionType()->returnType
+            != context.getNamed<NamedTypeValue>("void")) {
             genContext.builder.CreateUnreachable();
         } else {
             // Otherwise, return void automatically
@@ -67,11 +75,12 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     }
 }
 
-void Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
+void Function::generateExpressions(
+    ExpressionGenContext &genContext, std::vector<Expression *> expressions
+) {
     for (auto &expr : expressions) {
         expr->llvmValue(genContext);
-        if (expr->isTerminator())
-            return;
+        if (expr->isTerminator()) return;
     }
 }
 
@@ -88,38 +97,30 @@ std::string Function::dump() {
     }
 
     return fmt::format(
-        "({} {} {} ({})\n{})",
-        isPublic ? "fn" : "fn-",
-        name,
-        type->returnType->signature(),
-        fmt::join(argumentDumps, " "),
-        fmt::join(expressionDumps, "\n")
+        "({} {} {} ({})\n{})", isPublic ? "fn" : "fn-", name, type->returnType->signature(),
+        fmt::join(argumentDumps, " "), fmt::join(expressionDumps, "\n")
     );
 }
 
 CodegenError::CodegenError(std::string message)
     : message(message) {}
 
-std::string CodegenError::indentSpaces(int n) const {
-    return fmt::format("{: >{}}", "", n);
-}
+std::string CodegenError::indentSpaces(int n) const { return fmt::format("{: >{}}", "", n); }
 
-const char *CodegenError::what() const noexcept {
-    return whatIndented(0);
-}
+const char *CodegenError::what() const noexcept { return whatIndented(0); }
 
 const char *CodegenError::whatIndented(int indent) const {
     indentedMessage = fmt::format("{}{}", indentSpaces(indent), message.data());
     return indentedMessage.data();
 }
 
-StackedCodegenErrors::StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors)
+StackedCodegenErrors::StackedCodegenErrors(
+    std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors
+)
     : CodegenError(message),
       errors(std::move(errors)) {}
 
-const char *StackedCodegenErrors::what() const noexcept {
-    return whatIndented(0);
-}
+const char *StackedCodegenErrors::what() const noexcept { return whatIndented(0); }
 
 const char *StackedCodegenErrors::whatIndented(int indent) const {
     indentedMsg = fmt::format("{}{}\n", indentSpaces(indent), message);
@@ -141,8 +142,13 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<CharType>("char");
 }
 
-void CodegenContext::emplaceFn(const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType, Function::Body &&body, bool isPublic) {
-    emplaceNamed<NamedFunctionValue>(langName, *this, module, funcName, args, returnType, std::move(body), isPublic);
+void CodegenContext::emplaceFn(
+    const std::string &langName, const std::string &funcName, const Function::Args &args,
+    LanguageType *returnType, Function::Body &&body, bool isPublic
+) {
+    emplaceNamed<NamedFunctionValue>(
+        langName, *this, module, funcName, args, returnType, std::move(body), isPublic
+    );
 }
 
 std::string NamedFunctionValue::namedType() { return "function"; }
@@ -151,8 +157,7 @@ std::string NamedFunctionValue::valueNamedType() const { return namedType(); };
 std::string NamedVariableValue::namedType() { return "variable"; }
 std::string NamedVariableValue::valueNamedType() const { return namedType(); };
 NamedVariableValue::NamedVariableValue(VariableDefinition varDef)
-    : value(std::make_unique<ValueType>(varDef)) {
-}
+    : value(std::make_unique<ValueType>(varDef)) {}
 
 std::string NamedTypeValue::namedType() { return "type"; }
 std::string NamedTypeValue::valueNamedType() const { return namedType(); };
