@@ -217,7 +217,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     builder.SetInsertPoint(thenBlock);
 
     genContext.pushScope();
-    genContext.function->generateExpressions(genContext, { args[1].get() });
+    args[1]->llvmValue(genContext);
     if (!args[1]->isTerminator()) builder.CreateBr(afterIfBlock);
     genContext.popScope();
 
@@ -225,7 +225,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
         builder.SetInsertPoint(elseBlock);
 
         genContext.pushScope();
-        genContext.function->generateExpressions(genContext, { args[2].get() });
+        args[2]->llvmValue(genContext);
         if (!args[2]->isTerminator()) builder.CreateBr(afterIfBlock);
         genContext.popScope();
     }
@@ -238,8 +238,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     if (args.size() == 0) {
         throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name));
     }
-    if (name == "=" && args.size() != 2)
-        throw CodegenError(fmt::format("Expected exactly 2 argument to =, but got {}", args.size())
+    if ((name == "=" || name[0] == '>' || name[0] == '<') && args.size() != 2)
+        throw CodegenError(
+            fmt::format("Expected exactly 2 argument to {}, but got {}", name, args.size())
         );
 
     auto expectedType = args[0]->languageType(genContext);
@@ -311,6 +312,71 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             buildOperation
                 = std::bind(&llvm::IRBuilderBase::CreateFCmpOEQ, _1, _2, _3, "", nullptr);
         break;
+    case '!': {
+        assert(name[1] == '=');
+        if (intType)
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpNE, _1, _2, _3, "");
+        else
+            buildOperation
+                = std::bind(&llvm::IRBuilderBase::CreateFCmpONE, _1, _2, _3, "", nullptr);
+        break;
+    }
+    case '>': {
+        auto orEquals = name.size() > 1 && name[1] == '=';
+        if (intType) {
+            if (intType->isSigned) {
+                if (orEquals) {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpSGE, _1, _2, _3, "");
+                } else {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpSGT, _1, _2, _3, "");
+                }
+            } else {
+                if (orEquals) {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpUGE, _1, _2, _3, "");
+                } else {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpUGT, _1, _2, _3, "");
+                }
+            }
+        } else {
+            if (orEquals) {
+                buildOperation
+                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOGE, _1, _2, _3, "", nullptr);
+            } else {
+                buildOperation
+                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOGT, _1, _2, _3, "", nullptr);
+            }
+        }
+
+        break;
+    }
+    case '<': {
+        auto orEquals = name.size() > 1 && name[1] == '=';
+        if (intType) {
+            if (intType->isSigned) {
+                if (orEquals) {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpSLE, _1, _2, _3, "");
+                } else {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpSLT, _1, _2, _3, "");
+                }
+            } else {
+                if (orEquals) {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpULE, _1, _2, _3, "");
+                } else {
+                    buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpULT, _1, _2, _3, "");
+                }
+            }
+        } else {
+            if (orEquals) {
+                buildOperation
+                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOLE, _1, _2, _3, "", nullptr);
+            } else {
+                buildOperation
+                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOLT, _1, _2, _3, "", nullptr);
+            }
+        }
+
+        break;
+    }
     }
 
     llvm::Value *result = nullptr;
@@ -332,7 +398,8 @@ LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCo
     if (args.size() == 0) {
         throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name));
     }
-    if (name == "=") return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
+    if (name == "=" || name[0] == '>' || name[0] == '<')
+        return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
 
     return args[0]->languageType(genCont);
 }
@@ -390,6 +457,40 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
 
         genContext.builder.CreateStore(newValue->llvmValue(genContext), varAddress);
     }
+
+    return nullptr;
+}
+
+llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
+    if (args.size() != 2) {
+        throw CodegenError(fmt::format("Expected 2 arguments to while, but got {}", args.size()));
+    }
+    if (args[0]->languageType(genContext)->llvmType()
+        != genContext.codegenContext.getNamed<NamedTypeValue>("bool")->llvmType()) {
+        throw CodegenError("First argument to while must be boolean");
+    }
+
+    auto &llContext = genContext.codegenContext.context;
+    auto whileCondBlock
+        = llvm::BasicBlock::Create(llContext, "while-cond", genContext.function->llvmFunction());
+    genContext.builder.CreateBr(whileCondBlock);
+    genContext.builder.SetInsertPoint(whileCondBlock);
+    auto condValue = args[0]->llvmValue(genContext);
+
+    auto condTrueBlock
+        = llvm::BasicBlock::Create(llContext, "while-true", genContext.function->llvmFunction());
+    auto condAfterBlock
+        = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());
+
+    genContext.builder.CreateCondBr(condValue, condTrueBlock, condAfterBlock);
+    genContext.builder.SetInsertPoint(condTrueBlock);
+
+    genContext.pushScope();
+    args[1]->llvmValue(genContext);
+    if (!args[1]->isTerminator()) { genContext.builder.CreateBr(whileCondBlock); }
+    genContext.popScope();
+
+    genContext.builder.SetInsertPoint(condAfterBlock);
 
     return nullptr;
 }

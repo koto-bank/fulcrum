@@ -117,6 +117,7 @@ private:
     llvm::Value *ifProcessor(ExpressionGenContext &genContext);
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
+    llvm::Value *whileProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(ExpressionGenContext &genContext);
     LanguageType *voidProcessorType(ExpressionGenContext &genContext);
@@ -140,6 +141,7 @@ public:
             { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
             { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
             { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
+            { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
 
             { "+",
               { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
@@ -150,6 +152,16 @@ public:
             { "%",
               { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
             { "=",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "!=",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { ">",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { ">=",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "<",
+              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+            { "<=",
               { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         };
 
