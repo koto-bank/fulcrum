@@ -64,10 +64,16 @@ public:
     virtual ~Expression() = default;
 };
 
+struct ConstantExpression : Expression {
+    using Expression::Expression;
+
+    virtual llvm::Constant *llvmConstant(CodegenContext &context);
+};
+
 template<typename T>
 concept IsLongInteger = std::same_as<T, uint64_t> || std::same_as<T, int64_t>;
 
-struct IntegerConstant : Expression {
+struct IntegerConstant : ConstantExpression {
     std::variant<uint64_t, int64_t> constValue;
 
     IntegerConstant(IntegerType *type, IsLongInteger auto _constValue);
@@ -78,7 +84,7 @@ struct IntegerConstant : Expression {
 template<typename T>
 concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
 
-struct FloatConstant : Expression {
+struct FloatConstant : ConstantExpression {
     std::variant<float, double> constValue;
 
     FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_);
@@ -86,7 +92,7 @@ struct FloatConstant : Expression {
     std::string dump(int indent) override;
 };
 
-struct StringConstant : Expression {
+struct StringConstant : ConstantExpression {
 private:
     llvm::GlobalVariable *llvmConst = nullptr;
 
@@ -96,10 +102,11 @@ public:
     StringConstant(LanguageType *type, const std::string &constValue);
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    llvm::Constant *llvmConstant(CodegenContext &context) override;
     std::string dump(int indent) override;
 };
 
-struct BoolConstant : Expression {
+struct BoolConstant : ConstantExpression {
 public:
     bool constValue;
 

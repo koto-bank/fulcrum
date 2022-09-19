@@ -51,6 +51,9 @@ struct ParseHeaderContext {
     ParseHeaderContext(std::string name, CodegenContext &parentContext)
         : codegenContext(parentContext),
           interp(createClangInterpreter()) {
+        std::replace(name.begin(), name.end(), '/', '_');
+        std::replace(name.begin(), name.end(), '.', '_');
+
         module = std::make_unique<ModuleNode>(name);
     }
 
@@ -92,7 +95,7 @@ struct ParseHeaderContext {
         }
     doneSearching:
         if (decl == nullptr) tuOrErr->TUPart->dump();
-        auto declType = decl->getType();
+        auto declType = decl->getType().getNonReferenceType();
 
         auto llvmVar = tuOrErr->TheModule.get()->getGlobalVariable(varName);
         auto varDef = std::make_unique<VariableDeclarationNode>(name);
@@ -110,8 +113,8 @@ struct ParseHeaderContext {
             else
                 varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getZExtValue());
             return varDef;
-        } else if (llvmVar->getType()->isArrayTy()) {
-            auto varInitializer = llvm::dyn_cast<llvm::ConstantDataArray>(llvmVar->getInitializer());
+        } else if (declType->isConstantArrayType() && declType->getPointeeOrArrayElementType()->isAnyCharacterType()) {
+            auto varInitializer = llvm::dyn_cast<llvm::ConstantDataArray>(llvmVar->getInitializer()->getOperand(0));
 
             varDef->type = std::make_unique<ASTBuiltinType>("str");
             varDef->initialValue = std::make_unique<ConstantStringNode>(varInitializer->getAsString().str());
@@ -385,7 +388,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 clang_getSpellingLocation(loc, &locFile, &file, &col, &offset);
 
                 // Skip internals
-                if (clang_getFileName(locFile).data == nullptr) return CXChildVisit_Continue;
+                if (clang_getFileName(locFile).data == nullptr || name.starts_with("_")) return CXChildVisit_Continue;
 
                 auto varVal = parseHeaderContext->evalMacro(name);
                 if (varVal != nullptr) parseHeaderContext->module->globalVariables.push_back(std::move(varVal));

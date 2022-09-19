@@ -164,8 +164,8 @@ std::unique_ptr<Expression> FunctionCallNode::expression(ModuleNode *module, Cod
 VarAccessNode::VarAccessNode(std::string name)
     : name(name) {}
 
-std::unique_ptr<Expression> VarAccessNode::expression(ModuleNode *, CodegenContext &) {
-    return std::make_unique<VarAccess>(name);
+std::unique_ptr<Expression> VarAccessNode::expression(ModuleNode *module, CodegenContext &) {
+    return std::make_unique<VarAccess>(resolveName(module, name));
 }
 
 AddrOfNode::AddrOfNode(std::unique_ptr<ASTNode> &&target)
@@ -191,28 +191,19 @@ std::unique_ptr<Expression> VariableDeclarationNode::expression(ModuleNode *modu
 void VariableDeclarationNode::emplaceGlobalVar(ModuleNode *module, CodegenContext &context) {
     auto fullName = resolveName(module, name);
     VariableDefinition varDef(fullName, type->languageType(module, context));
-    auto varType = type->languageType(module, context);
 
     if (initialValue != nullptr) {
         auto expr = initialValue->expression(module, context);
+        auto constExpr = dynamic_cast<ConstantExpression *>(expr.get());
+        if (constExpr == nullptr)
+            throw CodegenError(fmt::format("Global variable of non-constant type not supported: {}", fullName));
 
-        // FIXME: This is a mess
-        auto maybeInt = dynamic_cast<IntegerConstant *>(expr.get());
-        if (maybeInt != nullptr) {
-            auto isSigned = std::holds_alternative<int64_t>(maybeInt->constValue);
-            llvm::Constant *numberConstant = isSigned
-                ? llvm::ConstantInt::getSigned(varType->llvmType(), std::get<int64_t>(maybeInt->constValue))
-                : llvm::ConstantInt::get(varType->llvmType(), std::get<uint64_t>(maybeInt->constValue));
-
-            auto llvmGlobal = new llvm::GlobalVariable(
-                context.module, varType->llvmType(), false, llvm::GlobalVariable::PrivateLinkage, numberConstant,
-                fullName
-            );
-            varDef.value = llvmGlobal;
-            context.emplaceNamed<NamedVariableValue>(fullName, varDef);
-        } else {
-            throw CodegenError(fmt::format("Global variables of type {} are not supported", varType->signature()));
-        }
+        auto constVal = constExpr->llvmConstant(context);
+        auto llvmGlobal = new llvm::GlobalVariable(
+            context.module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, fullName
+        );
+        varDef.value = llvmGlobal;
+        context.emplaceNamed<NamedVariableValue>(fullName, varDef);
     }
 }
 

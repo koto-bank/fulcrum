@@ -60,8 +60,11 @@ llvm::Value *Expression::llvmValue(ExpressionGenContext &) { return value; }
 
 bool Expression::isTerminator() { return false; }
 
+
+llvm::Constant *ConstantExpression::llvmConstant(CodegenContext &) { return (llvm::Constant *)value; }
+
 IntegerConstant::IntegerConstant(IntegerType *type, IsLongInteger auto _constValue)
-    : Expression(type),
+    : ConstantExpression(type),
       constValue(_constValue) {
     if (!llvm::ConstantInt::isValueValidForType(type->llvmType(), _constValue)) {
         throw CodegenError(fmt::format("Integer {} does not fit into its type", _constValue));
@@ -80,7 +83,7 @@ std::string IntegerConstant::dump(int indent) {
 }
 
 FloatConstant::FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_)
-    : Expression(type),
+    : ConstantExpression(type),
       constValue(constValue_) {
     auto apFloat = llvm::APFloat(constValue_);
     if (!llvm::ConstantFP::isValueValidForType(type->llvmType(), apFloat)) {
@@ -102,21 +105,32 @@ std::string FloatConstant::dump(int indent) {
 }
 
 StringConstant::StringConstant(LanguageType *type, const std::string &constValue)
-    : Expression(type),
+    : ConstantExpression(type),
       constValue(constValue) {}
 
 llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
-    if (llvmConst == nullptr) { llvmConst = genContext.builder.CreateGlobalString(constValue); }
-
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
     llvm::Constant *Indices[] = { Zero, Zero };
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(
+        llvmConst->getValueType(), llvmConstant(genContext.codegenContext), Indices
+    );
+}
+
+llvm::Constant *StringConstant::llvmConstant(CodegenContext &codegenContext) {
+    if (llvmConst == nullptr) {
+        llvm::Constant *StrConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
+        llvmConst = new llvm::GlobalVariable(
+            codegenContext.module, StrConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, StrConstant
+        );
+    }
+
+    return llvmConst;
 }
 
 std::string StringConstant::dump(int indent) { return fmt::format("{}\"{}\"", indentSpaces(indent), constValue); }
 
 BoolConstant::BoolConstant(LanguageType *type, bool constValue)
-    : Expression(type),
+    : ConstantExpression(type),
       constValue(constValue) {
     value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
 }
@@ -512,7 +526,10 @@ LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
         LanguageType *currentType = nullptr;
         for (auto &currentName : pathName) {
             if (currentType == nullptr) {
-                currentType = genCont.lookupVariable(currentName)->type;
+                auto foundVar = genCont.lookupVariable(currentName);
+                if (foundVar == nullptr) throw CodegenError(fmt::format("Variable {} not defined", currentName));
+
+                currentType = foundVar->type;
             } else {
                 auto *structType = dynamic_cast<StructType *>(currentType);
                 if (structType == nullptr)
