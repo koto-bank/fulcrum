@@ -49,9 +49,7 @@ protected:
 
     LanguageType *type = nullptr;
 
-    void assumeExpression(
-        ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage
-    );
+    void assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage);
 
 public:
     Expression(LanguageType *type);
@@ -130,40 +128,27 @@ public:
 
     FunctionCall(const std::string &name, Args &&args);
 
-    using SpecialFunctionProcessor
-        = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
-    using SpecialFunctionTyping
-        = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
+    using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
+    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
 
-    std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>>
-        specialFunctions{
-            { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
-            { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
-            { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
-            { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
-            { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
+    std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions{
+        { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
+        { "if", { &FunctionCall::ifProcessor, &FunctionCall::voidProcessorType } },
+        { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
+        { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
+        { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
 
-            { "+",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "-",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "/",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "%",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "=",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "!=",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { ">",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { ">=",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "<",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-            { "<=",
-              { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
-        };
+        { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "/", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "%", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "!=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { ">", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { ">=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "<", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+        { "<=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+    };
 
     bool isTerminator() override;
 
@@ -215,9 +200,7 @@ struct VariableDeclaration : Expression {
 
     std::string name;
 
-    VariableDeclaration(
-        const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue
-    );
+    VariableDeclaration(const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue);
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Type *llvmType(ExpressionGenContext &genContext) override;
 

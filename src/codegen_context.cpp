@@ -24,8 +24,7 @@ Function::Function(
     std::replace(name.begin(), name.end(), '/', '_');
 
     auto funcType = (llvm::FunctionType *)type->llvmType();
-    function
-        = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
+    function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
 
     for (auto i = 0u; i < function->arg_size(); i++)
         function->getArg(i)->setName(argumentNames[i]);
@@ -65,8 +64,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
         // If the function is not void, insert unreachable at the end, since the user must return
         // something
-        if (genContext.function->functionType()->returnType
-            != context.getNamed<NamedTypeValue>("void")) {
+        if (genContext.function->functionType()->returnType != context.getNamed<NamedTypeValue>("void")) {
             genContext.builder.CreateUnreachable();
         } else {
             // Otherwise, return void automatically
@@ -75,9 +73,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     }
 }
 
-void Function::generateExpressions(
-    ExpressionGenContext &genContext, std::vector<Expression *> expressions
-) {
+void Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
     for (auto &expr : expressions) {
         expr->llvmValue(genContext);
         if (expr->isTerminator()) return;
@@ -87,9 +83,7 @@ void Function::generateExpressions(
 std::string Function::dump() {
     std::vector<std::string> argumentDumps, expressionDumps;
     for (auto i = 0u; i < function->arg_size(); i++)
-        argumentDumps.push_back(
-            fmt::format("({} {})", argumentNames[i], type->arguments[i]->signature())
-        );
+        argumentDumps.push_back(fmt::format("({} {})", argumentNames[i], type->arguments[i]->signature()));
 
     for (auto &expr : body) {
         // Indent by 4
@@ -114,9 +108,7 @@ const char *CodegenError::whatIndented(int indent) const {
     return indentedMessage.data();
 }
 
-StackedCodegenErrors::StackedCodegenErrors(
-    std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors
-)
+StackedCodegenErrors::StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors)
     : CodegenError(message),
       errors(std::move(errors)) {}
 
@@ -140,15 +132,14 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<IntegerType>("i32", 32, true);
     emplaceType<IntegerType>("u32", 32, false);
     emplaceType<CharType>("char");
+    emplaceType<StringType>("str");
 }
 
 void CodegenContext::emplaceFn(
-    const std::string &langName, const std::string &funcName, const Function::Args &args,
-    LanguageType *returnType, Function::Body &&body, bool isPublic
+    const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType,
+    Function::Body &&body, bool isPublic
 ) {
-    emplaceNamed<NamedFunctionValue>(
-        langName, *this, module, funcName, args, returnType, std::move(body), isPublic
-    );
+    emplaceNamed<NamedFunctionValue>(langName, *this, module, funcName, args, returnType, std::move(body), isPublic);
 }
 
 std::string NamedFunctionValue::namedType() { return "function"; }

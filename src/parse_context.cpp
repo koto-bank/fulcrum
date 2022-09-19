@@ -53,8 +53,8 @@ LanguageType *ASTFunctionType::languageType(ModuleNode *module, CodegenContext &
         exprArgs.emplace_back(astType->languageType(module, context));
 
     return context.getOrEmplaceType<FunctionType>(
-        FunctionType::signatureFrom(exprArgs, returnType->languageType(module, context)),
-        exprArgs, returnType->languageType(module, context)
+        FunctionType::signatureFrom(exprArgs, returnType->languageType(module, context)), exprArgs,
+        returnType->languageType(module, context)
     );
 }
 
@@ -92,7 +92,9 @@ void AliasNode::emplaceAliasType(ModuleNode *module, CodegenContext &context) {
     context.emplaceType<AliasType>(fullName, fullName, target->languageType(module, context));
 }
 
-FunctionNode::FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic)
+FunctionNode::FunctionNode(
+    std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic
+)
     : name(name),
       isPublic(isPublic),
       arguments(std::move(arguments)),
@@ -109,10 +111,13 @@ void FunctionNode::emplaceFunction(ModuleNode *module, CodegenContext &context) 
         exprBody.push_back(node->expression(module, context));
 
     auto langName = name == "main" ? name : resolveName(module, name);
-    // FIXME: maybe there's a better way, but for now assume functions with no body are C declarations
+    // FIXME: maybe there's a better way, but for now assume functions with no body are C
+    // declarations
     auto funcName = (name == "main" || body.size() == 0) ? name : resolveName(module, name);
 
-    context.emplaceFn(langName, funcName, exprArgs, returnType->languageType(module, context), std::move(exprBody), isPublic);
+    context.emplaceFn(
+        langName, funcName, exprArgs, returnType->languageType(module, context), std::move(exprBody), isPublic
+    );
 }
 
 ConstantStringNode::ConstantStringNode(std::string value)
@@ -132,9 +137,8 @@ template ConstantIntNode::ConstantIntNode(ASTBuiltinType, uint64_t);
 
 std::unique_ptr<Expression> ConstantIntNode::expression(ModuleNode *module, CodegenContext &context) {
     auto tp = (IntegerType *)intType.languageType(module, context);
-    return isSigned
-        ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(value))
-        : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(value));
+    return isSigned ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(value))
+                    : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(value));
 }
 
 ConstantBoolNode::ConstantBoolNode(bool value)
@@ -180,8 +184,7 @@ VariableDeclarationNode::VariableDeclarationNode(std::string name)
 
 std::unique_ptr<Expression> VariableDeclarationNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<VariableDeclaration>(
-        name, type->languageType(module, context),
-        initialValue ? initialValue->expression(module, context) : nullptr
+        name, type->languageType(module, context), initialValue ? initialValue->expression(module, context) : nullptr
     );
 }
 
@@ -202,11 +205,7 @@ void VariableDeclarationNode::emplaceGlobalVar(ModuleNode *module, CodegenContex
                 : llvm::ConstantInt::get(varType->llvmType(), std::get<uint64_t>(maybeInt->constValue));
 
             auto llvmGlobal = new llvm::GlobalVariable(
-                context.module,
-                varType->llvmType(),
-                false,
-                llvm::GlobalVariable::PrivateLinkage,
-                numberConstant,
+                context.module, varType->llvmType(), false, llvm::GlobalVariable::PrivateLinkage, numberConstant,
                 fullName
             );
             varDef.value = llvmGlobal;

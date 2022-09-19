@@ -17,9 +17,7 @@ IntegerType::IntegerType(CodegenContext &context, unsigned int bits, bool isSign
 
 Type *IntegerType::llvmType() { return Type::getIntNTy(context.context, bits); }
 
-std::string IntegerType::signature() {
-    return std::string(isSigned ? "i" : "u") + std::to_string(bits);
-}
+std::string IntegerType::signature() { return std::string(isSigned ? "i" : "u") + std::to_string(bits); }
 
 LanguageType *LanguageType::actualLanguageType() { return this; }
 
@@ -30,8 +28,7 @@ FloatType::FloatType(CodegenContext &context, Bits bits)
 std::string FloatType::signature() { return bits == Bits::Float ? "f32" : "f64"; }
 
 Type *FloatType::llvmType() {
-    return bits == Bits::Float ? Type::getFloatTy(context.context)
-                               : Type::getDoubleTy(context.context);
+    return bits == Bits::Float ? Type::getFloatTy(context.context) : Type::getDoubleTy(context.context);
 }
 
 StringType::StringType(CodegenContext &context)
@@ -48,9 +45,7 @@ AliasType::AliasType(CodegenContext &codegenContext, std::string name, LanguageT
 
 llvm::Type *AliasType::llvmType() { return aliasTo->llvmType(); }
 
-std::string AliasType::signature() {
-    return fmt::format("{} ({})", name, actualLanguageType()->signature());
-}
+std::string AliasType::signature() { return fmt::format("{} ({})", name, actualLanguageType()->signature()); }
 
 LanguageType *AliasType::actualLanguageType() { return aliasTo->actualLanguageType(); }
 
@@ -62,12 +57,10 @@ StructType::StructType(CodegenContext &codegenContext, std::string name, bool is
 void StructType::fillFields(const Fields &fields_) { fields = fields_; }
 
 int StructType::fieldIndex(const std::string &fieldName) {
-    auto fieldIter = std::find_if(
-        fields.begin(), fields.end(),
-        [&fieldName](const StructType::Fields::value_type &elem) {
-            return std::get<0>(elem) == fieldName;
-        }
-    );
+    auto fieldIter
+        = std::find_if(fields.begin(), fields.end(), [&fieldName](const StructType::Fields::value_type &elem) {
+              return std::get<0>(elem) == fieldName;
+          });
     if (fieldIter == fields.end())
         throw CodegenError(fmt::format("No field named {} in type {}", fieldName, signature()));
     return std::distance(fields.begin(), fieldIter);
@@ -78,13 +71,10 @@ std::string StructType::signature() { return name; }
 Type *StructType::llvmType() {
     if (structType == nullptr) {
         std::vector<Type *> fieldTypes;
-        std::transform(
-            fields.begin(), fields.end(), std::back_inserter(fieldTypes),
-            [](auto &type) {
-                auto &[_, tp] = type;
-                return tp->llvmType();
-            }
-        );
+        std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {
+            auto &[_, tp] = type;
+            return tp->llvmType();
+        });
 
         structType = llvm::StructType::create(context.context, fieldTypes, name);
     }
@@ -113,9 +103,7 @@ std::string VoidType::signature() { return "void"; }
 
 std::string BoolType::signature() { return "bool"; }
 
-FunctionType::FunctionType(
-    CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType_
-)
+FunctionType::FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType_)
     : LanguageType(context),
       arguments(args),
       returnType(returnType_) {}
@@ -123,10 +111,9 @@ FunctionType::FunctionType(
 llvm::Type *FunctionType::llvmType() {
     if (funcType == nullptr) {
         std::vector<llvm::Type *> argTypes;
-        std::transform(
-            arguments.begin(), arguments.end(), std::back_inserter(argTypes),
-            [](auto &type) { return type->llvmType(); }
-        );
+        std::transform(arguments.begin(), arguments.end(), std::back_inserter(argTypes), [](auto &type) {
+            return type->llvmType();
+        });
         llvm::Type *retType = returnType->llvmType();
 
         funcType = llvm::FunctionType::get(retType, argTypes, false);
@@ -135,9 +122,7 @@ llvm::Type *FunctionType::llvmType() {
     return funcType;
 }
 
-std::string FunctionType::signatureFrom(
-    const std::vector<LanguageType *> &arguments, LanguageType *returnType
-) {
+std::string FunctionType::signatureFrom(const std::vector<LanguageType *> &arguments, LanguageType *returnType) {
     std::string argSignatures;
     for (auto i = 0u; i < arguments.size(); i++) {
         if (i != 0) argSignatures += ", ";

@@ -117,10 +117,7 @@ struct FunctionNode : ASTNode {
     Body body;
 
     FunctionNode() = default;
-    FunctionNode(
-        std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body,
-        bool isPublic
-    );
+    FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
     void emplaceFunction(ModuleNode *module, CodegenContext &context);

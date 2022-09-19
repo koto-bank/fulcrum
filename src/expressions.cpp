@@ -25,10 +25,8 @@ VariableDefinition *ExpressionGenContext::lookupVariable(const std::string &name
     return nullptr;
 }
 
-VariableDefinition *
-ExpressionGenContext::insertVariable(const std::string &name, LanguageType *type) {
-    if (lookupVariable(name) != nullptr)
-        throw CodegenError(fmt::format("Variable {} already defined", name));
+VariableDefinition *ExpressionGenContext::insertVariable(const std::string &name, LanguageType *type) {
+    if (lookupVariable(name) != nullptr) throw CodegenError(fmt::format("Variable {} already defined", name));
 
     auto allocated = builder.CreateAlloca(type->llvmType(), 0, name);
     auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
@@ -43,9 +41,7 @@ void ExpressionGenContext::pushScope() { variableScopes.push_back({}); }
 
 void ExpressionGenContext::popScope() { variableScopes.pop_back(); }
 
-void Expression::assumeExpression(
-    ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage
-) {
+void Expression::assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage) {
     if (expr->languageType(genContext)->actualLanguageType()
         == genContext.codegenContext.getNamed<NamedTypeValue>("void"))
         throw CodegenError(errorMessage);
@@ -58,9 +54,7 @@ Expression::Expression(LanguageType *type)
 
 LanguageType *Expression::languageType(ExpressionGenContext &) { return type; }
 
-llvm::Type *Expression::llvmType(ExpressionGenContext &genContext) {
-    return languageType(genContext)->llvmType();
-}
+llvm::Type *Expression::llvmType(ExpressionGenContext &genContext) { return languageType(genContext)->llvmType(); }
 
 llvm::Value *Expression::llvmValue(ExpressionGenContext &) { return value; }
 
@@ -81,13 +75,8 @@ template IntegerConstant::IntegerConstant(IntegerType *type, uint64_t _constValu
 std::string IntegerConstant::dump(int indent) {
     auto isSigned = static_cast<IntegerType *>(type)->isSigned;
 
-    return isSigned
-        ? fmt::format(
-            "{}{}{}", indentSpaces(indent), std::get<int64_t>(constValue), type->signature()
-        )
-        : fmt::format(
-            "{}{}{}", indentSpaces(indent), std::get<uint64_t>(constValue), type->signature()
-        );
+    return isSigned ? fmt::format("{}{}{}", indentSpaces(indent), std::get<int64_t>(constValue), type->signature())
+                    : fmt::format("{}{}{}", indentSpaces(indent), std::get<uint64_t>(constValue), type->signature());
 }
 
 FloatConstant::FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_)
@@ -107,8 +96,7 @@ std::string FloatConstant::dump(int indent) {
 
     return fmt::format(
         "{}{}{}", indentSpaces(indent),
-        floatbits == FloatType::Bits::Double ? std::get<double>(constValue)
-                                             : std::get<float>(constValue),
+        floatbits == FloatType::Bits::Double ? std::get<double>(constValue) : std::get<float>(constValue),
         type->signature()
     );
 }
@@ -122,14 +110,10 @@ llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
 
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
     llvm::Constant *Indices[] = { Zero, Zero };
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        llvmConst->getValueType(), llvmConst, Indices
-    );
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(llvmConst->getValueType(), llvmConst, Indices);
 }
 
-std::string StringConstant::dump(int indent) {
-    return fmt::format("{}\"{}\"", indentSpaces(indent), constValue);
-}
+std::string StringConstant::dump(int indent) { return fmt::format("{}\"{}\"", indentSpaces(indent), constValue); }
 
 BoolConstant::BoolConstant(LanguageType *type, bool constValue)
     : Expression(type),
@@ -137,9 +121,7 @@ BoolConstant::BoolConstant(LanguageType *type, bool constValue)
     value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
 }
 
-std::string BoolConstant::dump(int indent) {
-    return fmt::format("{}{}", indentSpaces(indent), constValue);
-}
+std::string BoolConstant::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), constValue); }
 
 FunctionCall::FunctionCall(const std::string &name_, Args &&args)
     // Initialize type with nullptr for now, since we don't know the return type yet
@@ -153,14 +135,11 @@ FunctionCall::FunctionCall(const std::string &name_, Args &&args)
 }
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
-    if (args.size() != 0 && args.size() != 1) {
-        throw CodegenError("Return must have 0 or 1 arguments");
-    }
+    if (args.size() != 0 && args.size() != 1) { throw CodegenError("Return must have 0 or 1 arguments"); }
 
     auto returnType = genContext.function->functionType()->returnType;
     if (args.size() == 0
-        && returnType->actualLanguageType()
-            != genContext.codegenContext.getNamed<NamedTypeValue>("void")) {
+        && returnType->actualLanguageType() != genContext.codegenContext.getNamed<NamedTypeValue>("void")) {
         throw CodegenError("Only void function can return nothing");
     } else if (args.size() == 1 && returnType->actualLanguageType() != args[0]->languageType(genContext)->actualLanguageType()) {
         throw CodegenError(fmt::format(
@@ -188,11 +167,8 @@ llvm::Value *FunctionCall::doProcessor(ExpressionGenContext &genContext) {
 llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     auto &context = genContext.codegenContext;
 
-    if (args.size() < 2 || args.size() > 3) {
-        throw CodegenError("If must have from 2 to 3 arguments");
-    }
-    if (args[0]->languageType(genContext)->actualLanguageType()
-        != context.getNamed<NamedTypeValue>("bool")) {
+    if (args.size() < 2 || args.size() > 3) { throw CodegenError("If must have from 2 to 3 arguments"); }
+    if (args[0]->languageType(genContext)->actualLanguageType() != context.getNamed<NamedTypeValue>("bool")) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -200,14 +176,11 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
 
     auto ifCondition = args[0]->llvmValue(genContext);
 
-    auto thenBlock
-        = llvm::BasicBlock::Create(context.context, "if-then", genContext.function->llvmFunction());
+    auto thenBlock = llvm::BasicBlock::Create(context.context, "if-then", genContext.function->llvmFunction());
     auto elseBlock = args.size() == 3
         ? llvm::BasicBlock::Create(context.context, "if-else", genContext.function->llvmFunction())
         : nullptr;
-    auto afterIfBlock = llvm::BasicBlock::Create(
-        context.context, "after-if", genContext.function->llvmFunction()
-    );
+    auto afterIfBlock = llvm::BasicBlock::Create(context.context, "after-if", genContext.function->llvmFunction());
     thenBlock->moveAfter(builder.GetInsertBlock());
     if (elseBlock != nullptr) elseBlock->moveAfter(thenBlock);
     afterIfBlock->moveAfter(elseBlock != nullptr ? elseBlock : thenBlock);
@@ -235,13 +208,9 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext) {
-    if (args.size() == 0) {
-        throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name));
-    }
+    if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if ((name == "=" || name[0] == '>' || name[0] == '<') && args.size() != 2)
-        throw CodegenError(
-            fmt::format("Expected exactly 2 argument to {}, but got {}", name, args.size())
-        );
+        throw CodegenError(fmt::format("Expected exactly 2 argument to {}, but got {}", name, args.size()));
 
     auto expectedType = args[0]->languageType(genContext)->actualLanguageType();
     auto intType = dynamic_cast<IntegerType *>(expectedType);
@@ -258,21 +227,19 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         auto &arg = args[i];
         if (arg->languageType(genContext)->actualLanguageType() != expectedType) {
             throw CodegenError(fmt::format(
-                "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
-                name, expectedType->signature(), i, arg->languageType(genContext)->signature()
+                "Expected all arguments to {} to be of type {}, but argument #{} was of type {}", name,
+                expectedType->signature(), i, arg->languageType(genContext)->signature()
             ));
         }
     }
 
     using namespace std::placeholders;
-    std::function<llvm::Value *(llvm::IRBuilderBase *, llvm::Value *, llvm::Value *)>
-        buildOperation;
+    std::function<llvm::Value *(llvm::IRBuilderBase *, llvm::Value *, llvm::Value *)> buildOperation;
 
     switch (name[0]) {
     case '+':
         if (intType)
-            buildOperation
-                = std::bind(&llvm::IRBuilderBase::CreateAdd, _1, _2, _3, "", false, false);
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateAdd, _1, _2, _3, "", false, false);
         else
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateFAdd, _1, _2, _3, "", nullptr);
 
@@ -309,16 +276,14 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         if (intType)
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpEQ, _1, _2, _3, "");
         else
-            buildOperation
-                = std::bind(&llvm::IRBuilderBase::CreateFCmpOEQ, _1, _2, _3, "", nullptr);
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOEQ, _1, _2, _3, "", nullptr);
         break;
     case '!': {
         assert(name[1] == '=');
         if (intType)
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpNE, _1, _2, _3, "");
         else
-            buildOperation
-                = std::bind(&llvm::IRBuilderBase::CreateFCmpONE, _1, _2, _3, "", nullptr);
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpONE, _1, _2, _3, "", nullptr);
         break;
     }
     case '>': {
@@ -339,11 +304,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             }
         } else {
             if (orEquals) {
-                buildOperation
-                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOGE, _1, _2, _3, "", nullptr);
+                buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOGE, _1, _2, _3, "", nullptr);
             } else {
-                buildOperation
-                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOGT, _1, _2, _3, "", nullptr);
+                buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOGT, _1, _2, _3, "", nullptr);
             }
         }
 
@@ -367,11 +330,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             }
         } else {
             if (orEquals) {
-                buildOperation
-                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOLE, _1, _2, _3, "", nullptr);
+                buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOLE, _1, _2, _3, "", nullptr);
             } else {
-                buildOperation
-                    = std::bind(&llvm::IRBuilderBase::CreateFCmpOLT, _1, _2, _3, "", nullptr);
+                buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOLT, _1, _2, _3, "", nullptr);
             }
         }
 
@@ -395,20 +356,15 @@ LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) 
 }
 
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
-    if (args.size() == 0) {
-        throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name));
-    }
-    if (name == "=" || name[0] == '>' || name[0] == '<')
-        return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
+    if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
+    if (name == "=" || name[0] == '>' || name[0] == '<') return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
 
     return args[0]->languageType(genCont);
 }
 
 llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
     if (args.size() % 2 != 0) {
-        throw CodegenError(
-            fmt::format("Expected an even number of arguments to set, but got {}", args.size())
-        );
+        throw CodegenError(fmt::format("Expected an even number of arguments to set, but got {}", args.size()));
     }
 
     for (auto i = 0u; i < args.size(); i++) {
@@ -422,9 +378,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
             auto *derefTarget = maybeDeref->target.get();
             auto ptrType = dynamic_cast<PointerType *>(derefTarget->languageType(genContext));
             if (ptrType == nullptr)
-                throw CodegenError(
-                    fmt::format("Dereferencing a non-pointer type {}", ptrType->signature())
-                );
+                throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", ptrType->signature()));
             varAddress = derefTarget->llvmValue(genContext);
         }
         if (variableType == nullptr) {
@@ -451,8 +405,8 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
         auto newValType = newValue->languageType(genContext)->actualLanguageType();
         if (variableType->actualLanguageType() != newValType)
             throw CodegenError(fmt::format(
-                "Variable {} is of type {}, argument to set is of type {}", args[i]->dump(),
-                variableType->signature(), newValType->signature()
+                "Variable {} is of type {}, argument to set is of type {}", args[i]->dump(), variableType->signature(),
+                newValType->signature()
             ));
 
         genContext.builder.CreateStore(newValue->llvmValue(genContext), varAddress);
@@ -462,25 +416,20 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
-    if (args.size() != 2) {
-        throw CodegenError(fmt::format("Expected 2 arguments to while, but got {}", args.size()));
-    }
+    if (args.size() != 2) { throw CodegenError(fmt::format("Expected 2 arguments to while, but got {}", args.size())); }
     if (args[0]->languageType(genContext)->actualLanguageType()
         != genContext.codegenContext.getNamed<NamedTypeValue>("bool")) {
         throw CodegenError("First argument to while must be boolean");
     }
 
     auto &llContext = genContext.codegenContext.context;
-    auto whileCondBlock
-        = llvm::BasicBlock::Create(llContext, "while-cond", genContext.function->llvmFunction());
+    auto whileCondBlock = llvm::BasicBlock::Create(llContext, "while-cond", genContext.function->llvmFunction());
     genContext.builder.CreateBr(whileCondBlock);
     genContext.builder.SetInsertPoint(whileCondBlock);
     auto condValue = args[0]->llvmValue(genContext);
 
-    auto condTrueBlock
-        = llvm::BasicBlock::Create(llContext, "while-true", genContext.function->llvmFunction());
-    auto condAfterBlock
-        = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());
+    auto condTrueBlock = llvm::BasicBlock::Create(llContext, "while-true", genContext.function->llvmFunction());
+    auto condAfterBlock = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());
 
     genContext.builder.CreateCondBr(condValue, condTrueBlock, condAfterBlock);
     genContext.builder.SetInsertPoint(condTrueBlock);
@@ -500,9 +449,7 @@ LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
         if (specialFunctions.contains(name)) {
             type = specialFunctions[name].second(this, genContext);
         } else {
-            type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)
-                       ->functionType()
-                       ->returnType;
+            type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)->functionType()->returnType;
         }
     }
 
@@ -569,9 +516,7 @@ LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
             } else {
                 auto *structType = dynamic_cast<StructType *>(currentType);
                 if (structType == nullptr)
-                    throw CodegenError(
-                        fmt::format("Expected {} to be a structure type", currentType->signature())
-                    );
+                    throw CodegenError(fmt::format("Expected {} to be a structure type", currentType->signature()));
                 auto fieldIndex = structType->fieldIndex(currentName);
                 currentType = std::get<1>(structType->fields[fieldIndex]);
             }
@@ -622,13 +567,10 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
         } else {
             auto *structType = dynamic_cast<StructType *>(currentType);
             if (structType == nullptr)
-                throw CodegenError(
-                    fmt::format("Expected {} to be a structure type", currentType->signature())
-                );
+                throw CodegenError(fmt::format("Expected {} to be a structure type", currentType->signature()));
             auto fieldIndex = structType->fieldIndex(currentName);
 
-            currentValue
-                = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);
+            currentValue = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);
             currentType = std::get<1>(structType->fields[fieldIndex]);
         }
     };
@@ -647,8 +589,7 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
 }
 
 llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genCont) {
-    if (path().size() > 1)
-        return genCont.builder.CreateLoad(llvmType(genCont), varAddress(genCont));
+    if (path().size() > 1) return genCont.builder.CreateLoad(llvmType(genCont), varAddress(genCont));
 
     return genCont.builder.CreateLoad(llvmType(genCont), varAddress(genCont));
 }
@@ -662,9 +603,7 @@ AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
 LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
     if (maybeVar == nullptr)
-        throw CodegenError(
-            fmt::format("Expected a variable to take an address of, got {}", target->dump())
-        );
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
 
     auto varType = maybeVar->languageType(genCont);
     auto ptrTypeName = varType->signature() + "*";
@@ -674,16 +613,12 @@ LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
 llvm::Value *AddrOf::llvmValue(ExpressionGenContext &genCont) {
     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
     if (maybeVar == nullptr)
-        throw CodegenError(
-            fmt::format("Expected a variable to take an address of, got {}", target->dump())
-        );
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
 
     return maybeVar->varAddress(genCont);
 }
 
-std::string AddrOf::dump(int indent) {
-    return fmt::format("{}&{}", indentSpaces(indent), target->dump(0));
-}
+std::string AddrOf::dump(int indent) { return fmt::format("{}&{}", indentSpaces(indent), target->dump(0)); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
@@ -693,21 +628,16 @@ LanguageType *Dereference::languageType(ExpressionGenContext &genCont) {
     auto derefing = target->languageType(genCont);
     auto ptrType = dynamic_cast<PointerType *>(derefing);
     if (ptrType == nullptr)
-        throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", derefing->signature())
-        );
+        throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", derefing->signature()));
 
     return ptrType->pointerTo;
 }
 
 llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
-    return genCont.builder.CreateLoad(
-        languageType(genCont)->llvmType(), target->llvmValue(genCont)
-    );
+    return genCont.builder.CreateLoad(languageType(genCont)->llvmType(), target->llvmValue(genCont));
 }
 
-std::string Dereference::dump(int indent) {
-    return fmt::format("{}@{}", indentSpaces(indent), target->dump(0));
-}
+std::string Dereference::dump(int indent) { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
 
 VariableDeclaration::VariableDeclaration(
     const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue
@@ -722,8 +652,8 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
         auto initialValType = initialValue->languageType(genContext);
         if (initialValType->actualLanguageType() != type->actualLanguageType()) {
             throw CodegenError(fmt::format(
-                "Tried to assign a value ot type {} to {}, which is a variable of type {}",
-                initialValType->signature(), name, type->signature()
+                "Tried to assign a value ot type {} to {}, which is a variable of type {}", initialValType->signature(),
+                name, type->signature()
             ));
         }
 
@@ -742,8 +672,7 @@ llvm::Type *VariableDeclaration::llvmType(ExpressionGenContext &) { return nullp
 std::string VariableDeclaration::dump(int indent) {
     return fmt::format(
         "{}($var {} {}", indentSpaces(indent), name,
-        type->signature()
-            + (initialValue == nullptr ? ")" : fmt::format(" {})", initialValue->dump(0)))
+        type->signature() + (initialValue == nullptr ? ")" : fmt::format(" {})", initialValue->dump(0)))
     );
 }
 
