@@ -5,17 +5,19 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
+
 #include <llvm/MC/TargetRegistry.h>
-#include <llvm/Support/CodeGen.h>
+
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/FileUtilities.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/Program.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
-#include <llvm/Target/TargetOptions.h>
 
 #include <clang-c/Index.h>
-#include <clang/AST/Decl.h>
-#include <clang/AST/Type.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Interpreter/Interpreter.h>
 
 #include "fmt/color.h"
 
@@ -62,8 +64,96 @@ struct ParseHeaderContext {
         return fmt::format("anon{}", anonymousNumbers[usr]);
     }
 
+    void includeHeader(const std::string &name) {
+        auto tuOrErr = interp->Parse(std::string(fmt::format(R"(#include <{}>)", name)));
+        auto isOk = bool(tuOrErr);
+        if (!isOk) return;
+        llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
+    }
+
+    std::unique_ptr<VariableDeclarationNode> evalMacro(const std::string &name) {
+        auto varName = fmt::format("macro_{}", name);
+        auto tuOrErr
+            = interp->Parse(std::string(fmt::format(R"(extern "C" constexpr decltype(auto) {} = {};)", varName, name)));
+        auto isOk = bool(tuOrErr);
+        if (!isOk) return nullptr;
+
+        clang::VarDecl *decl = nullptr;
+        for (auto toplevel : tuOrErr->TUPart->decls()) {
+            if (llvm::isa<clang::LinkageSpecDecl>(toplevel)) {
+                auto linkageSpec = llvm::dyn_cast<clang::LinkageSpecDecl>(toplevel);
+                for (auto varDecl_ : linkageSpec->decls()) {
+                    if (llvm::isa<clang::VarDecl>(varDecl_)) {
+                        decl = llvm::dyn_cast<clang::VarDecl>(varDecl_);
+                        goto doneSearching;
+                    }
+                }
+            }
+        }
+    doneSearching:
+        if (decl == nullptr) tuOrErr->TUPart->dump();
+        auto declType = decl->getType();
+
+        auto llvmVar = tuOrErr->TheModule.get()->getGlobalVariable(varName);
+        auto varDef = std::make_unique<VariableDeclarationNode>(name);
+        if (declType->isIntegerType()) {
+            auto varType = llvmVar->getValueType();
+
+            bool isSigned = declType->isSignedIntegerType();
+            auto valType = ASTBuiltinType(fmt::format("{}{}", isSigned ? "i" : "u", varType->getIntegerBitWidth()));
+
+            auto initializer = llvm::dyn_cast<llvm::ConstantInt>(llvmVar->getInitializer());
+
+            varDef->type = std::make_unique<ASTBuiltinType>("i64");
+            if (isSigned)
+                varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getSExtValue());
+            else
+                varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getZExtValue());
+            return varDef;
+        } else if (llvmVar->getType()->isArrayTy()) {
+            auto varInitializer = llvm::dyn_cast<llvm::ConstantDataArray>(llvmVar->getInitializer());
+
+            varDef->type = std::make_unique<ASTBuiltinType>("str");
+            varDef->initialValue = std::make_unique<ConstantStringNode>(varInitializer->getAsString().str());
+        } else {
+            return nullptr;
+        }
+
+        llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
+
+        return varDef;
+    }
+
 private:
+    std::unique_ptr<clang::Interpreter> interp;
     std::map<std::string, int> anonymousNumbers;
+
+    static std::unique_ptr<clang::Interpreter> createClangInterpreter() {
+        std::string clangPath = llvm::sys::findProgramByName("clang").get();
+        std::vector<llvm::StringRef> PrintResourceDirArgs{ clangPath, "-print-resource-dir" };
+        llvm::SmallString<64> OutputFile;
+        llvm::sys::fs::createTemporaryFile("print-resource-dir-output", "", OutputFile);
+        llvm::FileRemover OutputRemover(OutputFile.c_str());
+        llvm::Optional<llvm::StringRef> Redirects[] = { llvm::None, llvm::StringRef(OutputFile), llvm::None };
+        llvm::sys::ExecuteAndWait(clangPath, PrintResourceDirArgs, {}, Redirects);
+
+        auto OutputBuf = llvm::MemoryBuffer::getFile(OutputFile.c_str());
+        llvm::StringRef Output = OutputBuf.get()->getBuffer().rtrim('\n');
+        auto clangInc = fmt::format("-I{}/include", Output);
+
+        std::vector<const char *> clangArgs{ "-Xclang", "-emit-llvm-only", clangInc.data() };
+
+        auto instOrErr = clang::IncrementalCompilerBuilder::create(clangArgs);
+        auto inst = std::move(instOrErr.get());
+
+        auto ignoring = std::make_unique<clang::IgnoringDiagConsumer>();
+        inst->getDiagnostics().setClient(ignoring.release(), true);
+
+        std::unique_ptr<clang::Interpreter> interp;
+        llvm::handleAllErrors(clang::Interpreter::create(std::move(inst)).moveInto(interp));
+
+        return interp;
+    }
 };
 
 std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clangTp) {
@@ -208,6 +298,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
 
 std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext &parentContext) {
     auto parseHeaderContext = std::make_unique<ParseHeaderContext>(path, parentContext);
+    parseHeaderContext->includeHeader(path);
 
     CXIndex index = clang_createIndex(0, 0);
     CXTranslationUnit unit = clang_parseTranslationUnit(
@@ -277,39 +368,27 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
             }
             case CXCursor_MacroDefinition: {
                 auto name = cxToString(clang_getCursorSpelling(c));
+
+                if (clang_Cursor_isMacroFunctionLike(c)) return CXChildVisit_Continue;
+
+                if (std::find_if(
+                        parseHeaderContext->module->globalVariables.begin(),
+                        parseHeaderContext->module->globalVariables.end(),
+                        [&name](auto &node) { return node->name == name; }
+                    )
+                    != parseHeaderContext->module->globalVariables.end())
+                    break;
+
+                auto loc = clang_getCursorLocation(c);
+                CXFile locFile;
+                unsigned int file, col, offset;
+                clang_getSpellingLocation(loc, &locFile, &file, &col, &offset);
+
                 // Skip internals
-                if (name.starts_with("__")) return CXChildVisit_Continue;
+                if (clang_getFileName(locFile).data == nullptr) return CXChildVisit_Continue;
 
-                auto tu = clang_Cursor_getTranslationUnit(c);
-                auto extent = clang_getCursorExtent(c);
-
-                std::string macroContents;
-                CXToken *tokens;
-                unsigned count;
-                clang_tokenize(tu, extent, &tokens, &count);
-
-                if (count == 2) {
-                    auto macroStr = cxToString(clang_getTokenSpelling(tu, tokens[1]));
-                    try {
-                        auto parsed = std::stoll(macroStr, nullptr, 0);
-
-                        auto variantName = cxToString(clang_getCursorSpelling(c));
-                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
-                        varDef->type = std::make_unique<ASTBuiltinType>("i64");
-
-                        varDef->initialValue = std::make_unique<ConstantIntNode>(
-                            ASTBuiltinType("i64"),
-                            (int64_t)parsed
-                        );
-
-                        parseHeaderContext->module->globalVariables.push_back(
-                            std::move(varDef)
-                        );
-                    } catch (std::exception &) {
-                        // Not a number, it seems
-                    }
-                }
-                clang_disposeTokens(tu, tokens, count);
+                auto varVal = parseHeaderContext->evalMacro(name);
+                if (varVal != nullptr) parseHeaderContext->module->globalVariables.push_back(std::move(varVal));
 
                 break;
             }
@@ -435,6 +514,14 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                         EnumParseContext *parseContext = (EnumParseContext *)client_data_;
 
                         auto variantName = cxToString(clang_getCursorSpelling(c));
+                        if (std::find_if(
+                                parseContext->parseHeaderContext.module->globalVariables.begin(),
+                                parseContext->parseHeaderContext.module->globalVariables.end(),
+                                [&variantName](auto &node) { return node->name == variantName; }
+                            )
+                            != parseContext->parseHeaderContext.module->globalVariables.end())
+                            return CXChildVisit_Break;
+
                         auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
                         varDef->type = std::make_unique<ASTBuiltinType>(parseContext->enumTypeName);
 
@@ -500,6 +587,7 @@ int main(int argc, char *argv[]) {
         llvm::InitializeAllTargetInfos();
         llvm::InitializeAllTargets();
         llvm::InitializeAllTargetMCs();
+        llvm::InitializeAllAsmPrinters();
 
         auto targetTriple = llvm::sys::getDefaultTargetTriple();
         std::string err;
