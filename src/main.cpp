@@ -494,6 +494,8 @@ int main(int argc, char *argv[]) {
     llvm::LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
+    context.enableOpaquePointers();
+
     CodegenContext codegenCont("main", context);
 
     llvm::TargetMachine *targetMachine;

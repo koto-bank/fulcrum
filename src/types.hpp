@@ -21,6 +21,7 @@ protected:
 public:
     virtual llvm::Type *llvmType() = 0;
     virtual std::string signature() = 0;
+    virtual LanguageType *actualLanguageType();
 
     LanguageType(CodegenContext &context);
 
@@ -61,11 +62,9 @@ struct AliasType : LanguageType {
     AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo);
 
     llvm::Type *llvmType() override;
+    LanguageType *actualLanguageType() override;
 
     std::string signature() override;
-
-private:
-    std::string realType();
 };
 
 struct StructType : LanguageType {

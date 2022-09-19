@@ -21,6 +21,8 @@ std::string IntegerType::signature() {
     return std::string(isSigned ? "i" : "u") + std::to_string(bits);
 }
 
+LanguageType *LanguageType::actualLanguageType() { return this; }
+
 FloatType::FloatType(CodegenContext &context, Bits bits)
     : LanguageType(context),
       bits(bits) {}
@@ -46,12 +48,11 @@ AliasType::AliasType(CodegenContext &codegenContext, std::string name, LanguageT
 
 llvm::Type *AliasType::llvmType() { return aliasTo->llvmType(); }
 
-std::string AliasType::signature() { return fmt::format("{} ({})", name, realType()); }
-
-std::string AliasType::realType() {
-    auto maybeAlias = dynamic_cast<AliasType *>(aliasTo);
-    return maybeAlias ? maybeAlias->realType() : aliasTo->signature();
+std::string AliasType::signature() {
+    return fmt::format("{} ({})", name, actualLanguageType()->signature());
 }
+
+LanguageType *AliasType::actualLanguageType() { return aliasTo->actualLanguageType(); }
 
 StructType::StructType(CodegenContext &codegenContext, std::string name, bool isPublic)
     : LanguageType(codegenContext),
@@ -104,7 +105,7 @@ PointerType::PointerType(CodegenContext &context, LanguageType *pointerTo_)
     : LanguageType(context),
       pointerTo(pointerTo_) {}
 
-llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(pointerTo->llvmType(), 0); }
+llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(context.context, 0); }
 
 std::string PointerType::signature() { return pointerTo->signature() + "*"; }
 

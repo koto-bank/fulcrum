@@ -46,8 +46,8 @@ void ExpressionGenContext::popScope() { variableScopes.pop_back(); }
 void Expression::assumeExpression(
     ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage
 ) {
-    if (expr->llvmType(genContext)
-        == genContext.codegenContext.getNamed<NamedTypeValue>("void")->llvmType())
+    if (expr->languageType(genContext)->actualLanguageType()
+        == genContext.codegenContext.getNamed<NamedTypeValue>("void"))
         throw CodegenError(errorMessage);
 }
 
@@ -159,10 +159,10 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
 
     auto returnType = genContext.function->functionType()->returnType;
     if (args.size() == 0
-        && returnType->llvmType()
-            != genContext.codegenContext.getNamed<NamedTypeValue>("void")->llvmType()) {
+        && returnType->actualLanguageType()
+            != genContext.codegenContext.getNamed<NamedTypeValue>("void")) {
         throw CodegenError("Only void function can return nothing");
-    } else if (args.size() == 1 && returnType->llvmType() != args[0]->languageType(genContext)->llvmType()) {
+    } else if (args.size() == 1 && returnType->actualLanguageType() != args[0]->languageType(genContext)->actualLanguageType()) {
         throw CodegenError(fmt::format(
             "Function expected to return {}, but returns {}", returnType->signature(),
             args[0]->languageType(genContext)->signature()
@@ -191,8 +191,8 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 2 || args.size() > 3) {
         throw CodegenError("If must have from 2 to 3 arguments");
     }
-    if (args[0]->languageType(genContext)->llvmType()
-        != context.getNamed<NamedTypeValue>("bool")->llvmType()) {
+    if (args[0]->languageType(genContext)->actualLanguageType()
+        != context.getNamed<NamedTypeValue>("bool")) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -243,7 +243,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             fmt::format("Expected exactly 2 argument to {}, but got {}", name, args.size())
         );
 
-    auto expectedType = args[0]->languageType(genContext);
+    auto expectedType = args[0]->languageType(genContext)->actualLanguageType();
     auto intType = dynamic_cast<IntegerType *>(expectedType);
     auto floatType = intType == nullptr ? nullptr : dynamic_cast<FloatType *>(expectedType);
 
@@ -256,7 +256,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
     for (auto i = 0u; i < args.size(); i++) {
         auto &arg = args[i];
-        if (arg->languageType(genContext)->llvmType() != expectedType->llvmType()) {
+        if (arg->languageType(genContext)->actualLanguageType() != expectedType) {
             throw CodegenError(fmt::format(
                 "Expected all arguments to {} to be of type {}, but argument #{} was of type {}",
                 name, expectedType->signature(), i, arg->languageType(genContext)->signature()
@@ -448,8 +448,8 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
             fmt::format("Expected argument #{} to set to be an expression, but it's a statement", i)
         );
 
-        auto newValType = newValue->languageType(genContext);
-        if (variableType->llvmType() != newValType->llvmType())
+        auto newValType = newValue->languageType(genContext)->actualLanguageType();
+        if (variableType->actualLanguageType() != newValType)
             throw CodegenError(fmt::format(
                 "Variable {} is of type {}, argument to set is of type {}", args[i]->dump(),
                 variableType->signature(), newValType->signature()
@@ -465,8 +465,8 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     if (args.size() != 2) {
         throw CodegenError(fmt::format("Expected 2 arguments to while, but got {}", args.size()));
     }
-    if (args[0]->languageType(genContext)->llvmType()
-        != genContext.codegenContext.getNamed<NamedTypeValue>("bool")->llvmType()) {
+    if (args[0]->languageType(genContext)->actualLanguageType()
+        != genContext.codegenContext.getNamed<NamedTypeValue>("bool")) {
         throw CodegenError("First argument to while must be boolean");
     }
 
@@ -518,7 +518,7 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     for (auto i = 0u; i < args.size(); i++) {
         LanguageType *argType = args[i]->languageType(genContext);
         LanguageType *expectedType = calledFunction->functionType()->arguments[i];
-        if (argType->llvmType() != expectedType->llvmType()) {
+        if (argType->actualLanguageType() != expectedType->actualLanguageType()) {
             throw CodegenError(fmt::format(
                 "Incompatible argument type in {}: for argument #{}"
                 " expected {}, but received {}",
@@ -720,7 +720,7 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     auto varDef = genContext.insertVariable(name, type);
     if (initialValue != nullptr) {
         auto initialValType = initialValue->languageType(genContext);
-        if (initialValType->llvmType() != type->llvmType()) {
+        if (initialValType->actualLanguageType() != type->actualLanguageType()) {
             throw CodegenError(fmt::format(
                 "Tried to assign a value ot type {} to {}, which is a variable of type {}",
                 initialValType->signature(), name, type->signature()
