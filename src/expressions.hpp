@@ -224,3 +224,12 @@ struct Sizeof : Expression {
 
     std::string dump(int indent) override;
 };
+
+struct Cast : Expression {
+    std::unique_ptr<Expression> targetExpression;
+
+    Cast(CodegenContext &context, LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression);
+
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    std::string dump(int indent) override;
+};

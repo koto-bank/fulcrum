@@ -727,3 +727,76 @@ Sizeof::Sizeof(CodegenContext &context, LanguageType *targetType)
 std::string Sizeof::dump(int indent) {
     return fmt::format("{}($sizeof {})", indentSpaces(indent), targetType->signature());
 }
+
+Cast::Cast(CodegenContext &, LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression)
+    : Expression(targetType),
+      targetExpression(std::move(targetExpression)) {}
+
+std::string Cast::dump(int indent) {
+    return fmt::format("{}($cast {} {})", indentSpaces(indent), type->signature(), targetExpression->dump());
+}
+
+
+llvm::Value *Cast::llvmValue(ExpressionGenContext &genContext) {
+    auto targetValue = targetExpression->llvmValue(genContext);
+    auto targetType = type->actualLanguageType();
+    auto targetLlvmType = targetType->llvmType();
+    auto previousType = targetExpression->languageType(genContext)->actualLanguageType();
+    auto previousLlvmType = previousType->llvmType();
+
+    auto isNumericType = [](llvm::Type *t) {
+        return !t->isStructTy() && !t->isPointerTy() && (t->isIntegerTy() || !t->isFloatingPointTy());
+    };
+    auto isUnion = [](LanguageType *langType) {
+        auto ptrType = dynamic_cast<PointerType *>(langType);
+        if (ptrType == nullptr) return false;
+        auto structType = dynamic_cast<StructType *>(ptrType->pointerTo->actualLanguageType());
+        if (structType == nullptr) return false;
+
+        auto unionField = std::find_if(
+            structType->fields.begin(), structType->fields.end(),
+            [](const StructType::Fields::value_type &elem) { return std::get<0>(elem) == "union"; }
+        );
+        if (unionField != structType->fields.end()) {
+            auto [_, fieldTp] = *unionField;
+
+            auto llvmTp = fieldTp->actualLanguageType()->llvmType();
+            return llvmTp->isArrayTy() && llvmTp->getArrayElementType()->isIntegerTy()
+                && llvmTp->getArrayElementType()->getIntegerBitWidth() == 8;
+        }
+
+        return false;
+    };
+
+    if (!(isNumericType(previousLlvmType) && isNumericType(targetLlvmType))
+        && !(previousLlvmType->isPointerTy() && targetLlvmType->isPointerTy())
+        && !(previousLlvmType->isPointerTy() && targetLlvmType->isIntegerTy())
+        && !(previousLlvmType->isIntegerTy() && targetLlvmType->isPointerTy()) && !isUnion(previousType))
+        throw CodegenError(fmt::format(
+            "Can only cast from: numeric types to other numeric types, from one pointer to another, from pointer to "
+            "integer and back, from a pointer to a union (structure with an i8 array member named union) to any other "
+            "type, tried to cast from {} to {}",
+            targetExpression->languageType(genContext)->signature(), type->signature()
+        ));
+
+    if (isUnion(previousType)) {
+        return genContext.builder.CreateLoad(targetLlvmType, targetValue);
+    } else if (targetLlvmType->isIntegerTy()) {
+        if (previousLlvmType->isPointerTy()) {
+            return genContext.builder.CreatePtrToInt(targetValue, targetLlvmType);
+        } else {
+            auto intType = dynamic_cast<IntegerType *>(targetType);
+            return genContext.builder.CreateIntCast(targetValue, targetLlvmType, intType->isSigned);
+        }
+    } else if (targetLlvmType->isFloatingPointTy()) {
+        return genContext.builder.CreateFPCast(targetValue, targetLlvmType);
+    } else if (targetLlvmType->isPointerTy()) {
+        if (previousLlvmType->isIntegerTy()) {
+            return genContext.builder.CreateIntToPtr(targetValue, targetLlvmType);
+        } else {
+            return genContext.builder.CreatePointerCast(targetValue, targetLlvmType);
+        }
+    }
+
+    throw CodegenError("Unknown cast type reached");
+}

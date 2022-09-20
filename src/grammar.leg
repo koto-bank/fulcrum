@@ -179,7 +179,7 @@ Bits = [1-9][0-9][0-9] | [1-9][0-9] | [1-9]
 
 Alias = LP 'alias' Space+ Id - Id RP
 
-Expr = Literal | Dereference | AddrOfVar | IdExpr | VarDeclaration | Sizeof | FnCall
+Expr = Literal | Dereference | AddrOfVar | IdExpr | VarDeclaration | Sizeof | Cast | FnCall
 
 VarDeclaration = LP 'var' - VarList RP
 VarList = (VarDecl -)+
@@ -205,6 +205,20 @@ Sizeof = LP 'sizeof' Space+ - Type RP {
     assert(yy->ctx->type != nullptr);
     yy->ctx->exprStack.push_back(std::make_unique<SizeofNode>(std::move(yy->ctx->type)));
 }
+
+Cast = LP 'cast' Space+ - Type {
+    assert(yy->ctx->type != nullptr);
+    yy->ctx->exprStack.push_back(std::make_unique<CastNode>(std::move(yy->ctx->type)));
+} - Expr {
+    assert(!yy->ctx->exprStack.empty());
+    auto expr = std::move(yy->ctx->exprStack.back());
+    yy->ctx->exprStack.pop_back();
+
+    assert(!yy->ctx->exprStack.empty());
+    auto cast = dynamic_cast<CastNode *>(yy->ctx->exprStack.back().get());
+    assert(cast != nullptr);
+    cast->targetExpression = std::move(expr);
+} - RP
 
 FnCall = LP id:Id {
     yy->ctx->exprStack.push_back(std::make_unique<FunctionCallNode>(id.str));

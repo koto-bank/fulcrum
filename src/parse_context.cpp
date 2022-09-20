@@ -40,7 +40,7 @@ LanguageType *ASTArrayType::languageType(ModuleNode *module, CodegenContext &con
 
     auto pointeeName = targetLangType->signature();
     auto arrName = fmt::format("{}[{}]", pointeeName, size);
-    return context.getOrEmplaceType<ArrayType>(pointeeName, targetLangType, size);
+    return context.getOrEmplaceType<ArrayType>(arrName, targetLangType, size);
 };
 
 ASTFunctionType::ASTFunctionType(Args &&arguments, std::unique_ptr<ASTType> &&returnType)
@@ -184,7 +184,8 @@ VariableDeclarationNode::VariableDeclarationNode(std::string name)
 
 std::unique_ptr<Expression> VariableDeclarationNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<VariableDeclaration>(
-        name, type->languageType(module, context), initialValue ? initialValue->expression(module, context) : nullptr
+        resolveName(module, name), type->languageType(module, context),
+        initialValue ? initialValue->expression(module, context) : nullptr
     );
 }
 
@@ -212,6 +213,15 @@ SizeofNode::SizeofNode(std::unique_ptr<ASTType> &&targetType)
 
 std::unique_ptr<Expression> SizeofNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<Sizeof>(context, targetType->languageType(module, context));
+}
+
+CastNode::CastNode(std::unique_ptr<ASTType> &&targetType)
+    : targetType(std::move(targetType)) {}
+
+std::unique_ptr<Expression> CastNode::expression(ModuleNode *module, CodegenContext &context) {
+    return std::make_unique<Cast>(
+        context, targetType->languageType(module, context), targetExpression->expression(module, context)
+    );
 }
 
 ModuleNode::ModuleNode(std::string name)
