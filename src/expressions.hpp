@@ -123,9 +123,11 @@ private:
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
+    llvm::Value *notProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(ExpressionGenContext &genContext);
     LanguageType *voidProcessorType(ExpressionGenContext &genContext);
+    LanguageType *notProcessorType(ExpressionGenContext &genContext);
 
 public:
     using Args = std::vector<std::unique_ptr<Expression>>;
@@ -144,6 +146,7 @@ public:
         { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
         { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
         { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
+        { "not", { &FunctionCall::notProcessor, &FunctionCall::notProcessorType } },
 
         { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
