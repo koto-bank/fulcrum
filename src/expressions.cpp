@@ -371,7 +371,8 @@ LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) 
 
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
-    if (name == "=" || name[0] == '>' || name[0] == '<') return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
+    if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
+        return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
 
     return args[0]->languageType(genCont);
 }
