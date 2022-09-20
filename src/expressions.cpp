@@ -371,6 +371,10 @@ LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) 
     return genContext.codegenContext.getNamed<NamedTypeValue>("void");
 }
 
+LanguageType *FunctionCall::notProcessorType(ExpressionGenContext &genContext) {
+    return genContext.codegenContext.getNamed<NamedTypeValue>("bool");
+}
+
 LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
@@ -462,6 +466,19 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     genContext.builder.SetInsertPoint(condAfterBlock);
 
     return nullptr;
+}
+
+llvm::Value *FunctionCall::notProcessor(ExpressionGenContext &genContext) {
+    if (args.size() != 1
+        && args[0]->languageType(genContext)->actualLanguageType()
+            != genContext.codegenContext.getNamed<NamedTypeValue>("bool"))
+        throw CodegenError("'not' expects exactly one argument of type bool");
+
+    assumeExpression(
+        genContext, args[0].get(), fmt::format("Expected argumen to 'not' to to be an expression, but it's a statement")
+    );
+
+    return genContext.builder.CreateNot(args[0]->llvmValue(genContext));
 }
 
 LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
