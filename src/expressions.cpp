@@ -443,9 +443,7 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     auto condValue = args[0]->llvmValue(genContext);
 
     auto condTrueBlock = llvm::BasicBlock::Create(llContext, "while-true", genContext.function->llvmFunction());
-    auto condAfterBlock = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());
 
-    genContext.builder.CreateCondBr(condValue, condTrueBlock, condAfterBlock);
     genContext.builder.SetInsertPoint(condTrueBlock);
 
     genContext.pushScope();
@@ -453,6 +451,11 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     if (!args[1]->isTerminator()) { genContext.builder.CreateBr(whileCondBlock); }
     genContext.popScope();
 
+    auto condAfterBlock = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());
+    genContext.builder.SetInsertPoint(whileCondBlock);
+    // Actually add the conditional jump, now that while-after has been createad at the very end
+    genContext.builder.CreateCondBr(condValue, condTrueBlock, condAfterBlock);
+    // Continue inserting after the while
     genContext.builder.SetInsertPoint(condAfterBlock);
 
     return nullptr;
