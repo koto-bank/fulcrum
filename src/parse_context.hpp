@@ -201,6 +201,15 @@ struct SizeofNode : ASTNode {
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
+struct CastNode : ASTNode {
+    std::unique_ptr<ASTType> targetType;
+    std::unique_ptr<ASTNode> targetExpression;
+
+    CastNode(std::unique_ptr<ASTType> &&targetType);
+
+    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
+};
+
 struct ModuleNode : ASTNode {
     std::string name;
 

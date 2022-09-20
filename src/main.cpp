@@ -205,10 +205,12 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         result = std::make_unique<ASTBuiltinType>("f64");
         break;
     case CXType_SChar:
-    case CXType_UChar:
     case CXType_Char_S:
+        result = std::make_unique<ASTBuiltinType>("i8");
+        break;
+    case CXType_UChar:
     case CXType_Char_U:
-        result = std::make_unique<ASTBuiltinType>("char");
+        result = std::make_unique<ASTBuiltinType>("u8");
         break;
     case CXType_Void:
         result = std::make_unique<ASTBuiltinType>("void");
@@ -228,6 +230,9 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
 
             context.codegenContext.ensureType<IntegerType>("i8", 8, true);
             pointee = std::make_unique<ASTBuiltinType>("i8");
+        } else if (maybeBuiltin != nullptr && maybeBuiltin->builtinName == "i8") {
+            result = std::make_unique<ASTBuiltinType>("str");
+            break;
         }
 
         result = std::make_unique<ASTPointerType>(std::move(pointee));
@@ -450,10 +455,12 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     &data
                 );
 
-                auto biggestType = clangToASTType(*parseHeaderContext, data.biggestType);
+                // auto biggestType = clangToASTType(*parseHeaderContext, data.biggestType);
 
                 StructNode::Fields fields;
-                fields.emplace_back("anon", std::move(biggestType));
+                fields.emplace_back(
+                    "union", std::make_unique<ASTArrayType>(std::make_unique<ASTBuiltinType>("i8"), data.biggestSize)
+                );
 
                 parseHeaderContext->module->structs.emplace_back(
                     std::make_unique<StructNode>(unionName, std::move(fields), true)
