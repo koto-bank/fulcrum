@@ -109,6 +109,8 @@ StringConstant::StringConstant(LanguageType *type, const std::string &constValue
       constValue(constValue) {}
 
 llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
+    llvmConstant(genContext.codegenContext);
+
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
     llvm::Constant *Indices[] = { Zero, Zero };
     return llvm::ConstantExpr::getInBoundsGetElementPtr(
