@@ -80,6 +80,21 @@ void StructNode::fillStructTypeFields(ModuleNode *module, CodegenContext &contex
     structType->fillFields(exprFields);
 }
 
+void UnionNode::emplaceStructType(ModuleNode *module, CodegenContext &context) {
+    auto fullName = resolveName(module, name);
+
+    context.emplaceType<UnionType>(fullName, fullName, biggestSize);
+}
+void UnionNode::fillStructTypeFields(ModuleNode *module, CodegenContext &context) {
+    StructType::Fields exprFields;
+    for (auto &[name, astType] : fields)
+        exprFields.emplace_back(name, astType->languageType(module, context));
+
+    auto fullName = resolveName(module, name);
+    auto unionType = static_cast<UnionType *>(context.getNamed<NamedTypeValue>(fullName));
+    unionType->fillFields(exprFields);
+}
+
 AliasNode::AliasNode(std::string name, std::unique_ptr<ASTType> &&target)
     : name(name),
       target(std::move(target)) {}

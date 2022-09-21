@@ -68,7 +68,7 @@ struct AliasType : LanguageType {
 };
 
 struct StructType : LanguageType {
-private:
+protected:
     llvm::StructType *structType = nullptr;
 
 public:
@@ -86,6 +86,12 @@ public:
     std::string signature() override;
 
     int fieldIndex(const std::string &fieldName);
+};
+
+struct UnionType : StructType {
+    UnionType(CodegenContext &codegenContext, std::string name, long long biggestSize);
+
+    llvm::Type *llvmType() override;
 };
 
 struct CharType : LanguageType {

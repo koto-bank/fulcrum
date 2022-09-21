@@ -90,8 +90,16 @@ struct StructNode : ASTNode {
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
-    void emplaceStructType(ModuleNode *module, CodegenContext &context);
-    void fillStructTypeFields(ModuleNode *module, CodegenContext &context);
+    virtual void emplaceStructType(ModuleNode *module, CodegenContext &context);
+    virtual void fillStructTypeFields(ModuleNode *module, CodegenContext &context);
+};
+
+struct UnionNode : StructNode {
+    long long biggestSize = 0;
+
+    using StructNode::StructNode;
+    void emplaceStructType(ModuleNode *module, CodegenContext &context) override;
+    void fillStructTypeFields(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct AliasNode : ASTNode {
