@@ -435,7 +435,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     ParseHeaderContext &parseHeaderContext;
 
                     long long biggestSize = 0;
-                    CXType biggestType;
+                    StructNode::Fields fields;
                 };
                 VisitData data = { .parseHeaderContext = *parseHeaderContext };
                 clang_Type_visitFields(
@@ -445,26 +445,22 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
 
                         auto type = clang_getCursorType(cursor);
                         auto typeSize = clang_Type_getSizeOf(type);
-                        if (typeSize > visitData->biggestSize) {
-                            visitData->biggestSize = typeSize;
-                            visitData->biggestType = type;
-                        }
+                        if (typeSize > visitData->biggestSize) visitData->biggestSize = typeSize;
+
+                        visitData->fields.emplace_back(
+                            cxToString(clang_getCursorSpelling(cursor)),
+                            clangToASTType(visitData->parseHeaderContext, type)
+                        );
 
                         return CXVisit_Continue;
                     },
                     &data
                 );
 
-                // auto biggestType = clangToASTType(*parseHeaderContext, data.biggestType);
+                auto unionNode = std::make_unique<UnionNode>(unionName, std::move(data.fields), true);
+                unionNode->biggestSize = data.biggestSize;
 
-                StructNode::Fields fields;
-                fields.emplace_back(
-                    "union", std::make_unique<ASTArrayType>(std::make_unique<ASTBuiltinType>("i8"), data.biggestSize)
-                );
-
-                parseHeaderContext->module->structs.emplace_back(
-                    std::make_unique<StructNode>(unionName, std::move(fields), true)
-                );
+                parseHeaderContext->module->structs.push_back(std::move(unionNode));
 
                 break;
             }

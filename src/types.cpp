@@ -82,8 +82,15 @@ Type *StructType::llvmType() {
     return structType;
 }
 
-std::string CharType::signature() { return "char"; }
+UnionType::UnionType(CodegenContext &codegenContext, std::string name, long long biggestSize)
+    : StructType(codegenContext, name, true) {
+    auto unionArrayType = ArrayType(context, context.getNamed<NamedTypeValue>("i8"), biggestSize);
+    structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
+}
 
+Type *UnionType::llvmType() { return structType; }
+
+std::string CharType::signature() { return "char"; }
 
 Type *CharType::llvmType() { return Type::getInt8Ty(context.context); }
 

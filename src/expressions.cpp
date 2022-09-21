@@ -554,6 +554,7 @@ LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
 
                 currentType = foundVar->type;
             } else {
+                // This works both for unions and structs
                 auto *structType = dynamic_cast<StructType *>(currentType);
                 if (structType == nullptr)
                     throw CodegenError(fmt::format("Expected {} to be a structure type", currentType->signature()));
@@ -605,13 +606,20 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
             currentValue = var->value;
             currentType = var->type;
         } else {
-            auto *structType = dynamic_cast<StructType *>(currentType);
+            auto structType = dynamic_cast<StructType *>(currentType);
             if (structType == nullptr)
-                throw CodegenError(fmt::format("Expected {} to be a structure type", currentType->signature()));
+                throw CodegenError(
+                    fmt::format("Expected {} to be a structure or a union type", currentType->signature())
+                );
             auto fieldIndex = structType->fieldIndex(currentName);
 
-            currentValue = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);
             currentType = std::get<1>(structType->fields[fieldIndex]);
+
+            if (auto unionType = dynamic_cast<UnionType *>(structType)) {
+                // Don't do anything, loading with current type will produce the right value
+            } else {
+                currentValue = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);
+            }
         }
     };
 
@@ -744,44 +752,20 @@ llvm::Value *Cast::llvmValue(ExpressionGenContext &genContext) {
     auto previousType = targetExpression->languageType(genContext)->actualLanguageType();
     auto previousLlvmType = previousType->llvmType();
 
-    auto isNumericType = [](llvm::Type *t) {
-        return !t->isStructTy() && !t->isPointerTy() && (t->isIntegerTy() || !t->isFloatingPointTy());
-    };
-    auto isUnion = [](LanguageType *langType) {
-        auto ptrType = dynamic_cast<PointerType *>(langType);
-        if (ptrType == nullptr) return false;
-        auto structType = dynamic_cast<StructType *>(ptrType->pointerTo->actualLanguageType());
-        if (structType == nullptr) return false;
-
-        auto unionField = std::find_if(
-            structType->fields.begin(), structType->fields.end(),
-            [](const StructType::Fields::value_type &elem) { return std::get<0>(elem) == "union"; }
-        );
-        if (unionField != structType->fields.end()) {
-            auto [_, fieldTp] = *unionField;
-
-            auto llvmTp = fieldTp->actualLanguageType()->llvmType();
-            return llvmTp->isArrayTy() && llvmTp->getArrayElementType()->isIntegerTy()
-                && llvmTp->getArrayElementType()->getIntegerBitWidth() == 8;
-        }
-
-        return false;
-    };
+    auto isNumericType
+        = [](llvm::Type *t) { return !t->isPointerTy() && (t->isIntegerTy() || !t->isFloatingPointTy()); };
 
     if (!(isNumericType(previousLlvmType) && isNumericType(targetLlvmType))
         && !(previousLlvmType->isPointerTy() && targetLlvmType->isPointerTy())
         && !(previousLlvmType->isPointerTy() && targetLlvmType->isIntegerTy())
-        && !(previousLlvmType->isIntegerTy() && targetLlvmType->isPointerTy()) && !isUnion(previousType))
+        && !(previousLlvmType->isIntegerTy() && targetLlvmType->isPointerTy()))
         throw CodegenError(fmt::format(
             "Can only cast from: numeric types to other numeric types, from one pointer to another, from pointer to "
-            "integer and back, from a pointer to a union (structure with an i8 array member named union) to any other "
-            "type, tried to cast from {} to {}",
+            "integer and back, tried to cast from {} to {}",
             targetExpression->languageType(genContext)->signature(), type->signature()
         ));
 
-    if (isUnion(previousType)) {
-        return genContext.builder.CreateLoad(targetLlvmType, targetValue);
-    } else if (targetLlvmType->isIntegerTy()) {
+    if (targetLlvmType->isIntegerTy()) {
         if (previousLlvmType->isPointerTy()) {
             return genContext.builder.CreatePtrToInt(targetValue, targetLlvmType);
         } else {
