@@ -106,6 +106,13 @@ llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(context.cont
 
 std::string PointerType::signature() { return pointerTo->signature() + "*"; }
 
+LanguageType *PointerType::actualLanguageType() {
+    auto actualInternal = pointerTo->actualLanguageType();
+    auto pointeeName = actualInternal->signature();
+    auto ptrName = pointeeName + "*";
+    return context.getOrEmplaceType<PointerType>(ptrName, actualInternal);
+}
+
 std::string VoidType::signature() { return "void"; }
 
 std::string BoolType::signature() { return "bool"; }

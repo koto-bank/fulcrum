@@ -108,6 +108,7 @@ struct PointerType : LanguageType {
 
     llvm::Type *llvmType() override;
     std::string signature() override;
+    LanguageType *actualLanguageType() override;
 };
 
 struct VoidType : LanguageType {
