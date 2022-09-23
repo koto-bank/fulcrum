@@ -120,7 +120,7 @@ std::unique_ptr<Expression> FunctionNode::expression(ModuleNode *, CodegenContex
 void FunctionNode::emplaceFunction(ModuleNode *module, CodegenContext &context) {
     Function::Args exprArgs;
     for (auto &[name, astType] : arguments)
-        exprArgs.emplace_back(name, astType->languageType(module, context));
+        exprArgs.emplace_back(resolveName(module, name), astType->languageType(module, context));
     Function::Body exprBody;
     for (auto &node : body)
         exprBody.push_back(node->expression(module, context));
