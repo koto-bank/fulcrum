@@ -83,7 +83,7 @@ void StructNode::fillStructTypeFields(ModuleNode *module, CodegenContext &contex
 void UnionNode::emplaceStructType(ModuleNode *module, CodegenContext &context) {
     auto fullName = resolveName(module, name);
 
-    context.emplaceType<UnionType>(fullName, fullName, biggestSize);
+    context.emplaceType<UnionType>(fullName, fullName);
 }
 void UnionNode::fillStructTypeFields(ModuleNode *module, CodegenContext &context) {
     StructType::Fields exprFields;

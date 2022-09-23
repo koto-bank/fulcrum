@@ -434,7 +434,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 struct VisitData {
                     ParseHeaderContext &parseHeaderContext;
 
-                    long long biggestSize = 0;
                     StructNode::Fields fields;
                 };
                 VisitData data = { .parseHeaderContext = *parseHeaderContext };
@@ -444,9 +443,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                         VisitData *visitData = (VisitData *)client_data;
 
                         auto type = clang_getCursorType(cursor);
-                        auto typeSize = clang_Type_getSizeOf(type);
-                        if (typeSize > visitData->biggestSize) visitData->biggestSize = typeSize;
-
                         visitData->fields.emplace_back(
                             cxToString(clang_getCursorSpelling(cursor)),
                             clangToASTType(visitData->parseHeaderContext, type)
@@ -458,7 +454,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 );
 
                 auto unionNode = std::make_unique<UnionNode>(unionName, std::move(data.fields), true);
-                unionNode->biggestSize = data.biggestSize;
 
                 parseHeaderContext->module->structs.push_back(std::move(unionNode));
 

@@ -95,8 +95,6 @@ struct StructNode : ASTNode {
 };
 
 struct UnionNode : StructNode {
-    long long biggestSize = 0;
-
     using StructNode::StructNode;
     void emplaceStructType(ModuleNode *module, CodegenContext &context) override;
     void fillStructTypeFields(ModuleNode *module, CodegenContext &context) override;

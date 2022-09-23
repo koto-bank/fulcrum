@@ -89,7 +89,7 @@ public:
 };
 
 struct UnionType : StructType {
-    UnionType(CodegenContext &codegenContext, std::string name, long long biggestSize);
+    UnionType(CodegenContext &codegenContext, std::string name);
 
     llvm::Type *llvmType() override;
 };
