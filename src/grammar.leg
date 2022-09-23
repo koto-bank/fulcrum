@@ -72,6 +72,14 @@ StructType = ('struct-' -) {
     assert(yy->ctx->structDef == nullptr && "Nested structure definitions are not allowed");
     yy->ctx->structDef = std::make_unique<StructNode>();
     yy->ctx->structDef->isPublic = true;
+} | ('union' -) {
+    assert(yy->ctx->structDef == nullptr && "Nested union definitions are not allowed");
+    yy->ctx->structDef = std::make_unique<UnionNode>();
+    yy->ctx->structDef->isPublic = true;
+} | ('union-' -) {
+    assert(yy->ctx->structDef == nullptr && "Nested union definitions are not allowed");
+    yy->ctx->structDef = std::make_unique<UnionNode>();
+    yy->ctx->structDef->isPublic = false;
 }
 
 StructField = LP (id:Id {

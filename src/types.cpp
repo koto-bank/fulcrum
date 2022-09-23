@@ -93,7 +93,8 @@ Type *UnionType::llvmType() {
             if (size > biggestSize) biggestSize = size;
         }
 
-        auto unionArrayType = ArrayType(context, context.getNamed<NamedTypeValue>("i8"), biggestSize);
+        auto i8Type = context.getOrEmplaceType<IntegerType>("i8", 8, true);
+        auto unionArrayType = ArrayType(context, i8Type, biggestSize);
         structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
     }
 
