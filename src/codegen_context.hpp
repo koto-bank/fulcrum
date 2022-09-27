@@ -1,8 +1,12 @@
 #pragma once
 
-#include <endian.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/Target/TargetMachine.h>
+
 #include <filesystem>
 #include <map>
+#include <memory>
 
 #include <fmt/format.h>
 
@@ -45,6 +49,7 @@ public:
     const std::string &getName() const;
     FunctionType *functionType();
     llvm::Function *llvmFunction();
+    void setLLVMFunction(llvm::Function *function);
 
     bool generateTerminates = false;
     void
@@ -124,9 +129,13 @@ struct NamedTypeValue : NamedValue {
 
 struct CodegenContext {
     llvm::LLVMContext &context;
-    llvm::Module module;
+    std::unique_ptr<llvm::Module> module;
+    llvm::TargetMachine *targetMachine;
 
     std::map<std::string, std::unique_ptr<NamedValue>> names;
+    std::vector<std::filesystem::path> includeDirectories;
+
+    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
 
     bool existsNamed(const std::string &name) const { return names.contains(name); }
 
@@ -161,10 +170,6 @@ struct CodegenContext {
         names.emplace(name, std::make_unique<T>(std::forward<Args>(args)...));
     }
 
-    std::vector<std::filesystem::path> includeDirectories;
-
-    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
-
     template<typename Type, typename... Args> Type *getOrEmplaceType(const std::string &name, Args &&...args) {
         if (!existsNamed(name))
             emplaceNamed<NamedTypeValue>(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
@@ -189,4 +194,10 @@ struct CodegenContext {
         const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType,
         Function::Body &&body, bool isPublic
     );
+
+    std::unique_ptr<Expression>
+    evaluateMacro(ExpressionGenContext &genContext, Function *macroFunc, FunctionCall::Args &args);
+
+private:
+    std::unique_ptr<llvm::orc::LLJIT> lljit;
 };

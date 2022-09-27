@@ -1,0 +1,10 @@
+(module cpp
+        (import :c "../src/parse_context_macro.h"))
+
+(fn ast-integer-value i32 ((arg ASTNodeMacro)))
+
+(fn macro-test ASTNodeMacro ((arg ASTNodeMacro))
+    (return arg))
+
+(fn main i32 ()
+    (return (macro-test 20)))

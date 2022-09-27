@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <string>
 #include <variant>
 #include <vector>
@@ -51,6 +52,8 @@ protected:
 
     void assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage);
 
+    template<typename T> std::unique_ptr<T> cloneImpl() { return std::unique_ptr<T>(new T(*dynamic_cast<T *>(this))); }
+
 public:
     Expression(LanguageType *type);
 
@@ -58,6 +61,8 @@ public:
     virtual llvm::Type *llvmType(ExpressionGenContext &genContext);
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext);
     virtual bool isTerminator();
+
+    virtual std::unique_ptr<Expression> clone() = 0;
 
     virtual std::string dump(int indent = 0) = 0;
 
@@ -79,6 +84,7 @@ struct IntegerConstant : ConstantExpression {
     IntegerConstant(IntegerType *type, IsLongInteger auto _constValue);
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 template<typename T>
@@ -90,6 +96,7 @@ struct FloatConstant : ConstantExpression {
     FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_);
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct StringConstant : ConstantExpression {
@@ -104,6 +111,7 @@ public:
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Constant *llvmConstant(CodegenContext &context) override;
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct BoolConstant : ConstantExpression {
@@ -113,6 +121,7 @@ public:
     BoolConstant(LanguageType *type, bool constValue);
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct FunctionCall : Expression {
@@ -129,6 +138,9 @@ private:
     LanguageType *voidProcessorType(ExpressionGenContext &genContext);
     LanguageType *notProcessorType(ExpressionGenContext &genContext);
 
+    std::unique_ptr<Expression> macroCallResult = nullptr;
+    Expression *evaluateMacro(ExpressionGenContext &genContext);
+
 public:
     using Args = std::vector<std::unique_ptr<Expression>>;
 
@@ -136,6 +148,7 @@ public:
     Args args;
 
     FunctionCall(const std::string &name, Args &&args);
+    FunctionCall(FunctionCall &other);
 
     using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
     using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, ExpressionGenContext &)>;
@@ -167,6 +180,7 @@ public:
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct VarAccess : Expression {
@@ -180,6 +194,7 @@ public:
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 
     const std::vector<std::string> &path();
     llvm::Value *varAddress(ExpressionGenContext &genContext);
@@ -191,18 +206,24 @@ private:
 
 public:
     AddrOf(std::unique_ptr<Expression> &&target);
+    AddrOf(AddrOf &other);
+
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct Dereference : Expression {
     std::unique_ptr<Expression> target;
 
     Dereference(std::unique_ptr<Expression> &&target);
+    Dereference(Dereference &other);
+
     LanguageType *languageType(ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct VariableDeclaration : Expression {
@@ -211,10 +232,13 @@ struct VariableDeclaration : Expression {
     std::string name;
 
     VariableDeclaration(const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue);
+    VariableDeclaration(VariableDeclaration &other);
+
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Type *llvmType(ExpressionGenContext &genContext) override;
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct Sizeof : Expression {
@@ -223,13 +247,16 @@ struct Sizeof : Expression {
     Sizeof(CodegenContext &context, LanguageType *targetType);
 
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };
 
 struct Cast : Expression {
     std::unique_ptr<Expression> targetExpression;
 
     Cast(CodegenContext &context, LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression);
+    Cast(Cast &other);
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
+    virtual std::unique_ptr<Expression> clone() override;
 };

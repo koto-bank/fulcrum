@@ -89,7 +89,7 @@ Type *UnionType::llvmType() {
     if (structType == nullptr) {
         llvm::LinearPolySize<llvm::TypeSize>::ScalarTy biggestSize = 0;
         for (auto [_, fieldTp] : fields) {
-            auto size = context.module.getDataLayout().getTypeAllocSize(fieldTp->llvmType()).getFixedSize();
+            auto size = context.module->getDataLayout().getTypeAllocSize(fieldTp->llvmType()).getFixedSize();
             if (size > biggestSize) biggestSize = size;
         }
 

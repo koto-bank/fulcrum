@@ -1,9 +1,26 @@
-#include <llvm/IR/Function.h>
+#include <llvm/ExecutionEngine/JITSymbol.h>
+#include <llvm/ExecutionEngine/Orc/Core.h>
+#include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
 
 #include <fmt/format.h>
 
 #include "codegen_context.hpp"
 #include "expressions.hpp"
+#include "parse_context.hpp"
+#include "parse_context_macro.h"
 
 using llvm::LLVMContext;
 
@@ -33,6 +50,7 @@ Function::Function(
 const std::string &Function::getName() const { return name; }
 FunctionType *Function::functionType() { return type.get(); }
 llvm::Function *Function::llvmFunction() { return function; }
+void Function::setLLVMFunction(llvm::Function *function) { this->function = function; }
 
 void Function::generateExpressions(
     ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions
@@ -52,9 +70,25 @@ void Function::generateBody(ExpressionGenContext &genContext) {
 
     // Insert variables for arguments
     genContext.pushScope();
-    for (auto i = 0u; i < argumentNames.size(); i++) {
-        auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
-        genContext.builder.CreateStore(function->getArg(i), varDef->value);
+
+    if (name.find("macro-") != std::string::npos) {
+        auto functionArg = function->getArg(0);
+        for (auto i = 0u; i < argumentNames.size(); i++) {
+            auto argType = functionType()->arguments[i];
+            auto varDef = genContext.insertVariable(argumentNames[i], argType);
+
+            auto N = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), i);
+
+            auto argPointer = genContext.builder.CreateGEP(functionArg->getType(), functionArg, { N });
+            auto loadArg = genContext.builder.CreateLoad(argType->llvmType(), argPointer);
+
+            genContext.builder.CreateStore(loadArg, varDef->value);
+        }
+    } else {
+        for (auto i = 0u; i < argumentNames.size(); i++) {
+            auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
+            genContext.builder.CreateStore(function->getArg(i), varDef->value);
+        }
     }
 
     generateExpressions(genContext, body);
@@ -124,7 +158,32 @@ const char *StackedCodegenErrors::whatIndented(int indent) const {
 
 CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &context)
     : context(context),
-      module(moduleName, context) {
+      module(std::make_unique<llvm::Module>(moduleName, context)) {
+    {
+        llvm::InitializeAllTargetInfos();
+        llvm::InitializeAllTargets();
+        llvm::InitializeAllTargetMCs();
+        llvm::InitializeAllAsmPrinters();
+
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+
+        auto targetTriple = llvm::sys::getDefaultTargetTriple();
+        std::string err;
+        auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
+        if (!target) {
+            llvm::errs() << err;
+            return;
+        }
+
+        llvm::TargetOptions options;
+        auto rm = llvm::Optional<llvm::Reloc::Model>();
+        targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
+        module->setDataLayout(targetMachine->createDataLayout());
+        module->setTargetTriple(targetTriple);
+    }
+
     emplaceType<FloatType>("f32", FloatType::Bits::Float);
     emplaceType<FloatType>("f64", FloatType::Bits::Double);
     emplaceType<VoidType>("void");
@@ -133,13 +192,96 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<IntegerType>("u32", 32, false);
     emplaceType<CharType>("char");
     emplaceType<StringType>("str");
+
+    lljit = llvm::cantFail(llvm::orc::LLJITBuilder().create());
+}
+
+int64_t macroAstIntegerValue(ASTNodeMacro node) {
+    auto integer = (IntegerConstant *)node.data;
+
+    std::cout << "AA" << std::endl;
+    std::cout << integer->dump(0) << std::endl;
+
+    if (std::holds_alternative<int64_t>(integer->constValue))
+        return std::get<int64_t>(integer->constValue);
+    else
+        return (int64_t)std::get<uint64_t>(integer->constValue);
+};
+
+std::unique_ptr<Expression>
+CodegenContext::evaluateMacro(ExpressionGenContext &genContext, Function *macroFunc, FunctionCall::Args &callArgs) {
+    macroFunc->llvmFunction()->removeFromParent();
+
+    llvm::ValueToValueMapTy valueMap;
+    auto calledFrom = genContext.function->llvmFunction()->getName();
+
+    // auto astNodeMacro = getNamed<NamedTypeValue>("___src_parse_context_macro_h/ASTNodeMacro");
+
+    // auto argN = macroFunc->functionType()->arguments.size();
+    auto argArray = llvm::PointerType::get(context, 0);
+
+    std::vector<llvm::Type *> argTypes{ argArray };
+    auto funcType = llvm::FunctionType::get(macroFunc->functionType()->returnType->llvmType(), argTypes, false);
+    llvm::Function *function;
+
+    function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, macroFunc->getName(), *module);
+
+    macroFunc->setLLVMFunction(function);
+
+    auto previousFunc = genContext.function;
+    auto prevInsertPoint = genContext.builder.GetInsertBlock();
+    genContext.function = macroFunc;
+    macroFunc->generateBody(genContext);
+    genContext.function = previousFunc;
+    genContext.builder.SetInsertPoint(prevInsertPoint);
+
+    auto &dylib = lljit->getMainJITDylib();
+
+    llvm::orc::MangleAndInterner mangle(lljit->getExecutionSession(), lljit->getDataLayout());
+    llvm::orc::SymbolMap symbolMap;
+    symbolMap[mangle("ast-integer-value")] = llvm::JITEvaluatedSymbol(
+        llvm::pointerToJITTargetAddress(&macroAstIntegerValue), llvm::JITSymbolFlags::Exported
+    );
+
+    llvm::cantFail(dylib.define(llvm::orc::absoluteSymbols(symbolMap)));
+
+    if (llvm::verifyModule(*module, &llvm::errs()))
+        ;
+
+    auto macroModule = llvm::CloneModule(*module, valueMap, [&calledFrom](const llvm::GlobalValue *val) {
+        return val->getName() != calledFrom;
+    });
+    llvm::cantFail(
+        lljit->addIRModule(llvm::orc::ThreadSafeModule(std::move(macroModule), std::make_unique<LLVMContext>()))
+    );
+
+    std::vector<std::unique_ptr<Expression>> argCopies;
+    std::vector<ASTNodeMacro> macroArgs;
+    for (auto &arg : callArgs)
+        argCopies.push_back(arg->clone());
+    for (auto &arg : argCopies)
+        macroArgs.emplace_back<ASTNodeMacro>({ arg.get() });
+
+    auto func = llvm::cantFail(lljit->lookup(macroFunc->getName())).toPtr<ASTNodeMacro (*)(ASTNodeMacro *)>();
+
+    auto result = func(macroArgs.data());
+    Expression *resultExpr = (Expression *)result.data;
+    auto resultCopy = resultExpr->clone();
+
+    if (std::find_if(argCopies.begin(), argCopies.end(), [&](auto &arg) { return arg.get() == resultExpr; })
+        == argCopies.end()) {
+        // Returned expression is not one of the arguments passed in, so it has to be freed manually
+        delete resultExpr;
+    }
+
+    return resultCopy;
 }
 
 void CodegenContext::emplaceFn(
     const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType,
     Function::Body &&body, bool isPublic
 ) {
-    emplaceNamed<NamedFunctionValue>(langName, *this, module, funcName, args, returnType, std::move(body), isPublic);
+    emplaceNamed<NamedFunctionValue>(langName, *this, *module, funcName, args, returnType, std::move(body), isPublic);
 }
 
 std::string NamedFunctionValue::namedType() { return "function"; }

@@ -216,7 +216,7 @@ void VariableDeclarationNode::emplaceGlobalVar(ModuleNode *module, CodegenContex
 
         auto constVal = constExpr->llvmConstant(context);
         auto llvmGlobal = new llvm::GlobalVariable(
-            context.module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, fullName
+            *context.module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, fullName
         );
         varDef.value = llvmGlobal;
         context.emplaceNamed<NamedVariableValue>(fullName, varDef);

@@ -216,6 +216,27 @@ struct CastNode : ASTNode {
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
+struct QuotedIdNode : ASTNode {
+    std::string id;
+
+    QuotedIdNode(const std::string &id)
+        : id(id) {}
+
+    std::unique_ptr<Expression> expression(ModuleNode *, CodegenContext &) override { return nullptr; }
+};
+
+struct QuotedListNode : ASTNode {
+    std::vector<std::unique_ptr<ASTNode>> nodes;
+
+    std::unique_ptr<Expression> expression(ModuleNode *, CodegenContext &) override { return nullptr; }
+};
+
+struct QuoteNode : ASTNode {
+    std::vector<std::unique_ptr<ASTNode>> quoted;
+
+    std::unique_ptr<Expression> expression(ModuleNode *, CodegenContext &) override { return nullptr; }
+};
+
 struct ModuleNode : ASTNode {
     std::string name;
 

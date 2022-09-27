@@ -6,14 +6,11 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
 
-#include <llvm/MC/TargetRegistry.h>
-
+#include <llvm/Support/Error.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FileUtilities.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/Program.h>
-#include <llvm/Support/TargetSelect.h>
-#include <llvm/Target/TargetMachine.h>
 
 #include <clang-c/Index.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -70,7 +67,10 @@ struct ParseHeaderContext {
     void includeHeader(const std::string &name) {
         auto tuOrErr = interp->Parse(std::string(fmt::format(R"(#include <{}>)", name)));
         auto isOk = bool(tuOrErr);
-        if (!isOk) return;
+        if (!isOk) {
+            llvm::handleAllErrors(tuOrErr.takeError(), [](const llvm::ErrorInfoBase &) {});
+            return;
+        }
         llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
     }
 
@@ -78,8 +78,11 @@ struct ParseHeaderContext {
         auto varName = fmt::format("macro_{}", name);
         auto tuOrErr
             = interp->Parse(std::string(fmt::format(R"(extern "C" constexpr decltype(auto) {} = {};)", varName, name)));
-        auto isOk = bool(tuOrErr);
-        if (!isOk) return nullptr;
+        if (!tuOrErr) {
+            llvm::handleAllErrors(tuOrErr.takeError(), [](const llvm::ErrorInfoBase &) {});
+
+            return nullptr;
+        }
 
         clang::VarDecl *decl = nullptr;
         for (auto toplevel : tuOrErr->TUPart->decls()) {
@@ -147,6 +150,8 @@ private:
         std::vector<const char *> clangArgs{ "-Xclang", "-emit-llvm-only", clangInc.data() };
 
         auto instOrErr = clang::IncrementalCompilerBuilder::create(clangArgs);
+        if (!instOrErr) llvm::errs() << instOrErr.takeError();
+
         auto inst = std::move(instOrErr.get());
 
         auto ignoring = std::make_unique<clang::IgnoringDiagConsumer>();
@@ -206,10 +211,12 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         break;
     case CXType_SChar:
     case CXType_Char_S:
+        context.codegenContext.ensureType<IntegerType>("i8", 8, true);
         result = std::make_unique<ASTBuiltinType>("i8");
         break;
     case CXType_UChar:
     case CXType_Char_U:
+        context.codegenContext.ensureType<IntegerType>("u8", 8, false);
         result = std::make_unique<ASTBuiltinType>("u8");
         break;
     case CXType_Void:
@@ -468,8 +475,9 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                         parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
                         [&structName](auto &node) { return node->name == structName; }
                     )
-                    != parseHeaderContext->module->structs.end())
+                    != parseHeaderContext->module->structs.end()) {
                     break;
+                }
 
                 struct VisitData {
                     ParseHeaderContext &parseHeaderContext;
@@ -583,28 +591,6 @@ int main(int argc, char *argv[]) {
 
     CodegenContext codegenCont("main", context);
 
-    llvm::TargetMachine *targetMachine;
-    {
-        llvm::InitializeAllTargetInfos();
-        llvm::InitializeAllTargets();
-        llvm::InitializeAllTargetMCs();
-        llvm::InitializeAllAsmPrinters();
-
-        auto targetTriple = llvm::sys::getDefaultTargetTriple();
-        std::string err;
-        auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
-        if (!target) {
-            llvm::errs() << err;
-            return 1;
-        }
-
-        llvm::TargetOptions options;
-        auto rm = llvm::Optional<llvm::Reloc::Model>();
-        targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
-        codegenCont.module.setDataLayout(targetMachine->createDataLayout());
-        codegenCont.module.setTargetTriple(targetTriple);
-    }
-
     if (includeArg) {
         namespace fs = std::filesystem;
         for (auto &path : includeArg.Get()) {
@@ -713,7 +699,7 @@ int main(int argc, char *argv[]) {
             auto f = namedF->value.get();
 
             exprGenContext.function = f;
-            f->generateBody(exprGenContext);
+            if (f->getName().find("macro-") == std::string::npos) f->generateBody(exprGenContext);
         } catch (const CodegenError &err) {
             std::cout << fmt::format(
                 "{}\n{}", fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold), err.whatIndented(4)
@@ -723,9 +709,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    llvm::errs() << codegenCont.module;
+    llvm::errs() << *codegenCont.module;
 
-    if (llvm::verifyModule(codegenCont.module, &llvm::errs())) {
+    if (llvm::verifyModule(*codegenCont.module, &llvm::errs())) {
         // Exit early if there's an error
         return 1;
     }
@@ -737,8 +723,8 @@ int main(int argc, char *argv[]) {
     llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
 
     llvm::legacy::PassManager passManager;
-    targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
-    passManager.run(codegenCont.module);
+    codegenCont.targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
+    passManager.run(*codegenCont.module);
     dest.flush();
 
     return 0;

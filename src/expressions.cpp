@@ -82,6 +82,8 @@ std::string IntegerConstant::dump(int indent) {
                     : fmt::format("{}{}{}", indentSpaces(indent), std::get<uint64_t>(constValue), type->signature());
 }
 
+std::unique_ptr<Expression> IntegerConstant::clone() { return cloneImpl<IntegerConstant>(); }
+
 FloatConstant::FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_)
     : ConstantExpression(type),
       constValue(constValue_) {
@@ -104,6 +106,8 @@ std::string FloatConstant::dump(int indent) {
     );
 }
 
+std::unique_ptr<Expression> FloatConstant::clone() { return cloneImpl<FloatConstant>(); }
+
 StringConstant::StringConstant(LanguageType *type, const std::string &constValue)
     : ConstantExpression(type),
       constValue(constValue) {}
@@ -122,7 +126,7 @@ llvm::Constant *StringConstant::llvmConstant(CodegenContext &codegenContext) {
     if (llvmConst == nullptr) {
         llvm::Constant *StrConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
         llvmConst = new llvm::GlobalVariable(
-            codegenContext.module, StrConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, StrConstant
+            *codegenContext.module, StrConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, StrConstant
         );
     }
 
@@ -137,7 +141,10 @@ BoolConstant::BoolConstant(LanguageType *type, bool constValue)
     value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
 }
 
+std::unique_ptr<Expression> StringConstant::clone() { return cloneImpl<StringConstant>(); }
+
 std::string BoolConstant::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), constValue); }
+std::unique_ptr<Expression> BoolConstant::clone() { return cloneImpl<BoolConstant>(); }
 
 FunctionCall::FunctionCall(const std::string &name_, Args &&args)
     // Initialize type with nullptr for now, since we don't know the return type yet
@@ -148,6 +155,12 @@ FunctionCall::FunctionCall(const std::string &name_, Args &&args)
     auto namespaceSep = name.find('/');
     auto baseName = name.substr(namespaceSep + 1);
     if (specialFunctions.contains(baseName)) name = baseName;
+}
+
+FunctionCall::FunctionCall(FunctionCall &other)
+    : FunctionCall(other.name, {}) {
+    for (auto &arg : other.args)
+        args.push_back(arg->clone());
 }
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
@@ -481,10 +494,21 @@ llvm::Value *FunctionCall::notProcessor(ExpressionGenContext &genContext) {
     return genContext.builder.CreateNot(args[0]->llvmValue(genContext));
 }
 
+Expression *FunctionCall::evaluateMacro(ExpressionGenContext &genContext) {
+    if (macroCallResult == nullptr) {
+        auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
+        macroCallResult = genContext.codegenContext.evaluateMacro(genContext, calledFunction, args);
+    }
+
+    return macroCallResult.get();
+}
+
 LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
     if (type == nullptr) {
         if (specialFunctions.contains(name)) {
             type = specialFunctions[name].second(this, genContext);
+        } else if (name.find("macro-") != name.npos) {
+            type = evaluateMacro(genContext)->languageType(genContext);
         } else {
             type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)->functionType()->returnType;
         }
@@ -497,6 +521,9 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     if (specialFunctions.contains(name)) return specialFunctions[name].first(this, genContext);
 
     auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
+    if (calledFunction->getName().find("macro-") != std::string::npos) {
+        return evaluateMacro(genContext)->llvmValue(genContext);
+    }
 
     std::vector<llvm::Value *> argValues;
     for (auto i = 0u; i < args.size(); i++) {
@@ -537,6 +564,8 @@ std::string FunctionCall::dump(int indent) {
 
     return fmt::format("{}({} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
+
+std::unique_ptr<Expression> FunctionCall::clone() { return cloneImpl<FunctionCall>(); }
 
 VarAccess::VarAccess(const std::string &name)
     : Expression(nullptr),
@@ -644,9 +673,15 @@ llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genCont) {
 
 std::string VarAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
 
+std::unique_ptr<Expression> VarAccess::clone() { return cloneImpl<VarAccess>(); }
+
 AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
       target(std::move(target)) {}
+
+AddrOf::AddrOf(AddrOf &other)
+    : Expression(nullptr),
+      target(other.target->clone()) {}
 
 LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
@@ -668,9 +703,15 @@ llvm::Value *AddrOf::llvmValue(ExpressionGenContext &genCont) {
 
 std::string AddrOf::dump(int indent) { return fmt::format("{}&{}", indentSpaces(indent), target->dump(0)); }
 
+std::unique_ptr<Expression> AddrOf::clone() { return cloneImpl<AddrOf>(); }
+
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
       target(std::move(target)) {}
+
+Dereference::Dereference(Dereference &other)
+    : Expression(nullptr),
+      target(other.target->clone()) {}
 
 LanguageType *Dereference::languageType(ExpressionGenContext &genCont) {
     auto derefing = target->languageType(genCont);
@@ -687,12 +728,19 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
 
 std::string Dereference::dump(int indent) { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
 
+std::unique_ptr<Expression> Dereference::clone() { return cloneImpl<Dereference>(); }
+
 VariableDeclaration::VariableDeclaration(
     const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue
 )
     : Expression(type),
       initialValue(std::move(initialValue)),
       name(name) {}
+
+VariableDeclaration::VariableDeclaration(VariableDeclaration &other)
+    : Expression(other.type),
+      initialValue(other.initialValue != nullptr ? other.initialValue->clone() : nullptr),
+      name(other.name) {}
 
 llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     auto varDef = genContext.insertVariable(name, type);
@@ -724,11 +772,13 @@ std::string VariableDeclaration::dump(int indent) {
     );
 }
 
+std::unique_ptr<Expression> VariableDeclaration::clone() { return cloneImpl<VariableDeclaration>(); }
+
 Sizeof::Sizeof(CodegenContext &context, LanguageType *targetType)
     : Expression(context.getNamed<NamedTypeValue>("u32")),
       targetType(targetType) {
     value = llvm::ConstantInt::get(
-        type->llvmType(), context.module.getDataLayout().getTypeAllocSize(targetType->llvmType())
+        type->llvmType(), context.module->getDataLayout().getTypeAllocSize(targetType->llvmType())
     );
 }
 
@@ -736,14 +786,21 @@ std::string Sizeof::dump(int indent) {
     return fmt::format("{}($sizeof {})", indentSpaces(indent), targetType->signature());
 }
 
+std::unique_ptr<Expression> Sizeof::clone() { return cloneImpl<Sizeof>(); }
+
 Cast::Cast(CodegenContext &, LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression)
     : Expression(targetType),
       targetExpression(std::move(targetExpression)) {}
+
+Cast::Cast(Cast &other)
+    : Expression(other.type),
+      targetExpression(other.targetExpression->clone()) {}
 
 std::string Cast::dump(int indent) {
     return fmt::format("{}($cast {} {})", indentSpaces(indent), type->signature(), targetExpression->dump());
 }
 
+std::unique_ptr<Expression> Cast::clone() { return cloneImpl<Cast>(); }
 
 llvm::Value *Cast::llvmValue(ExpressionGenContext &genContext) {
     auto targetValue = targetExpression->llvmValue(genContext);
