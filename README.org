@@ -1,0 +1,11 @@
+* Build
+Generate:
+~rm -rf _build ; mkdir _build ; cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1~
+
+Build:
+~cmake --build _build~
+
+** Macos
+Don't forget to export paths to LLVM and Clang:
+~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
+~export Clang_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/clang~
