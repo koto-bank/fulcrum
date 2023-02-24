@@ -309,11 +309,13 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     parseHeaderContext->includeHeader(path);
 
     CXIndex index = clang_createIndex(0, 0);
-    CXTranslationUnit unit = clang_parseTranslationUnit(
-        index, path.data(), nullptr, 0, nullptr, 0, CXTranslationUnit_DetailedPreprocessingRecord
-    );
-    if (unit == nullptr) {
-        std::cout << "Could not parse " << path;
+    CXTranslationUnit unit;
+    auto code = clang_parseTranslationUnit2(
+        index, path.data(), nullptr, 0, nullptr, 0, CXTranslationUnit_DetailedPreprocessingRecord, &unit
+        );
+
+    if (code != 0u) {
+        std::cout << "Could not parse " << path << " error code: " << code << "\n";
         return nullptr;
     }
 
@@ -551,7 +553,6 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 break;
             };
 
-
             return CXChildVisit_Recurse;
         },
         parseHeaderContext.get()
@@ -561,6 +562,71 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     clang_disposeIndex(index);
 
     return parseHeaderContext;
+}
+
+void processImportsRecursive(std::vector<ModuleNode::Import> moduleImports,
+               CodegenContext& codegenCont,
+               std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
+    for (auto &import : moduleImports) {
+        if (includedModules.contains(import.target)) continue;
+
+        if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
+            auto resultContext = parseHeader(import.target, codegenCont);
+            if (resultContext == nullptr) {
+                return;
+            }
+            includedModules.emplace(import.target, std::move(resultContext->module));
+        } else {
+            namespace fs = std::filesystem;
+
+            fs::path targetPath;
+            bool found = false;
+            for (auto inclDir = codegenCont.includeDirectories.rbegin();
+                 inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
+                fs::path includePath(*inclDir);
+                includePath.make_preferred();
+
+                if (!fs::is_directory(includePath.string())) {
+                    std::cout << fmt::format(
+                        "Include path {} does not exist or is not a directory", includePath.string()
+                        );
+                    continue;
+                }
+
+                auto targetPathStr = import.target;
+                std::replace(targetPathStr.begin(), targetPathStr.end(), '.', fs::path::preferred_separator);
+                targetPath = includePath / targetPathStr;
+                targetPath.replace_extension(".fl");
+                if (fs::is_regular_file(targetPath)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) throw CodegenError(fmt::format("Could not find the module {}", import.target));
+
+            std::ifstream file(targetPath);
+            auto moduleAST = parse(&codegenCont, &file);
+            if (moduleAST == nullptr)
+                throw CodegenError(
+                    fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
+                    );
+            if (moduleAST->name != import.target)
+                throw CodegenError(fmt::format(
+                                       "Module was imported as {}, but the name declared in the module was {}", import.target,
+                                       moduleAST->name
+                                       ));
+
+            auto &emplaced = includedModules.emplace(import.target, std::move(moduleAST)).first->second;
+            processImportsRecursive(emplaced->imports, codegenCont, includedModules);
+        }
+    }
+}
+
+std::map<std::string, std::unique_ptr<ModuleNode>>
+processImports(std::vector<ModuleNode::Import> moduleImports, CodegenContext& codegenCont) {
+    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
+    processImportsRecursive(moduleImports, codegenCont, includedModules);
+    return includedModules;
 }
 
 int main(int argc, char *argv[]) {
@@ -636,60 +702,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
-    std::function<void(std::vector<ModuleNode::Import>)> processImports
-        = [&](std::vector<ModuleNode::Import> moduleImports) {
-              for (auto &import : moduleImports) {
-                  if (includedModules.contains(import.target)) continue;
-
-                  if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-                      auto resultContext = parseHeader(import.target, codegenCont);
-                      includedModules.emplace(import.target, std::move(resultContext->module));
-                  } else {
-                      namespace fs = std::filesystem;
-
-                      fs::path targetPath;
-                      bool found = false;
-                      for (auto inclDir = codegenCont.includeDirectories.rbegin();
-                           inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
-                          fs::path includePath(*inclDir);
-                          includePath.make_preferred();
-
-                          if (!fs::is_directory(includePath.string())) {
-                              std::cout << fmt::format(
-                                  "Include path {} does not exist or is not a directory", includePath.string()
-                              );
-                              continue;
-                          }
-
-                          auto targetPathStr = import.target;
-                          std::replace(targetPathStr.begin(), targetPathStr.end(), '.', fs::path::preferred_separator);
-                          targetPath = includePath / targetPathStr;
-                          targetPath.replace_extension(".fl");
-                          if (fs::is_regular_file(targetPath)) {
-                              found = true;
-                              break;
-                          }
-                      }
-                      if (!found) throw CodegenError(fmt::format("Could not find the module {}", import.target));
-
-                      std::ifstream file(targetPath);
-                      auto moduleAST = parse(&codegenCont, &file);
-                      if (moduleAST == nullptr)
-                          throw CodegenError(
-                              fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
-                          );
-                      if (moduleAST->name != import.target)
-                          throw CodegenError(fmt::format(
-                              "Module was imported as {}, but the name declared in the module was {}", import.target,
-                              moduleAST->name
-                          ));
-
-                      auto &emplaced = includedModules.emplace(import.target, std::move(moduleAST)).first->second;
-                      processImports(emplaced->imports);
-                  }
-              }
-          };
+    auto includedModules = processImports(moduleAST->imports, codegenCont);
     auto importNames = [&includedModules](ModuleNode *importTo) {
         for (auto &import : importTo->imports) {
             // TODO: actually add import names, for now everything is imported
@@ -700,7 +713,6 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    processImports(moduleAST->imports);
     for (auto &[name, ast] : includedModules) {
         std::cout << fmt::format("Compiling {}", name) << std::endl;
 
