@@ -28,10 +28,10 @@ struct VariableDefinition {
 
 struct ExpressionGenContext {
     llvm::IRBuilder<> &builder;
-    Function *function;
+    Function *function = nullptr;
 
     using VariableScope = std::map<std::string, VariableDefinition>;
-    std::vector<VariableScope> variableScopes;
+    std::vector<VariableScope> variableScopes = {};
     CodegenContext &codegenContext;
 
     VariableDefinition *lookupVariable(const std::string &name);

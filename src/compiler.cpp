@@ -35,6 +35,7 @@
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 #include "parse_context.hpp"
+#include "parser.hpp"
 #include "types.hpp"
 
 namespace {
@@ -440,7 +441,8 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     long long biggestSize = 0;
                     StructNode::Fields fields;
                 };
-                VisitData data = { .parseHeaderContext = *parseHeaderContext };
+                VisitData data = { .parseHeaderContext = *parseHeaderContext,
+                    .fields = {} };
                 clang_Type_visitFields(
                     unionType,
                     [](CXCursor cursor, CXClientData client_data) {
@@ -483,7 +485,8 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                     ParseHeaderContext &parseHeaderContext;
                     StructNode::Fields fields;
                 };
-                VisitData data = { .parseHeaderContext = *parseHeaderContext };
+                VisitData data = { .parseHeaderContext = *parseHeaderContext,
+                    .fields = {} };
                 clang_Type_visitFields(
                     structType,
                     [](CXCursor cursor, CXClientData client_data) {
@@ -605,12 +608,13 @@ void processImportsRecursive(std::vector<ModuleNode::Import> moduleImports,
             }
             if (!found) throw CodegenError(fmt::format("Could not find the module {}", import.target));
 
-            std::ifstream file(targetPath);
-            auto moduleAST = parse(&codegenCont, &file);
-            if (moduleAST == nullptr)
+            Parser parser;
+            auto res = parser.parse(&codegenCont, targetPath);
+            if (res == false)
                 throw CodegenError(
                     fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
                     );
+            auto moduleAST = parser.getResult();
             if (moduleAST->name != import.target)
                 throw CodegenError(fmt::format(
                                        "Module was imported as {}, but the name declared in the module was {}", import.target,
@@ -688,18 +692,20 @@ args::ArgumentParser argParser("fulcrum");
     }
 
     std::unique_ptr<ModuleNode> moduleAST;
+    Parser parser;
+    bool res = false;
     if (!fileArg) {
-        moduleAST = parse(&codegenCont, &std::cin);
+        res = parser.parse(&codegenCont);
     } else {
-        std::ifstream file(fileArg.Get());
-        if (!file.is_open()) {
-            std::cout << fmt::format("Could not open {}", std::string(fileArg.Get()));
-            return 1;
-        }
-
-        moduleAST = parse(&codegenCont, &file);
+        res = parser.parse(&codegenCont, fileArg.Get());
     }
 
+    if (!res) {
+        std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
+        return 1;
+    }
+
+    moduleAST = parser.getResult();
     if (moduleAST == nullptr) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
         return 1;

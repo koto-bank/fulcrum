@@ -1,3 +1,4 @@
+#include "assert.hpp"
 #include "parse_context.hpp"
 #include "codegen_context.hpp"
 #include "expressions.hpp"
@@ -6,7 +7,7 @@ ASTBuiltinType::ASTBuiltinType(std::string name)
     : builtinName(name) {}
 
 LanguageType *ASTBuiltinType::languageType(ModuleNode *, CodegenContext &context) {
-    assert(context.existsNamed(builtinName));
+    fc_assert(context.existsNamed(builtinName));
 
     return context.getNamed<NamedTypeValue>(builtinName);
 };

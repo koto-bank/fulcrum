@@ -13,16 +13,18 @@ find_package(Clang REQUIRED)
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
 
-add_compile_definitions("DEBUG=$<CONFIG:Debug>")
-
 ### Library
 
 add_library(${FULCRUM_LIB} OBJECT
   "src/compiler.cpp"
   "src/codegen_context.cpp"
   "src/expressions.cpp"
+  "src/parser.cpp"
+  "src/token.cpp"
+  "src/lexer.cpp"
   "src/parse_context.cpp"
   "src/types.cpp")
+target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC
@@ -43,8 +45,6 @@ add_custom_command(
   VERBATIM
 )
 
-target_sources(${FULCRUM_LIB} PRIVATE "${GRAMMAR_DIR}/generated_parser.cpp")
-
 add_subdirectory(deps/fmt)
 
 option(ARGS_BUILD_EXAMPLE "" OFF)
@@ -59,6 +59,7 @@ target_link_libraries(${FULCRUM_LIB} fmt args LLVM libclang clang-cpp ${llvm_lib
 ### Compiler
 
 add_executable(${FULCRUM_COMPILER} "src/main.cpp" $<TARGET_OBJECTS:${FULCRUM_LIB}>)
+target_compile_definitions(${FULCRUM_COMPILER} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB})
 #target_include_directories(${FULCRUM_COMPILER} PRIVATE ${FULCRUM_INCLUDE_DIRS})
 target_compile_options(${FULCRUM_COMPILER} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
