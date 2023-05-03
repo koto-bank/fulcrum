@@ -8,6 +8,7 @@
 
 #include <fmt/format.h>
 
+#include "assert.hpp"
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 #include "types.hpp"
@@ -295,7 +296,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateFCmpOEQ, _1, _2, _3, "", nullptr);
         break;
     case '!': {
-        assert(name[1] == '=');
+        fc_assert(name[1] == '=');
         if (intType)
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateICmpNE, _1, _2, _3, "");
         else
@@ -615,7 +616,7 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
 
             currentType = std::get<1>(structType->fields[fieldIndex]);
 
-            if (auto unionType = dynamic_cast<UnionType *>(structType)) {
+            if (dynamic_cast<UnionType *>(structType) != nullptr) {
                 // Don't do anything, loading with current type will produce the right value
             } else {
                 currentValue = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);

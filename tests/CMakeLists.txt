@@ -10,8 +10,6 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 
 file(GLOB_RECURSE TEST_SRCS "../src/*.test.cpp")
 
-add_compile_definitions("DEBUG=$<CONFIG:Debug>")
-
 add_subdirectory(../ fulcrum)
 add_subdirectory(../deps/googletest googletest)
 
@@ -19,4 +17,6 @@ add_executable(${FULCRUM_TESTS}
     "main.cpp"
     ${TEST_SRCS}
     $<TARGET_OBJECTS:libfulcrum>)
+
+target_compile_definitions(${FULCRUM_TESTS} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_link_libraries(${FULCRUM_TESTS} libfulcrum gtest)

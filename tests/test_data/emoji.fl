@@ -1,0 +1,8 @@
+(module main)
+
+;; the function
+(fn main void () ; comment 1
+  "👨‍👨‍👦‍👦⌘ \" ; comment (it is not, it's a part of the string)
+\
+\
+🙂")
