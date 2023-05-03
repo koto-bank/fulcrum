@@ -13,6 +13,8 @@ find_package(Clang REQUIRED)
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
 
+add_compile_definitions("DEBUG=$<CONFIG:Debug>")
+
 ### Library
 
 add_library(${FULCRUM_LIB} OBJECT

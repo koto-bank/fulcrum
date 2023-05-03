@@ -10,6 +10,8 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 
 file(GLOB_RECURSE TEST_SRCS "../src/*.test.cpp")
 
+add_compile_definitions("DEBUG=$<CONFIG:Debug>")
+
 add_subdirectory(../ fulcrum)
 add_subdirectory(../deps/googletest googletest)
 
