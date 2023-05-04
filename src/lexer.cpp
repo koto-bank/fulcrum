@@ -26,7 +26,7 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
     while (stream->get(c)) {
         if (utils::isLineBreak(c)) {
             if (inString) {
-                tokens.push_back(std::make_unique<token::Error>("Encountered line break during string parsing",
+                tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInString,
                                                                 std::make_unique<token::StringLiteral>(currentTokenStr)));
                 inString = false;
             }
@@ -113,7 +113,7 @@ std::unique_ptr<token::Token> Lexer::readNumber() {
     const auto strEnd = &*currentTokenStr.end();
     auto intRes = std::strtoll(currentTokenStr.data(), &end, 0);
     if (errno == ERANGE) {
-        return std::make_unique<token::Error>("Number literal exceeds 64-bit limit", nullptr);
+        return std::make_unique<token::Error>(token::Error::IntegerOverflow, nullptr);
     }
 
     if (end == strEnd) {
@@ -131,7 +131,7 @@ std::unique_ptr<token::Token> Lexer::readNumber() {
             isSigned = true;
         } else {
             // Anything other than 'u' or 'i' immediately after the number is not allowed
-            return std::make_unique<token::Error>("Ill-formed integer literal", nullptr);
+            return std::make_unique<token::Error>(token::Error::IllFormedInteger, nullptr);
         }
 
         end++;
@@ -139,8 +139,8 @@ std::unique_ptr<token::Token> Lexer::readNumber() {
             char* bitsEnd = nullptr;
             bits = std::strtol(end, &bitsEnd, 0);
             fc_assert(bitsEnd == strEnd || isDelimiter(*bitsEnd));
-            if (bits > 128u) {
-                return std::make_unique<token::Error>("Integer size exceeded",
+            if (bits > 128u || bits <= 0) {
+                return std::make_unique<token::Error>(token::Error::IntegerBadBitSize,
                                                       std::make_unique<token::IntegerLiteral>(intRes, isSigned, bits));
             }
         }
@@ -153,25 +153,25 @@ extractFloat:
     end = nullptr;
     auto floatRes = std::strtod(currentTokenStr.data(), &end);
     if (errno == ERANGE) {
-        return std::make_unique<token::Error>("Number literal exceeds double limit", nullptr);
+        return std::make_unique<token::Error>(token::Error::FloatOverflow, nullptr);
     }
 
     if (end == &*currentTokenStr.end()) {
         return std::make_unique<token::FloatLiteral>(floatRes, 64u);
     } else if (*end != 'f') {
         // Anything other than 'f32' or 'f64' is not allowed
-        return std::make_unique<token::Error>("Ill-formed float literal", nullptr);
+        return std::make_unique<token::Error>(token::Error::IllFormedFloat, nullptr);
     } else {
         end++;
         char* bitsEnd = nullptr;
         auto bits = std::strtol(end, &bitsEnd, 0);
         fc_assert(bitsEnd == strEnd || isDelimiter(*bitsEnd));
         if (bits != 32 && bits != 64) {
-            return std::make_unique<token::Error>("Floating point literal has wrong size",
+            return std::make_unique<token::Error>(token::Error::FloatBadBitSize,
                                                   std::make_unique<token::FloatLiteral>(floatRes, bits));
         }
         return std::make_unique<token::FloatLiteral>(floatRes, bits);
     }
 
-    return std::make_unique<token::Error>("Failed to parse numeric value", nullptr);
+    return std::make_unique<token::Error>(token::Error::NumericValueParsingFailed, nullptr);
 }

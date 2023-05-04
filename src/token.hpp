@@ -41,9 +41,31 @@ struct Token {
 };
 
 struct Error final : public Token {
-    Error(const std::string &what, std::unique_ptr<Token> &&originalToken);
+    enum {
+        EOFInString,
+        LineBreakInString,
 
-    std::string what;
+        EOFInChar,
+        LineBreakInChar,
+        CharLiteralTooLong,
+
+        IntegerOverflow,
+        IllFormedInteger,
+        IntegerBadBitSize,
+
+        FloatOverflow,
+        IllFormedFloat,
+        FloatBadBitSize,
+
+        NumericValueParsingFailed, // ...for some reason
+
+        Count
+    };
+
+    Error(uint32_t code, std::unique_ptr<Token> &&originalToken);
+
+    const uint32_t code;
+    const std::string what;
     std::unique_ptr<Token> originalToken;
 };
 
