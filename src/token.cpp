@@ -4,7 +4,6 @@
 
 namespace token {
 namespace {
-
     constexpr std::array<const char *, Error::Count> errorDescriptions = {
         "EOF inside a string",
         "Encountered line break during string parsing",
@@ -65,6 +64,10 @@ IntegerLiteral::IntegerLiteral(uint64_t _value, bool isSigned, uint32_t bits)
         value = static_cast<uint64_t>(_value);
     }
 }
+
+CharLiteral::CharLiteral(uint8_t value)
+    : Token(Type::CharLiteral)
+    , value(value) {}
 
 FloatLiteral::FloatLiteral(double value, uint32_t bits)
     : Token(Type::FloatLiteral)

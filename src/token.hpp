@@ -16,6 +16,7 @@ enum class Type : uint32_t {
 
     BooleanLiteral,
     IntegerLiteral,
+    CharLiteral,
     FloatLiteral,
     StringLiteral,
 };
@@ -29,13 +30,13 @@ struct Token {
     virtual ~Token() = default;
 
     template <typename T>
-    T* as() {
+    T *as() {
 #if defined(FC_DEBUG)
-        auto r = dynamic_cast<T*>(this);
+        auto r = dynamic_cast<T *>(this);
         fc_assert(r != nullptr);
         return r;
 #else
-        return static_cast<T*>(this);
+        return static_cast<T *>(this);
 #endif
     }
 };
@@ -78,7 +79,7 @@ struct RParen final : public Token {
 };
 
 struct Id final : public Token {
-    Id(const std::string& id);
+    Id(const std::string &id);
     std::string id;
 };
 
@@ -105,6 +106,12 @@ struct IntegerLiteral final : public Token {
     }
 };
 
+struct CharLiteral final : public Token {
+    CharLiteral(uint8_t value);
+
+    uint8_t value;
+};
+
 struct FloatLiteral final : public Token {
     FloatLiteral(double value, uint32_t bits);
 
@@ -118,7 +125,7 @@ struct FloatLiteral final : public Token {
 };
 
 struct StringLiteral final : Token {
-    StringLiteral(const std::string& contents);
+    StringLiteral(const std::string &contents);
     std::string contents;
 };
 }
