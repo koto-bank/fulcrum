@@ -199,6 +199,137 @@ TEST(lexer_int, hex_unsigned) {
     EXPECT_EQ(r->bits, 8u);
 }
 
+// Chars
+TEST(lexer_char, simple) {
+    const std::string i = "'a'";
+
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 1);
+
+    ASSERT_EQ(res[0]->type, token::Type::CharLiteral);
+    auto r = res[0]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+
+    EXPECT_EQ(r->value, 'a');
+}
+
+TEST(lexer_char, escapes) {
+    const std::string i = "'\\0' '\\1' '\\2' '\\3' '\\4' '\\5' '\\6' '\\7' '\\8' '\\9' '\\n' '\\t'";
+
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 12);
+
+    checkError(res[0]);
+    ASSERT_EQ(res[0]->type, token::Type::CharLiteral);
+    auto r = res[0]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 0);
+
+    checkError(res[1]);
+    ASSERT_EQ(res[1]->type, token::Type::CharLiteral);
+    r = res[1]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 1);
+
+    checkError(res[2]);
+    ASSERT_EQ(res[2]->type, token::Type::CharLiteral);
+    r = res[2]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 2);
+
+    checkError(res[3]);
+    ASSERT_EQ(res[3]->type, token::Type::CharLiteral);
+    r = res[3]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 3);
+
+    checkError(res[4]);
+    ASSERT_EQ(res[4]->type, token::Type::CharLiteral);
+    r = res[4]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 4);
+
+    checkError(res[5]);
+    ASSERT_EQ(res[5]->type, token::Type::CharLiteral);
+    r = res[5]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 5);
+
+    checkError(res[6]);
+    ASSERT_EQ(res[6]->type, token::Type::CharLiteral);
+    r = res[6]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 6);
+
+    checkError(res[7]);
+    ASSERT_EQ(res[7]->type, token::Type::CharLiteral);
+    r = res[7]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 7);
+
+    checkError(res[8]);
+    ASSERT_EQ(res[8]->type, token::Type::CharLiteral);
+    r = res[8]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 8);
+
+    checkError(res[9]);
+    ASSERT_EQ(res[9]->type, token::Type::CharLiteral);
+    r = res[9]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, 9);
+
+    // numbers end
+    ASSERT_EQ(res[10]->type, token::Type::CharLiteral);
+    r = res[10]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, '\n');
+
+    ASSERT_EQ(res[11]->type, token::Type::CharLiteral);
+    r = res[11]->as<token::CharLiteral>();
+    ASSERT_NE(r, nullptr);
+    ASSERT_EQ(r->value, '\t');
+}
+
+TEST(lexer_char, too_much_bytes_inside) {
+    const std::string i = "'\\nn' 'ab' '😠'";
+
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 3);
+
+    ASSERT_EQ(res[0]->type, token::Type::Error);
+    auto r = res[0]->as<token::Error>();
+    EXPECT_EQ(r->code, token::Error::CharLiteralTooLong);
+
+    ASSERT_EQ(res[1]->type, token::Type::Error);
+    r = res[1]->as<token::Error>();
+    EXPECT_EQ(r->code, token::Error::CharLiteralTooLong);
+
+    ASSERT_EQ(res[2]->type, token::Type::Error);
+    r = res[2]->as<token::Error>();
+    EXPECT_EQ(r->code, token::Error::CharLiteralTooLong);
+}
+
+TEST(lexer_char, eof_in_literal) {
+    const std::string i = "'";
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 1);
+
+    ASSERT_EQ(res[0]->type, token::Type::Error);
+    auto r = res[0]->as<token::Error>();
+    EXPECT_EQ(r->code, token::Error::EOFInChar);
+}
+
+TEST(lexer_char, line_break_in_literal) {
+    const std::string i = "'a\n";
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 1);
+
+    ASSERT_EQ(res[0]->type, token::Type::Error);
+    auto r = res[0]->as<token::Error>();
+    EXPECT_EQ(r->code, token::Error::LineBreakInChar);
+}
+
 // Floats
 
 TEST(lexer_float, f64_default) {

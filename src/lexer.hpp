@@ -14,8 +14,9 @@ struct Lexer {
 private:
     bool inComment = false;
     bool inString = false;
+    bool inCharLiteral = false;
     bool readingToken = false;
-    bool stringEscape = false;
+    bool escape = false;
 
     std::string currentTokenStr;
 

@@ -19,6 +19,23 @@ bool isNumber(const std::string &str) {
             && std::isdigit(str[1])
             && (str[0] == '-' || str[0] == '+'));
 }
+
+void escapeChar(char c, std::string& str) {
+    if (std::isdigit(c)) {
+        str += (c - '0');
+        return;
+    }
+    switch (c) {
+    case 'n':
+        str += '\n';
+        break;
+    case 't':
+        str += '\t';
+        break;
+    default:
+        str += c;
+    }
+}
 }
 
 Lexer::Tokens Lexer::lex(std::istream *stream) {
@@ -30,6 +47,13 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
                                                                 std::make_unique<token::StringLiteral>(currentTokenStr)));
                 inString = false;
             }
+            if (inCharLiteral) {
+                tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInChar,
+                                                                nullptr));
+                inCharLiteral = false;
+            }
+            currentTokenStr.clear();
+
             inComment = false;
             col = 0;
             line++;
@@ -41,20 +65,11 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
         if (inComment) {
             continue;
         } else if (inString) {
-            if (stringEscape) {
-                stringEscape = false;
-                switch (c) {
-                case 'n':
-                    currentTokenStr += '\n';
-                    break;
-                case 't':
-                    currentTokenStr += '\t';
-                    break;
-                default:
-                    currentTokenStr += c;
-                }
+            if (escape) {
+                escape = false;
+                escapeChar(c, currentTokenStr);
             } else if (c == '\\') {
-                stringEscape = true;
+                escape = true;
             } else if (c == '"') {
                 fc_assert(inString);
                 inString = false;
@@ -63,6 +78,29 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
             } else {
                 currentTokenStr += c;
             }
+        } else if (inCharLiteral) {
+            if (escape) {
+                escape = false;
+                escapeChar(c, currentTokenStr);
+            } else if (c == '\\') {
+                escape = true;
+            } else if (c == '\'') {
+                fc_assert(inCharLiteral);
+                inCharLiteral = false;
+                if (currentTokenStr.size() > 1) {
+                    tokens.push_back(std::make_unique<token::Error>(token::Error::CharLiteralTooLong, nullptr));
+                } else {
+                    fc_assert(!currentTokenStr.empty());
+                    tokens.push_back(std::make_unique<token::CharLiteral>(currentTokenStr[0]));
+                }
+                currentTokenStr.clear();
+            } else {
+                currentTokenStr += c;
+            }
+        } else if (c == '\'') {
+            fc_assert(!inCharLiteral);
+            inCharLiteral = true;
+            pushToken();
         } else if (c == '"') {
             fc_assert(!inString);
             inString = true;
@@ -82,8 +120,13 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
         }
     }
     fc_assert(stream->eof());
-    fc_assert(inString == false);
-    if (!currentTokenStr.empty()) pushToken();
+    if (inString) {
+        tokens.push_back(std::make_unique<token::Error>(token::Error::EOFInString, nullptr));
+    } else if (inCharLiteral) {
+        tokens.push_back(std::make_unique<token::Error>(token::Error::EOFInChar, nullptr));
+    } else if (!currentTokenStr.empty()) {
+        pushToken();
+    }
     return std::move(tokens);
 }
 
