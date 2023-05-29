@@ -61,16 +61,17 @@ BooleanLiteral::BooleanLiteral(bool value)
     : Token(Type::BooleanLiteral)
     , value(value) {}
 
-IntegerLiteral::IntegerLiteral(uint64_t _value, bool isSigned, uint32_t bits)
+IntegerLiteral::IntegerLiteral(uint64_t _value, uint32_t bits)
     : Token(Type::IntegerLiteral)
-    , isSigned(isSigned)
-    , bits(bits) {
-    if (isSigned) {
-        value = static_cast<int64_t>(_value);
-    } else {
-        value = static_cast<uint64_t>(_value);
-    }
-}
+    , value(static_cast<uint64_t>(_value))
+    , isSigned(false)
+    , bits(bits) {}
+
+IntegerLiteral::IntegerLiteral(int64_t _value, uint32_t bits)
+    : Token(Type::IntegerLiteral)
+    , value(static_cast<int64_t>(_value))
+    , isSigned(true)
+    , bits(bits) {}
 
 CharLiteral::CharLiteral(uint8_t value)
     : Token(Type::CharLiteral)
