@@ -25,7 +25,7 @@ TEST(lexer_int, signed_) {
     const std::string i = "123";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -40,7 +40,7 @@ TEST(lexer_int, signed_sign) {
     const std::string i = "-123";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     checkError(res[0]);
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
@@ -58,7 +58,7 @@ TEST(lexer_int, signed_suffix) {
     Lexer l;
     std::istringstream is(i);
     auto res = l.lex(&is);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -75,7 +75,7 @@ TEST(lexer_int, signed_bits_normal) {
     Lexer l;
     std::istringstream is(i);
     auto res = l.lex(&is);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -92,7 +92,7 @@ TEST(lexer_int, signed_bits_exceeded) {
     Lexer l;
     std::istringstream is(i);
     auto res = l.lex(&is);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::Error);
     auto r = res[0]->as<token::Error>();
@@ -124,7 +124,7 @@ TEST(lexer_int, unsigned_bits_normal) {
     const std::string i = "123u8";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -139,7 +139,7 @@ TEST(lexer_int, unsigned_bits_value_overflow) {
     const std::string i = "123u129";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::Error);
     auto r = res[0]->as<token::Error>();
@@ -157,7 +157,7 @@ TEST(lexer_int, hex_signed) {
     const std::string i = "0x7Fi8";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     checkError(res[0]);
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
@@ -173,7 +173,7 @@ TEST(lexer_int, hex_signed_overflow_literal) {
     const std::string i = "0xFFi8";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -188,7 +188,7 @@ TEST(lexer_int, hex_unsigned) {
     const std::string i = "0xFFu8";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     auto r = res[0]->as<token::IntegerLiteral>();
@@ -204,7 +204,7 @@ TEST(lexer_char, simple) {
     const std::string i = "'a'";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::CharLiteral);
     auto r = res[0]->as<token::CharLiteral>();
@@ -217,7 +217,7 @@ TEST(lexer_char, escapes) {
     const std::string i = "'\\0' '\\1' '\\2' '\\3' '\\4' '\\5' '\\6' '\\7' '\\8' '\\9' '\\n' '\\t'";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 12);
+    ASSERT_EQ(res.size(), 13);
 
     checkError(res[0]);
     ASSERT_EQ(res[0]->type, token::Type::CharLiteral);
@@ -295,7 +295,7 @@ TEST(lexer_char, too_much_bytes_inside) {
     const std::string i = "'\\nn' 'ab' '😠'";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 3);
+    ASSERT_EQ(res.size(), 4);
 
     ASSERT_EQ(res[0]->type, token::Type::Error);
     auto r = res[0]->as<token::Error>();
@@ -323,7 +323,7 @@ TEST(lexer_char, eof_in_literal) {
 TEST(lexer_char, line_break_in_literal) {
     const std::string i = "'a\n";
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::Error);
     auto r = res[0]->as<token::Error>();
@@ -336,7 +336,7 @@ TEST(lexer_float, f64_default) {
     const std::string i = "123.34";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
     auto r = res[0]->as<token::FloatLiteral>();
@@ -350,7 +350,7 @@ TEST(lexer_float, f64_suffix) {
     const std::string i = "123.34f64";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -365,7 +365,7 @@ TEST(lexer_float, f64_suffix_no_period) {
     const std::string i = "123f64";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -380,7 +380,7 @@ TEST(lexer_float, f64_hex) {
     const std::string i = "0xA1p0";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -395,7 +395,7 @@ TEST(lexer_float, f64_scientific) {
     const std::string i = "123.34e-2";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -410,7 +410,7 @@ TEST(lexer_float, f64_scientific_suffix) {
     const std::string i = "123.34e-2f64";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -425,7 +425,7 @@ TEST(lexer_float, f64_hex_suffix) {
     const std::string i = "0xA1.B2p0f64";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -440,7 +440,7 @@ TEST(lexer_float, f32_suffix) {
     const std::string i = "123.34f32";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -455,7 +455,7 @@ TEST(lexer_float, f32_suffix_no_period) {
     const std::string i = "123f32";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -470,7 +470,7 @@ TEST(lexer_float, f32_scientific) {
     const std::string i = "123.34e-2f32";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -485,7 +485,7 @@ TEST(lexer_float, f32_hex) {
     const std::string i = "0xA1.B2p0f32";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::FloatLiteral);
@@ -501,7 +501,7 @@ TEST(lexer_id, boolean_true) {
     const std::string i = "true";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::BooleanLiteral);
@@ -515,7 +515,7 @@ TEST(lexer_id, boolean_true_negative_case) {
     const std::string i = "True";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::Id);
@@ -529,7 +529,7 @@ TEST(lexer_id, boolean_false) {
     const std::string i = "false";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::BooleanLiteral);
@@ -543,7 +543,7 @@ TEST(lexer_id, boolean_false_negative_case) {
     const std::string i = "False";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::Id);
@@ -557,7 +557,7 @@ TEST(lexer_id, id_default) {
     const std::string i = "some-id";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::Id);
@@ -571,7 +571,7 @@ TEST(lexer_id, id_non_ascii) {
     const std::string i = "識別名";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::Id);
@@ -585,7 +585,7 @@ TEST(lexer_id, id_emoji) {
     const std::string i = "🤔";
 
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 1);
+    ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::Id);
@@ -595,12 +595,38 @@ TEST(lexer_id, id_emoji) {
     EXPECT_EQ(r->id, "🤔");
 }
 
+TEST(lexer_keyword, simple) {
+    const std::string i = ":a :b :::c :what-ever";
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 5);
+
+    ASSERT_EQ(res[0]->type, token::Type::Keyword);
+    auto r = res[0]->as<token::Keyword>();
+    ASSERT_NE(r, nullptr);
+    EXPECT_EQ(r->name, "a");
+
+    ASSERT_EQ(res[1]->type, token::Type::Keyword);
+    r = res[1]->as<token::Keyword>();
+    ASSERT_NE(r, nullptr);
+    EXPECT_EQ(r->name, "b");
+
+    ASSERT_EQ(res[2]->type, token::Type::Keyword);
+    r = res[2]->as<token::Keyword>();
+    ASSERT_NE(r, nullptr);
+    EXPECT_EQ(r->name, "::c");
+
+    ASSERT_EQ(res[3]->type, token::Type::Keyword);
+    r = res[3]->as<token::Keyword>();
+    ASSERT_NE(r, nullptr);
+    EXPECT_EQ(r->name, "what-ever");
+}
+
 // Strings
 TEST(lexer_string, string_default) {
     const std::string i = "\"this is a string\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    EXPECT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::StringLiteral);
@@ -614,7 +640,7 @@ TEST(lexer_string, string_escape_newline) {
     const std::string i = "\"this is a line\\nbreak\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    EXPECT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::StringLiteral);
@@ -628,7 +654,7 @@ TEST(lexer_string, string_escape_dquote) {
     const std::string i = "\"this is a \\\"quote\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    EXPECT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::StringLiteral);
@@ -642,7 +668,7 @@ TEST(lexer_string, string_with_parens) {
     const std::string i = "\"(this) () is ((a ))) string))((with parens!\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    EXPECT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::StringLiteral);
@@ -656,7 +682,7 @@ TEST(lexer_string, string_with_parens_and_semicolons) {
     const std::string i = "\"(this; () is ;;;a  string))((;;with parens and semicolons!\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 1);
+    EXPECT_EQ(res.size(), 2);
     checkError(res[0]);
 
     ASSERT_EQ(res[0]->type, token::Type::StringLiteral);
@@ -672,13 +698,13 @@ TEST(lexer_compounds, comment) {
     const std::string i = "; after comment all is ignored\"(this; () is ;;;a  string))((;;with parens and semicolons!\"";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 0);
+    EXPECT_EQ(res.size(), 1);
 }
 
 TEST(lexer_compounds, comment_and_string) {
     const std::string i = "123; comment ends when line ends 123\n\"String on new line\"";
     auto res = processString(i);
-    ASSERT_EQ(res.size(), 2);
+    ASSERT_EQ(res.size(), 3);
 
     ASSERT_EQ(res[0]->type, token::Type::IntegerLiteral);
     ASSERT_EQ(res[1]->type, token::Type::StringLiteral);
@@ -696,7 +722,7 @@ TEST(lexer_compounds, simple_1) {
     const std::string i = "()";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 2);
+    EXPECT_EQ(res.size(), 3);
 
     EXPECT_EQ(res[0]->type, token::Type::LParen);
     EXPECT_EQ(res[1]->type, token::Type::RParen);
@@ -706,7 +732,7 @@ TEST(lexer_compounds, simple_2) {
     const std::string i = "(+ 123u8 345u16)";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 5);
+    EXPECT_EQ(res.size(), 6);
 
     EXPECT_EQ(res[0]->type, token::Type::LParen);
 
@@ -722,13 +748,14 @@ TEST(lexer_compounds, simple_2) {
     EXPECT_EQ(res[3]->as<token::IntegerLiteral>()->bits, 16u);
 
     EXPECT_EQ(res[4]->type, token::Type::RParen);
+    EXPECT_EQ(res[5]->type, token::Type::EndOfFile);
 }
 
 TEST(lexer_compounds, compound_1) {
     const std::string i = "(format true \"{} {}\\n\" \"The result:\" (* a b c 0x12u8)) ; printing";
 
     auto res = processString(i);
-    EXPECT_EQ(res.size(), 13);
+    EXPECT_EQ(res.size(), 14);
 
     EXPECT_EQ(res[0]->type, token::Type::LParen);
 

@@ -126,7 +126,11 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
         tokens.push_back(std::make_unique<token::Error>(token::Error::EOFInChar, nullptr));
     } else if (!currentTokenStr.empty()) {
         pushToken();
+        tokens.push_back(std::make_unique<token::EndOfFile>());
+    } else {
+        tokens.push_back(std::make_unique<token::EndOfFile>());
     }
+
     return std::move(tokens);
 }
 
@@ -141,6 +145,8 @@ void Lexer::pushToken() {
             tokens.push_back(std::make_unique<token::BooleanLiteral>(true));
         } else if (currentTokenStr == "false") {
             tokens.push_back(std::make_unique<token::BooleanLiteral>(false));
+        } else if (currentTokenStr[0] == ':') {
+            tokens.push_back(std::make_unique<token::Keyword>(currentTokenStr));
         } else {
             tokens.push_back(std::make_unique<token::Id>(currentTokenStr));
         }

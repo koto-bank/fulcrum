@@ -13,12 +13,15 @@ enum class Type : uint32_t {
     LParen,
     RParen,
     Id,
+    Keyword,
 
     BooleanLiteral,
     IntegerLiteral,
     CharLiteral,
     FloatLiteral,
     StringLiteral,
+
+    EndOfFile,
 };
 
 struct Token {
@@ -83,6 +86,11 @@ struct Id final : public Token {
     std::string id;
 };
 
+struct Keyword final : public Token {
+    Keyword(const std::string &name);
+    const std::string name;
+};
+
 struct BooleanLiteral final : public Token {
     BooleanLiteral(bool value);
 
@@ -127,5 +135,9 @@ struct FloatLiteral final : public Token {
 struct StringLiteral final : Token {
     StringLiteral(const std::string &contents);
     std::string contents;
+};
+
+struct EndOfFile final : Token {
+    EndOfFile();
 };
 }
