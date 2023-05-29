@@ -166,7 +166,7 @@ std::unique_ptr<token::Token> Lexer::readNumber() {
     }
 
     if (end == strEnd) {
-        return std::make_unique<token::IntegerLiteral>(intRes, true, 32u);
+        return std::make_unique<token::IntegerLiteral>(static_cast<int64_t>(intRes), 32u);
     } else if (*end == '.' || *end == 'f' || *end == 'p') {
         // 'p' for hex exponent in floats
         goto extractFloat;
@@ -189,11 +189,20 @@ std::unique_ptr<token::Token> Lexer::readNumber() {
             bits = std::strtol(end, &bitsEnd, 0);
             fc_assert(bitsEnd == strEnd || isDelimiter(*bitsEnd));
             if (bits > 128u || bits <= 0) {
-                return std::make_unique<token::Error>(token::Error::IntegerBadBitSize,
-                                                      std::make_unique<token::IntegerLiteral>(intRes, isSigned, bits));
+                if (isSigned) {
+                    return std::make_unique<token::Error>(token::Error::IntegerBadBitSize,
+                                                          std::make_unique<token::IntegerLiteral>(static_cast<int64_t>(intRes), bits));
+                } else {
+                    return std::make_unique<token::Error>(token::Error::IntegerBadBitSize,
+                                                          std::make_unique<token::IntegerLiteral>(static_cast<uint64_t>(intRes), bits));
+                }
             }
         }
-        return std::make_unique<token::IntegerLiteral>(intRes, isSigned, bits);
+        if (isSigned) {
+            return std::make_unique<token::IntegerLiteral>(static_cast<int64_t>(intRes), bits);
+        } else {
+            return std::make_unique<token::IntegerLiteral>(static_cast<uint64_t>(intRes), bits);
+        }
     }
 
     // Floats
