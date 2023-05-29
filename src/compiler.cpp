@@ -139,7 +139,7 @@ private:
         llvm::SmallString<64> OutputFile;
         llvm::sys::fs::createTemporaryFile("print-resource-dir-output", "", OutputFile);
         llvm::FileRemover OutputRemover(OutputFile.c_str());
-        llvm::Optional<llvm::StringRef> Redirects[] = { llvm::None, llvm::StringRef(OutputFile), llvm::None };
+        llvm::Optional<llvm::StringRef> Redirects[] = { std::nullopt, llvm::StringRef(OutputFile), std::nullopt };
         llvm::sys::ExecuteAndWait(clangPath, PrintResourceDirArgs, {}, Redirects);
 
         auto OutputBuf = llvm::MemoryBuffer::getFile(OutputFile.c_str());
