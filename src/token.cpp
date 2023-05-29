@@ -50,6 +50,13 @@ Id::Id(const std::string& id)
     : Token(Type::Id)
     , id(id) {}
 
+Keyword::Keyword(const std::string &_name)
+    : Token(Type::Keyword)
+    , name(_name.substr(1)) {
+    fc_assert(_name.length() >= 2);
+    fc_assert(_name[0] == ':');
+}
+
 BooleanLiteral::BooleanLiteral(bool value)
     : Token(Type::BooleanLiteral)
     , value(value) {}
@@ -77,4 +84,7 @@ FloatLiteral::FloatLiteral(double value, uint32_t bits)
 StringLiteral::StringLiteral(const std::string& contents)
     : Token(Type::StringLiteral)
     , contents(contents) {}
+
+EndOfFile::EndOfFile()
+    : Token(Type::EndOfFile) {}
 }
