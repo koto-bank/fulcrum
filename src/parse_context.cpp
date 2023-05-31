@@ -3,6 +3,23 @@
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 
+namespace {
+std::string resolveName(ModuleNode *module, const std::string &name) {
+    auto isNamespaced = name != "/" && name.find('/') != name.npos;
+
+    std::string fullName;
+    if (isNamespaced) {
+        fullName = name;
+    } else if (module->importedNames.contains(name)) {
+        fullName = module->importedNames[name];
+    } else {
+        fullName = fmt::format("{}/{}", module->name, name);
+    }
+
+    return fullName;
+}
+}
+
 ASTBuiltinType::ASTBuiltinType(std::string name)
     : builtinName(name) {}
 
@@ -287,19 +304,4 @@ void ModuleNode::importName(const std::string &baseName, const std::string &full
     }
 
     importedNames[baseName] = fullName;
-}
-
-std::string resolveName(ModuleNode *module, const std::string &name) {
-    auto isNamespaced = name != "/" && name.find('/') != name.npos;
-
-    std::string fullName;
-    if (isNamespaced) {
-        fullName = name;
-    } else if (module->importedNames.contains(name)) {
-        fullName = module->importedNames[name];
-    } else {
-        fullName = fmt::format("{}/{}", module->name, name);
-    }
-
-    return fullName;
 }
