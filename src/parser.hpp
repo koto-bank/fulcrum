@@ -1,23 +1,19 @@
 #pragma once
 
+#include <filesystem>
+#include <functional>
+#include <istream>
 #include <memory>
 #include <string>
 
-#include "parse_context.hpp"
 #include "lexer.hpp"
-
-struct CodegenContext;
 
 class Parser {
 public:
-    // parse stdin
-    bool parse(CodegenContext *code);
-
-    // parse file
-    bool parse(CodegenContext *code, const std::filesystem::path &path);
-
-    // get result
-    std::unique_ptr<ModuleNode> getResult();
+    bool parse(); // parse stdin
+    bool parse(const std::filesystem::path &path);
+    bool parse(std::istream *stream);
+    bool parse(const std::string &str);
 
     struct ParsingError {
         std::string fileName;
@@ -30,33 +26,38 @@ public:
     std::vector<ParsingError> getErrors();
     void dumpErrors();
 
+    struct Expression {
+        Expression() = default;
+        Expression(Expression *parent);
+
+        Expression *parent = nullptr;
+        token::Token *token = nullptr; // lists have nullptr, terminals -- a corresponding token
+        std::vector<Expression> children;
+
+        void dump(uint32_t indent = 0u) const;
+    };
+
+    const Expression *getSyntaxTree() const;
+
 private:
-    bool parse();
+    bool process(std::istream *stream);
+    bool parseProgram();
+    bool parseExpression();
 
-    // Top level
-    bool parseModule(CodegenContext *code);
-    bool parseAlias(CodegenContext *code);
-    bool parseStructrueDef(CodegenContext *code);
-    bool parseFnDef(CodegenContext *code);
+    bool parseList();
+    bool parseTerminal();
+    bool parseEndOfInput();
 
-    // Types and literals
-    bool parseType(CodegenContext *code);
-    bool parseArray(CodegenContext *code);
-    bool parseInteger(CodegenContext *code);
-    bool parseFloat(CodegenContext *code);
-    bool parseString(CodegenContext *code);
-    bool parseBool(CodegenContext *code);
+    bool matchNextToken(token::Type expectedType);
+    bool matchAndPushNextToken(token::Type expectedType);
 
-    std::unique_ptr<std::ifstream> file;
-    CodegenContext *code = nullptr;
-    std::istream *stream = nullptr;
+    void pushExpression();
+    void popExpression();
+
+    Expression syntaxTree;
+    Expression *currentExpression;
 
     std::vector<ParsingError> parsingErrors;
-
-    std::unique_ptr<ParseContext> ctx;
-    std::unique_ptr<ModuleNode> parsedModule;
-
-    void lex();
-
-    Lexer lexer;
+    Lexer::Tokens tokens {};
+    Lexer::Tokens::iterator nextToken {};
 };

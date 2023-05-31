@@ -234,6 +234,7 @@ struct ModuleNode : ASTNode {
     std::vector<std::unique_ptr<VariableDeclarationNode>> globalVariables;
 
     ModuleNode(std::string name);
+    ModuleNode() = default;
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
@@ -271,7 +272,3 @@ struct ParseContext {
 
     size_t arraySize;
 };
-
-std::unique_ptr<ModuleNode> parse(CodegenContext *, std::istream *input);
-
-std::string resolveName(ModuleNode *module, const std::string &name);

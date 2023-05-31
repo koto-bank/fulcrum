@@ -609,12 +609,16 @@ void processImportsRecursive(std::vector<ModuleNode::Import> moduleImports,
             if (!found) throw CodegenError(fmt::format("Could not find the module {}", import.target));
 
             Parser parser;
-            auto res = parser.parse(&codegenCont, targetPath);
+            auto res = parser.parse(targetPath);
             if (res == false)
                 throw CodegenError(
                     fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
                     );
-            auto moduleAST = parser.getResult();
+
+            auto codegen = [](CodegenContext *, const Parser::Expression *) {
+                return std::make_unique<ModuleNode>("temp");
+            };
+            auto moduleAST = codegen(&codegenCont, parser.getSyntaxTree());
             if (moduleAST->name != import.target)
                 throw CodegenError(fmt::format(
                                        "Module was imported as {}, but the name declared in the module was {}", import.target,
@@ -695,9 +699,9 @@ args::ArgumentParser argParser("fulcrum");
     Parser parser;
     bool res = false;
     if (!fileArg) {
-        res = parser.parse(&codegenCont);
+        res = parser.parse();
     } else {
-        res = parser.parse(&codegenCont, fileArg.Get());
+        res = parser.parse(fileArg.Get());
     }
 
     if (!res) {
@@ -705,7 +709,11 @@ args::ArgumentParser argParser("fulcrum");
         return 1;
     }
 
-    moduleAST = parser.getResult();
+    auto codegen = [](CodegenContext *, const Parser::Expression *) {
+        return std::make_unique<ModuleNode>("temp");
+    };
+
+    moduleAST = codegen(&codegenCont, parser.getSyntaxTree());
     if (moduleAST == nullptr) {
         std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
         return 1;
