@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <variant>
@@ -142,3 +143,4 @@ struct EndOfFile final : Token {
     EndOfFile();
 };
 }
+std::ostream &operator<<(std::ostream &os, const token::Type &);
