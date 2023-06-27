@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #include "parser.hpp"
 #include "codegen_context.hpp"
