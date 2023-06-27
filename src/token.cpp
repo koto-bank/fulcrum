@@ -89,3 +89,42 @@ StringLiteral::StringLiteral(const std::string& contents)
 EndOfFile::EndOfFile()
     : Token(Type::EndOfFile) {}
 }
+
+std::ostream &operator<<(std::ostream &os, const token::Type &type) {
+    switch (type) {
+    case token::Type::Error:
+        os << "Error";
+        break;
+    case token::Type::LParen:
+        os << "LParen";
+        break;
+    case token::Type::RParen:
+        os << "RParen";
+        break;
+    case token::Type::Id:
+        os << "Id";
+        break;
+    case token::Type::Keyword:
+        os << "Keyword";
+        break;
+    case token::Type::BooleanLiteral:
+        os << "BooleanLiteral";
+        break;
+    case token::Type::IntegerLiteral:
+        os << "IntegerLiteral";
+        break;
+    case token::Type::CharLiteral:
+        os << "CharLiteral";
+        break;
+    case token::Type::FloatLiteral:
+        os << "FloatLiteral";
+        break;
+    case token::Type::StringLiteral:
+        os << "StringLiteral";
+        break;
+    case token::Type::EndOfFile:
+        os << "EndOfFile";
+        break;
+    }
+    return os;
+}
