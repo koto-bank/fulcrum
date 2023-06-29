@@ -43,6 +43,8 @@ struct Token {
         return static_cast<T *>(this);
 #endif
     }
+
+    auto operator<=>(const Token &other) const = default;
 };
 
 struct Error final : public Token {
@@ -99,8 +101,8 @@ struct BooleanLiteral final : public Token {
 };
 
 struct IntegerLiteral final : public Token {
-    IntegerLiteral(int64_t value, uint32_t bits);
-    IntegerLiteral(uint64_t value, uint32_t bits);
+    explicit IntegerLiteral(int64_t value, uint32_t bits);
+    explicit IntegerLiteral(uint64_t value, uint32_t bits);
 
     const std::variant<uint64_t, int64_t> value;
     const bool isSigned;
@@ -142,5 +144,17 @@ struct StringLiteral final : Token {
 struct EndOfFile final : Token {
     EndOfFile();
 };
+
+template <typename T>
+auto classToType() {
+    if constexpr (std::is_same_v<T, Id>) { return Type::Id; }
+    else if (std::is_same_v<T, Keyword>) { return Type::Keyword; }
+    else if (std::is_same_v<T, BooleanLiteral>) { return Type::BooleanLiteral; }
+    else if (std::is_same_v<T, IntegerLiteral>) { return Type::IntegerLiteral; }
+    else if (std::is_same_v<T, CharLiteral>) { return Type::CharLiteral; }
+    else if (std::is_same_v<T, FloatLiteral>) { return Type::FloatLiteral; }
+    else if (std::is_same_v<T, StringLiteral>) { return Type::StringLiteral; }
 }
+}
+
 std::ostream &operator<<(std::ostream &os, const token::Type &);
