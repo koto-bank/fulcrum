@@ -46,15 +46,19 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
                 tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInString,
                                                                 std::make_unique<token::StringLiteral>(currentTokenStr)));
                 inString = false;
-            }
-            if (inCharLiteral) {
+                currentTokenStr.clear();
+            } else if (inCharLiteral) {
                 tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInChar,
                                                                 nullptr));
                 inCharLiteral = false;
+                currentTokenStr.clear();
+            } else if (inComment) {
+                inComment = false;
+            } else {
+                // id or something idk, lines end all the time
+                pushToken();
             }
-            currentTokenStr.clear();
 
-            inComment = false;
             col = 0;
             line++;
             continue;
