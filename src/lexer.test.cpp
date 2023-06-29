@@ -595,6 +595,42 @@ TEST(lexer_id, id_emoji) {
     EXPECT_EQ(r->id, "🤔");
 }
 
+TEST(lexer_id, id_and_newline) {
+    const std::string i = "some-id\n";
+
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 2);
+    checkError(res[0]);
+
+    ASSERT_EQ(res[0]->type, token::Type::Id);
+    auto r = res[0]->as<token::Id>();
+    ASSERT_NE(r, nullptr);
+
+    EXPECT_EQ(r->id, "some-id");
+}
+
+TEST(lexer_id, multiple_ids_and_newlines) {
+    const std::string i = "id-1\nid-2\n";
+
+    auto res = processString(i);
+    ASSERT_EQ(res.size(), 3);
+    checkError(res[0]);
+
+    ASSERT_EQ(res[0]->type, token::Type::Id);
+    auto r = res[0]->as<token::Id>();
+    ASSERT_NE(r, nullptr);
+
+    EXPECT_EQ(r->id, "id-1");
+
+    checkError(res[1]);
+
+    ASSERT_EQ(res[1]->type, token::Type::Id);
+    r = res[1]->as<token::Id>();
+    ASSERT_NE(r, nullptr);
+
+    EXPECT_EQ(r->id, "id-2");
+}
+
 TEST(lexer_keyword, simple) {
     const std::string i = ":a :b :::c :what-ever";
     auto res = processString(i);
