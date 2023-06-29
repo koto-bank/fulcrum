@@ -23,6 +23,7 @@ add_library(${FULCRUM_LIB} OBJECT
   "src/token.cpp"
   "src/lexer.cpp"
   "src/parse_context.cpp"
+  "src/tree_matcher.cpp"
   "src/types.cpp")
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
