@@ -88,6 +88,14 @@ StringLiteral::StringLiteral(const std::string& contents)
 
 EndOfFile::EndOfFile()
     : Token(Type::EndOfFile) {}
+
+bool operator==(const token::IntegerLiteral &l, const token::IntegerLiteral &r) {
+    return l.isSigned == r.isSigned
+        && l.bits == r.bits
+        && l.value == r.value
+        && l.line == r.line
+        && l.col == r.col;
+}
 }
 
 std::ostream &operator<<(std::ostream &os, const token::Type &type) {
