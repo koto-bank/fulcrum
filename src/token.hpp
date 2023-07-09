@@ -28,6 +28,9 @@ enum class Type : uint32_t {
 struct Token {
     const Type type = Type::Error;
 
+    uint32_t line = 0u;
+    uint32_t col = 0u;
+
     Token(Type type);
     Token() = delete;
 
