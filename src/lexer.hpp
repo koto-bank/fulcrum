@@ -29,4 +29,13 @@ private:
 
     std::unique_ptr<token::Token> readNumber();
     std::unique_ptr<token::Token> readToken(const std::string &str);
+
+    template <uint32_t code, typename T, typename ...Args>
+    void pushError(Args &&...args);
+
+    template <uint32_t code>
+    void pushError();
+
+    template <typename T, typename ...Args>
+    void pushToken(Args &&...args);
 };
