@@ -28,4 +28,10 @@ TreeMatcher &TreeMatcher::build() {
 TreeMatcher create() {
     return TreeMatcher {};
 }
+
+List createList(List &&list) {
+    List l;
+    l.construct(std::move(list));
+    return l;
+}
 }

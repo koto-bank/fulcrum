@@ -83,15 +83,12 @@ struct Node : NodeBase {
 };
 
 struct List : Expr {
-    List() = default;
-    List(List &&) = delete;
-
     template <typename ...Args>
     List(Args &&...args) {
         construct(std::forward<Args>(args)...);
     }
 
-    void construct() {};
+    void construct() {}
 
     template <typename ...Args>
     void construct(List &&l, Args &&...args) {
@@ -141,6 +138,14 @@ struct List : Expr {
 
     std::vector<std::unique_ptr<Expr>> exprs;
 };
+
+// helper
+List createList(List &&list);
+
+template <typename ...Args>
+auto createList(Args &&...args) {
+    return List(std::forward<Args>(args)...);
+}
 
 template <typename ...Args>
 bool TreeMatcher::match(const Parser::Expression *tree, Args &&...args) {
