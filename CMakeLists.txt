@@ -36,16 +36,6 @@ target_compile_definitions(${FULCRUM_LIB} PUBLIC ${LLVM_DEFINITIONS_LIST})
 
 llvm_map_components_to_libnames(llvm_libs support)
 
-set(GRAMMAR_DIR "${CMAKE_BINARY_DIR}/grammar")
-file(MAKE_DIRECTORY ${GRAMMAR_DIR})
-set(GRAMMAR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/grammar.leg")
-add_custom_command(
-  OUTPUT "${GRAMMAR_DIR}/generated_parser.cpp"
-  DEPENDS "${GRAMMAR_SRC}"
-  COMMAND leg -o "${GRAMMAR_DIR}/generated_parser.cpp" "${GRAMMAR_SRC}"
-  VERBATIM
-)
-
 add_subdirectory(deps/fmt)
 
 option(ARGS_BUILD_EXAMPLE "" OFF)
@@ -62,5 +52,4 @@ target_link_libraries(${FULCRUM_LIB} fmt args LLVM libclang clang-cpp ${llvm_lib
 add_executable(${FULCRUM_COMPILER} "src/main.cpp" $<TARGET_OBJECTS:${FULCRUM_LIB}>)
 target_compile_definitions(${FULCRUM_COMPILER} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB})
-#target_include_directories(${FULCRUM_COMPILER} PRIVATE ${FULCRUM_INCLUDE_DIRS})
 target_compile_options(${FULCRUM_COMPILER} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
