@@ -46,8 +46,8 @@ public:
     llvm::Function *llvmFunction();
 
     bool generateTerminates = false;
-    void
-    generateExpressions(ExpressionGenContext &genContext, const std::vector<std::unique_ptr<Expression>> &expressions);
+    void generateExpressions(ExpressionGenContext &genContext,
+                             const std::vector<std::unique_ptr<Expression>> &expressions);
     void generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
 
     void generateBody(ExpressionGenContext &builder);
@@ -73,7 +73,7 @@ class StackedCodegenErrors : public CodegenError {
     mutable std::string indentedMsg;
 
 public:
-    StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors);
+    StackedCodegenErrors(const std::string &message, std::vector<std::unique_ptr<CodegenError>> &&errors);
 
     const char *what() const noexcept override;
 
