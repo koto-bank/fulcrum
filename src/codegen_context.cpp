@@ -108,7 +108,7 @@ const char *CodegenError::whatIndented(int indent) const {
     return indentedMessage.data();
 }
 
-StackedCodegenErrors::StackedCodegenErrors(std::string message, std::vector<std::unique_ptr<CodegenError>> &&errors)
+StackedCodegenErrors::StackedCodegenErrors(const std::string &message, std::vector<std::unique_ptr<CodegenError>> &&errors)
     : CodegenError(message),
       errors(std::move(errors)) {}
 

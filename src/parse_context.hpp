@@ -195,7 +195,7 @@ struct VariableDeclarationNode : ASTNode {
     std::unique_ptr<ASTType> type;
     std::string name;
 
-    VariableDeclarationNode(std::string name);
+    VariableDeclarationNode(const std::string &name);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
     void emplaceGlobalVar(ModuleNode *module, CodegenContext &context);

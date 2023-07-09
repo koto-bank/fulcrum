@@ -212,7 +212,7 @@ std::unique_ptr<Expression> DereferenceNode::expression(ModuleNode *module, Code
     return std::make_unique<Dereference>(target->expression(module, context));
 }
 
-VariableDeclarationNode::VariableDeclarationNode(std::string name)
+VariableDeclarationNode::VariableDeclarationNode(const std::string &name)
     : name(name) {}
 
 std::unique_ptr<Expression> VariableDeclarationNode::expression(ModuleNode *module, CodegenContext &context) {
