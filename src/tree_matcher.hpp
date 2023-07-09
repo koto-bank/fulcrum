@@ -66,9 +66,8 @@ struct Node : NodeBase {
         if (matcher.exprTypeMatcher != nullptr) {
             matcher.exprTypeMatcher(isNode ? ExprType::Node : ExprType::List, ExprType::Node);
         }
-        if (!isNode) {
-            return false;
-        }
+        fc_assert(isNode);
+
         if (matcher.nodeTypeMatcher != nullptr) {
             matcher.nodeTypeMatcher(node->token->type, this->type);
         }
@@ -122,20 +121,18 @@ struct List : Expr {
         if (matcher.exprTypeMatcher != nullptr) {
             matcher.exprTypeMatcher(isList ? ExprType::List : ExprType::Node, ExprType::List);
         }
-        if (!isList) {
-            return false;
-        }
+        fc_assert(isList);
         auto parsedSize = list->children.size();
         auto expectedSize = size();
         if (matcher.listSizeMatcher != nullptr) {
             matcher.listSizeMatcher(parsedSize, expectedSize);
         }
-        if (parsedSize != expectedSize) {
-            return false;
-        }
         bool res = true;
-        for (auto i = 0u; res && i < size(); i++) {
-            res = res && exprs[i]->match(&list->children[i], matcher);
+        if (parsedSize != expectedSize) {
+            res = false;
+        }
+        for (auto i = 0u; i < size(); i++) {
+            res = exprs[i]->match(&list->children[i], matcher) && res;
         }
         return res;
     }
