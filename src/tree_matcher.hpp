@@ -5,6 +5,7 @@
 #include "parser.hpp"
 
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -40,6 +41,7 @@ TreeMatcher create();
 struct Expr {
     virtual ~Expr() = default;
     virtual bool match(const Parser::Expression *, const TreeMatcher &) const = 0;
+    virtual void dump(uint32_t indent) const = 0;
 };
 
 struct NodeBase : Expr {
@@ -81,6 +83,13 @@ struct Node : NodeBase {
             matcher.nodeMatcher(t, token);
         }
         return t == token;
+    }
+
+    void dump(uint32_t indent) const override {
+        for (auto i = indent * 4; i > 0; i--) {
+            std::cout << " ";
+        }
+        std::cout << token.type << '\n';
     }
 
     T token;
@@ -129,6 +138,25 @@ struct List : Expr {
             res = res && exprs[i]->match(&list->children[i], matcher);
         }
         return res;
+    }
+
+    void dump(uint32_t indent) const override {
+        for (auto i = indent * 4; i > 0; i--) {
+            std::cout << " ";
+        }
+        if (exprs.empty()) {
+            std::cout << "()\n";
+            return;
+        } else {
+            std::cout << "( ; size is " << size() << '\n';
+            for (const auto &c : exprs) {
+                c->dump(indent + 1);
+            }
+            for (auto i = indent * 4; i > 0; i--) {
+                std::cout << " ";
+            }
+            std::cout << ")\n";
+        }
     }
 
     template <typename T>
