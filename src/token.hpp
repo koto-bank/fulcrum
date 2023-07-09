@@ -157,6 +157,7 @@ auto classToType() {
     else if (std::is_same_v<T, CharLiteral>) { return Type::CharLiteral; }
     else if (std::is_same_v<T, FloatLiteral>) { return Type::FloatLiteral; }
     else if (std::is_same_v<T, StringLiteral>) { return Type::StringLiteral; }
+    else if (std::is_same_v<T, Error>) { return Type::Error; }
 }
 }
 
