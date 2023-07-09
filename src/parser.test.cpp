@@ -4,7 +4,9 @@
 #include "tree_matcher.hpp"
 
 namespace {
-using L = tree_matcher::List;
+
+#define L(...) tree_matcher::createList(__VA_ARGS__)
+
 template <typename T>
 using N = tree_matcher::Node<T>;
 
