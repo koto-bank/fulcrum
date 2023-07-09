@@ -119,6 +119,8 @@ struct IntegerLiteral final : public Token {
             return static_cast<T>(std::get<uint64_t>(value));
         }
     }
+
+    friend bool operator==(const token::IntegerLiteral &l, const token::IntegerLiteral &r);
 };
 
 struct CharLiteral final : public Token {
