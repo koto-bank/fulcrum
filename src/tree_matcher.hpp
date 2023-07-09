@@ -73,10 +73,14 @@ struct Node : NodeBase {
         if (node->token->type != this->type) {
             return false;
         }
+        // need to remove line/col info for checking
+        auto t = *node->token->as<T>();
+        t.line = 0u;
+        t.col = 0u;
         if (matcher.nodeMatcher != nullptr) {
-            matcher.nodeMatcher(*node->token->as<T>(), token);
+            matcher.nodeMatcher(t, token);
         }
-        return *node->token->as<T>() == token;
+        return t == token;
     }
 
     T token;
