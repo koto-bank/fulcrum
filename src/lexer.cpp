@@ -38,18 +38,41 @@ void escapeChar(char c, std::string& str) {
 }
 }
 
+template <typename T, typename ...Args>
+void Lexer::pushToken(Args &&...args) {
+    auto token = std::make_unique<T>(std::forward<Args>(args)...);
+    token->line = line;
+    token->col = col;
+    tokens.push_back(std::move(token));
+}
+
+template <uint32_t code, typename T, typename ...Args>
+void Lexer::pushError(Args &&...args) {
+    auto token = std::make_unique<token::Error>(code,
+                                                std::make_unique<T>(std::forward<Args>(args)...));
+    token->line = line;
+    token->col = col;
+    tokens.push_back(std::move(token));
+}
+
+template <uint32_t code>
+void Lexer::pushError() {
+    auto token = std::make_unique<token::Error>(code, nullptr);
+    token->line = line;
+    token->col = col;
+    tokens.push_back(std::move(token));
+}
+
 Lexer::Tokens Lexer::lex(std::istream *stream) {
     char c = 0;
     while (stream->get(c)) {
         if (utils::isLineBreak(c)) {
             if (inString) {
-                tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInString,
-                                                                std::make_unique<token::StringLiteral>(currentTokenStr)));
+                pushError<token::Error::LineBreakInString, token::StringLiteral>(currentTokenStr);
                 inString = false;
                 currentTokenStr.clear();
             } else if (inCharLiteral) {
-                tokens.push_back(std::make_unique<token::Error>(token::Error::LineBreakInChar,
-                                                                nullptr));
+                pushError<token::Error::LineBreakInChar>();
                 inCharLiteral = false;
                 currentTokenStr.clear();
             } else if (inComment) {
@@ -77,7 +100,7 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
             } else if (c == '"') {
                 fc_assert(inString);
                 inString = false;
-                tokens.push_back(std::make_unique<token::StringLiteral>(currentTokenStr));
+                pushToken<token::StringLiteral>(currentTokenStr);
                 currentTokenStr.clear();
             } else {
                 currentTokenStr += c;
@@ -92,10 +115,10 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
                 fc_assert(inCharLiteral);
                 inCharLiteral = false;
                 if (currentTokenStr.size() > 1) {
-                    tokens.push_back(std::make_unique<token::Error>(token::Error::CharLiteralTooLong, nullptr));
+                    pushError<token::Error::CharLiteralTooLong>();
                 } else {
                     fc_assert(!currentTokenStr.empty());
-                    tokens.push_back(std::make_unique<token::CharLiteral>(currentTokenStr[0]));
+                    pushToken<token::CharLiteral>(currentTokenStr[0]);
                 }
                 currentTokenStr.clear();
             } else {
@@ -115,9 +138,9 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
         } else if (isDelimiter(c)) {
             pushToken();
             if (c == '(') {
-                tokens.push_back(std::make_unique<token::LParen>());
+                pushToken<token::LParen>();
             } else if (c == ')') {
-                tokens.push_back(std::make_unique<token::RParen>());
+                pushToken<token::RParen>();
             }
         } else {
             currentTokenStr += c;
@@ -125,14 +148,14 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
     }
     fc_assert(stream->eof());
     if (inString) {
-        tokens.push_back(std::make_unique<token::Error>(token::Error::EOFInString, nullptr));
+        pushError<token::Error::EOFInString>();
     } else if (inCharLiteral) {
-        tokens.push_back(std::make_unique<token::Error>(token::Error::EOFInChar, nullptr));
+        pushError<token::Error::EOFInChar>();
     } else if (!currentTokenStr.empty()) {
         pushToken();
-        tokens.push_back(std::make_unique<token::EndOfFile>());
+        pushToken<token::EndOfFile>();
     } else {
-        tokens.push_back(std::make_unique<token::EndOfFile>());
+        pushToken<token::EndOfFile>();
     }
 
     return std::move(tokens);
@@ -146,13 +169,13 @@ void Lexer::pushToken() {
         tokens.push_back(readNumber());
     } else {
         if (currentTokenStr == "true") {
-            tokens.push_back(std::make_unique<token::BooleanLiteral>(true));
+            pushToken<token::BooleanLiteral>(true);
         } else if (currentTokenStr == "false") {
-            tokens.push_back(std::make_unique<token::BooleanLiteral>(false));
+            pushToken<token::BooleanLiteral>(false);
         } else if (currentTokenStr[0] == ':') {
-            tokens.push_back(std::make_unique<token::Keyword>(currentTokenStr));
+            pushToken<token::Keyword>(currentTokenStr);
         } else {
-            tokens.push_back(std::make_unique<token::Id>(currentTokenStr));
+            pushToken<token::Id>(currentTokenStr);
         }
     }
     currentTokenStr.clear();
