@@ -26,9 +26,176 @@ auto makeMatcher() {
         })
         .build();
 }
+
+void checkParseResult(bool result,
+                      const Parser &parser,
+                      const std::string &program) {
+    if (!result) {
+        std::cout << "---+++++ Parsing failure! +++++---\n"
+                  << "Program:" << program << "\n   Tree:\n";
+        parser.getSyntaxTree()->dump();
+        std::cout << " Errors:\n";
+        parser.dumpErrors();
+        std::cout << "---+++++ ---------------- +++++---\n";
+    }
+}
+}
+
+TEST(parser, sanity_check) {
+    auto i1 = token::IntegerLiteral((int64_t)123, 32);
+    auto i2 = token::IntegerLiteral((int64_t)123, 32);
+    EXPECT_EQ(i1, i2);
+
+    auto i3 = token::IntegerLiteral((int64_t)321, 32);
+    auto i4 = token::IntegerLiteral((uint64_t)123, 32);
+    auto i5 = token::IntegerLiteral((int64_t)123, 64);
+    EXPECT_NE(i1, i3);
+    EXPECT_NE(i1, i4);
+    EXPECT_NE(i1, i5);
+
+    i2.col = 1;
+    EXPECT_NE(i1, i2);
+
+    auto id1 = token::Id("foo");
+    auto id2 = token::Id("foo");
+
+    EXPECT_EQ(id1, id2);
+
+    auto kw1 = token::Keyword(":foo");
+    auto kw2 = token::Keyword(":foo");
+}
+
+TEST(parser, empty_list) {
+    const std::string program = R""(
+()
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_TRUE(res);
+
+    const auto tree = parser.getSyntaxTree();
+    EXPECT_FALSE(tree->children.empty());
+    EXPECT_EQ(tree->children.size(), 1);
+    EXPECT_EQ(tree->children[0].children.size(), 0);
+
+    auto matcher = makeMatcher();
+    res = matcher.match(tree, L());
+    checkParseResult(res, parser, program);
+    EXPECT_TRUE(res);
+}
+
+TEST(parser, nested_list) {
+    const std::string program = R""(
+(())
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_TRUE(res);
+
+    const auto tree = parser.getSyntaxTree();
+
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(L()));
+    checkParseResult(res, parser, program);
+
+    EXPECT_FALSE(tree->children.empty());
+    EXPECT_EQ(tree->children.size(), 1);
+    EXPECT_EQ(tree->children[0].children.size(), 1);
+    EXPECT_EQ(tree->children[0].children[0].children.size(), 0);
+
+    EXPECT_TRUE(res);
+}
+
+TEST(parser, nested_lists) {
+    const std::string program = R""(
+(()(()))
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_TRUE(res);
+
+    const auto tree = parser.getSyntaxTree();
+
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(L(), L(L())));
+    checkParseResult(res, parser, program);
+
+    EXPECT_FALSE(tree->children.empty());
+    EXPECT_EQ(tree->children.size(), 1);
+    EXPECT_EQ(tree->children[0].children.size(), 2);
+    EXPECT_EQ(tree->children[0].children[0].children.size(), 0);
+    EXPECT_EQ(tree->children[0].children[1].children.size(), 1);
+    EXPECT_EQ(tree->children[0].children[1].children[0].children.size(), 0);
+
+    EXPECT_TRUE(res);
+}
+
+TEST(parser, empty_lists) {
+    const std::string program = R""(
+()()
+()
+(())
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_TRUE(res);
+
+    const auto tree = parser.getSyntaxTree();
+    EXPECT_FALSE(tree->children.empty());
+    EXPECT_EQ(tree->children.size(), 4);
+    EXPECT_EQ(tree->children[0].children.size(), 0);
+    EXPECT_EQ(tree->children[1].children.size(), 0);
+    EXPECT_EQ(tree->children[2].children.size(), 0);
+    EXPECT_EQ(tree->children[3].children.size(), 1);
+    EXPECT_EQ(tree->children[3].children[0].children.size(), 0);
+
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(), L(), L(), L(L()));
+    checkParseResult(res, parser, program);
+    EXPECT_TRUE(res);
 }
 
 TEST(parser, simple_1) {
+    const std::string program = R""(
+(+ (* 1 2) (- 3 4))
+(foo)
+()
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_TRUE(res);
+
+    const auto tree = parser.getSyntaxTree();
+    EXPECT_FALSE(tree->children.empty());
+    EXPECT_EQ(tree->children.size(), 3);
+    EXPECT_EQ(tree->children[0].children.size(), 3);
+    EXPECT_EQ(tree->children[1].children.size(), 1);
+    EXPECT_EQ(tree->children[2].children.size(), 0);
+
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(N<token::Id>("+"),
+                          L(N<token::Id>("*"),
+                            N<token::IntegerLiteral>((int64_t)1, 32),
+                            N<token::IntegerLiteral>((int64_t)2, 32)),
+                          L(N<token::Id>("-"),
+                            N<token::IntegerLiteral>((int64_t)3, 32),
+                            N<token::IntegerLiteral>((int64_t)4, 32))),
+                        L(N<token::Id>("foo")),
+                        L());
+    checkParseResult(res, parser, program);
+    EXPECT_TRUE(res);
+}
+
+TEST(parser, simple_2) {
     const std::string program = R""(
 (fn test :attr (a b) (+ 123 a b))
 )"";
@@ -53,6 +220,8 @@ TEST(parser, simple_1) {
                             N<token::IntegerLiteral>((int64_t)123, 32),
                             N<token::Id>("a"),
                             N<token::Id>("b"))));
+    checkParseResult(res, parser, program);
+
     EXPECT_TRUE(res);
 }
 
@@ -64,9 +233,41 @@ TEST(parser, simple_error) {
     Parser parser;
     auto res = parser.parse(program);
     EXPECT_FALSE(res); // unclosed paren
+
+    const auto tree = parser.getSyntaxTree();
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(N<token::Id>("module"),
+                          N<token::Id>("simple")));
+    checkParseResult(res, parser, program);
+    const auto &errors = parser.getErrors();
+    EXPECT_EQ(errors.size(), 1);
+    EXPECT_EQ(errors[0].error, "Unmatched opening parenthesis");
+    EXPECT_TRUE(res);
 }
 
-TEST(parser, simple_2) {
+TEST(parser, closing_paren_error) {
+    const std::string program = R""(
+)(module simple)
+)"";
+
+    Parser parser;
+    auto res = parser.parse(program);
+    EXPECT_FALSE(res); // stray RParen
+
+    const auto tree = parser.getSyntaxTree();
+    auto matcher = makeMatcher();
+    res = matcher.match(tree,
+                        L(N<token::Id>("module"),
+                          N<token::Id>("simple")));
+    checkParseResult(res, parser, program);
+    const auto &errors = parser.getErrors();
+    EXPECT_EQ(errors.size(), 1);
+    EXPECT_EQ(errors[0].error, "Unmatched closing parenthesis");
+    EXPECT_TRUE(res);
+}
+
+TEST(parser, simple_3) {
     const std::string program = R""(
 (module simple)
 
@@ -88,9 +289,12 @@ TEST(parser, simple_2) {
                           L(),
                           L(N<token::Id>("return"),
                             N<token::IntegerLiteral>((int64_t)0, 32))));
+    checkParseResult(res, parser, program);
+
+    EXPECT_TRUE(res);
 }
 
-TEST(parser, simple_3) {
+TEST(parser, simple_4) {
     const std::string program = R""(
 (module simple)
 
@@ -134,5 +338,7 @@ TEST(parser, simple_3) {
                             L(N<token::Id>("+"),
                               N<token::Id>("i"),
                               N<token::Id>("j")))));
+    checkParseResult(res, parser, program);
+
     EXPECT_TRUE(res);
 }

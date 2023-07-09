@@ -15,23 +15,24 @@ public:
     bool parse(std::istream *stream);
     bool parse(const std::string &str);
 
-    struct ParsingError {
-        std::string fileName;
-        std::string line;
+    struct Error {
+        std::string sourceLine;
         std::string error;
-        uint32_t lineNum;
-        uint32_t colNum;
+        uint32_t line;
+        uint32_t col;
     };
 
-    std::vector<ParsingError> getErrors();
-    void dumpErrors();
+    std::string currentFileName;
+
+    std::vector<Error> getErrors() const;
+    void dumpErrors() const;
 
     struct Expression {
         Expression() = default;
         Expression(Expression *parent);
 
         Expression *parent = nullptr;
-        token::Token *token = nullptr; // lists have nullptr, terminals -- a corresponding token
+        std::unique_ptr<token::Token> token; // lists have nullptr, terminals -- a corresponding token
         std::vector<Expression> children;
 
         void dump(uint32_t indent = 0u) const;
@@ -49,7 +50,7 @@ private:
     bool parseEndOfInput();
 
     bool matchNextToken(token::Type expectedType);
-    bool matchAndPushNextToken(token::Type expectedType);
+    bool matchNextTokenAndPushTerminal(token::Type expectedTerminalType);
 
     void pushExpression();
     void popExpression();
@@ -57,7 +58,17 @@ private:
     Expression syntaxTree;
     Expression *currentExpression;
 
-    std::vector<ParsingError> parsingErrors;
+// Errors and recovery:
+    struct LParen {
+        uint32_t line;
+        uint32_t col;
+    };
+
+    std::vector<LParen> openParens;
+
+    bool parseStrayRParen();
+
+    std::vector<Error> errors;
     Lexer::Tokens tokens {};
     Lexer::Tokens::iterator nextToken {};
 };

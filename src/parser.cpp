@@ -19,14 +19,9 @@
 // list -> '(' expr * ')'
 
 namespace {
-void printParsingError(const Parser::ParsingError &e) {
-    std::cerr << fmt::format("Parsing error on {}:{}\n", e.fileName, e.lineNum)
-              << e.line << '\n';
-    for (auto i = 0u; i < e.colNum; i++) {
-        std::cerr << fmt::format("{:<{}}\n", "", e.colNum);
-    }
-
-    std::cerr << e.error << '\n';
+void printError(const std::string &fileName, const Parser::Error &e) {
+    std::cerr << fmt::format("{}:{}:{}: error: {}\n", fileName, e.line, e.col, e.error)
+              << e.sourceLine << '\n';
 }
 }
 
@@ -38,44 +33,52 @@ const Parser::Expression *Parser::getSyntaxTree() const {
 }
 
 void Parser::Expression::dump(uint32_t indent) const {
-    if (children.empty()) {
+    if (token != nullptr) {
         for (auto i = indent * 4; i > 0; i--) {
             std::cout << " ";
         }
-        fc_assert(token != nullptr);
         std::cout << token->type << '\n';
     } else {
         for (auto i = indent * 4; i > 0; i--) {
             std::cout << " ";
         }
-        std::cout << "(\n";
-        for (const auto &c : children) {
-            c.dump(indent + 1);
+        if (children.empty()) {
+            std::cout << "()\n";
+            return;
+        } else {
+            std::cout << "(\n";
+            for (const auto &c : children) {
+                c.dump(indent + 1);
+            }
+            for (auto i = indent * 4; i > 0; i--) {
+                std::cout << " ";
+            }
+            std::cout << ")\n";
         }
-        for (auto i = indent * 4; i > 0; i--) {
-            std::cout << " ";
-        }
-        std::cout << ")\n";
     }
 }
 
 bool Parser::parse(std::istream *stream) {
+    currentFileName = "*stream*";
     return process(stream);
 }
 
 bool Parser::parse(const std::string &str) {
+    currentFileName = "*string*";
     std::istringstream stringStream(str);
     return process(&stringStream);
 }
 
 bool Parser::parse() {
+    currentFileName = "*stdin*";
     return process(&std::cin);
 }
 
 bool Parser::parse(const std::filesystem::path &path) {
+    currentFileName = path;
     std::ifstream file(path);
     if (!file.is_open()) {
-        parsingErrors.push_back({ path, "", "Failed to open file", 0, 0 });
+        errors.push_back({ "", "Failed to open file", 0, 0 });
         return false;
     }
     return process(&file);
@@ -88,10 +91,7 @@ bool Parser::process(std::istream *stream) {
     syntaxTree.children.clear();
     currentExpression = &syntaxTree;
     nextToken = tokens.begin();
-    bool parsed = parseProgram();
-
-    // TODO: check parsed tree
-    return parsed;
+    return parseProgram();
 }
 
 bool Parser::parseProgram() {
@@ -99,48 +99,56 @@ bool Parser::parseProgram() {
     while (res && nextToken != tokens.end()) {
         auto save = nextToken;
         res = res && (parseExpression()
-                      || (nextToken = save, parseEndOfInput()));
+                      || (nextToken = save, parseStrayRParen())
+                      || (nextToken = save, matchNextToken(token::Type::EndOfFile)));
     }
-    return res;
+    return res && errors.empty();
 }
 
 bool Parser::parseExpression() {
     auto save = nextToken;
-    return parseEndOfInput()
-        || (nextToken = save, parseTerminal())
+    return parseTerminal()
         || (nextToken = save, parseList());
 }
 
-bool Parser::parseList() {
-    auto lParen = matchNextToken(token::Type::LParen);
-    if (!lParen) {
+bool Parser::parseStrayRParen() {
+    auto save = nextToken;
+    if (matchNextToken(token::Type::RParen)) {
+        errors.push_back({"", "Unmatched closing parenthesis", (*save)->line, (*save)->col });
+        return true;
+    } else {
         return false;
     }
-
-    pushExpression();
-
-    auto save = nextToken;
-    while (parseExpression()) {
-        save = nextToken;
-    };
-    nextToken = save;
-    popExpression();
-    return matchNextToken(token::Type::RParen);
 }
 
-bool Parser::parseEndOfInput() {
-    return matchNextToken(token::Type::EndOfFile);
+bool Parser::parseList() {
+    auto save = nextToken;
+    if (!matchNextToken(token::Type::LParen)) {
+        return false;
+    }
+    openParens.push_back({ (*save)->line, (*save)->col });
+    pushExpression();
+    while (save = nextToken, parseExpression());
+    if (nextToken = save, !matchNextToken(token::Type::RParen)) {
+        fc_assert(!openParens.empty());
+        const auto& paren = openParens.back();
+        errors.push_back({ "", "Unmatched opening parenthesis", paren.line, paren.col });
+    }
+    openParens.pop_back();
+    popExpression();
+    return true;
 }
 
 bool Parser::parseTerminal() {
     auto save = nextToken;
-    if (matchAndPushNextToken(token::Type::Id)
-        || (nextToken = save, matchAndPushNextToken(token::Type::Keyword))
-        || (nextToken = save, matchAndPushNextToken(token::Type::BooleanLiteral))
-        || (nextToken = save, matchAndPushNextToken(token::Type::CharLiteral))
-        || (nextToken = save, matchAndPushNextToken(token::Type::StringLiteral))
-        || (nextToken = save, matchAndPushNextToken(token::Type::IntegerLiteral))
-        || (nextToken = save, matchAndPushNextToken(token::Type::FloatLiteral))) {
+    if (matchNextTokenAndPushTerminal(token::Type::Id)
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::Keyword))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::BooleanLiteral))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::CharLiteral))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::StringLiteral))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::IntegerLiteral))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::FloatLiteral))
+        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::Error))) {
         return true;
     } else {
         return false;
@@ -148,16 +156,16 @@ bool Parser::parseTerminal() {
 }
 
 bool Parser::matchNextToken(token::Type expectedType) {
-    return nextToken != tokens.end()
-        && (*nextToken++)->type == expectedType;
+    return (nextToken != tokens.end()
+            && (*nextToken++)->type == expectedType);
 }
 
-bool Parser::matchAndPushNextToken(token::Type expectedType) {
+bool Parser::matchNextTokenAndPushTerminal(token::Type expectedTerminalType) {
     if (nextToken != tokens.end()
-        && (*nextToken)->type == expectedType) {
+        && (*nextToken)->type == expectedTerminalType) {
         pushExpression();
-        currentExpression->token = nextToken++->get();
-        currentExpression = currentExpression->parent;
+        currentExpression->token = std::move(*nextToken++);
+        popExpression();
         return true;
     } else {
         return false;
@@ -166,7 +174,7 @@ bool Parser::matchAndPushNextToken(token::Type expectedType) {
 
 void Parser::pushExpression() {
     fc_assert(currentExpression != nullptr);
-    currentExpression->children.emplace_back(currentExpression);
+    currentExpression->children.emplace_back(currentExpression); // expression's parent
     currentExpression = &currentExpression->children.back();
 }
 
@@ -175,12 +183,12 @@ void Parser::popExpression() {
     currentExpression = currentExpression->parent;
 }
 
-std::vector<Parser::ParsingError> Parser::getErrors() {
-    return parsingErrors;
+std::vector<Parser::Error> Parser::getErrors() const {
+    return errors;
 }
 
-void Parser::dumpErrors() {
-    for (const auto &e : parsingErrors) {
-        printParsingError(e);
+void Parser::dumpErrors() const {
+    for (const auto &e : errors) {
+        printError(currentFileName, e);
     }
 }
