@@ -271,6 +271,12 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateFRem, _1, _2, _3, "", nullptr);
 
         break;
+    case '*':
+        if (intType)
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateMul, _1, _2, _3, "", false, false);
+        else
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFMul, _1, _2, _3, "", nullptr);
+        break;
     case '/':
         if (intType)
             if (intType->isSigned)
