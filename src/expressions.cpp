@@ -263,13 +263,9 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         break;
     case '-':
         if (intType)
-            if (intType->isSigned)
-                buildOperation = std::bind(&llvm::IRBuilderBase::CreateSRem, _1, _2, _3, "");
-            else
-                buildOperation = std::bind(&llvm::IRBuilderBase::CreateURem, _1, _2, _3, "");
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateSub, _1, _2, _3, "", false, false);
         else
-            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFRem, _1, _2, _3, "", nullptr);
-
+            buildOperation = std::bind(&llvm::IRBuilderBase::CreateFSub, _1, _2, _3, "", nullptr);
         break;
     case '*':
         if (intType)
