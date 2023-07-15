@@ -80,7 +80,7 @@ public:
 
     StructType(CodegenContext &codegenContext, std::string name, bool isPublic);
 
-    void fillFields(const Fields &fields_);
+    virtual void fillFields(const Fields &fields_);
 
     llvm::Type *llvmType() override;
     std::string signature() override;
