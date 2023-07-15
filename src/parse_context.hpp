@@ -7,9 +7,9 @@
 #include <stdint.h>
 
 #include "codegen_context.hpp"
-#include "expressions.hpp"
 
 struct ModuleNode;
+#include "is_long_integer.hpp"
 
 // Types
 
