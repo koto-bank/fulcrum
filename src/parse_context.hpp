@@ -182,16 +182,16 @@ struct DereferenceNode : ASTNode {
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
-struct VariableDeclarationNode : ASTNode {
+struct VarDeclarationNode : ASTNode {
     std::unique_ptr<ASTNode> initialValue = nullptr;
 
     std::unique_ptr<ASTType> type;
     const std::string name;
 
-    VariableDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
     void emplaceGlobalVar(ModuleNode *module, CodegenContext &context);
+    VarDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type);
 };
 
 struct SizeofNode : ASTNode {
@@ -224,7 +224,7 @@ struct ModuleNode : ASTNode {
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
     std::vector<std::unique_ptr<AliasNode>> aliases;
-    std::vector<std::unique_ptr<VariableDeclarationNode>> globalVariables;
+    std::vector<std::unique_ptr<VarDeclarationNode>> globalVariables;
 
     ModuleNode(const std::string &name);
 
