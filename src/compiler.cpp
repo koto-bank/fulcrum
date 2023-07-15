@@ -34,8 +34,8 @@
 
 #include "codegen_context.hpp"
 #include "expressions.hpp"
-#include "parse_context.hpp"
 #include "parser.hpp"
+#include "semantic_analyzer.hpp"
 #include "types.hpp"
 
 namespace {
@@ -99,7 +99,6 @@ struct ParseHeaderContext {
         auto declType = decl->getType().getNonReferenceType();
 
         auto llvmVar = tuOrErr->TheModule.get()->getGlobalVariable(varName);
-        auto varDef = std::make_unique<VariableDeclarationNode>(name);
         if (declType->isIntegerType()) {
             auto varType = llvmVar->getValueType();
 
@@ -108,24 +107,24 @@ struct ParseHeaderContext {
 
             auto initializer = llvm::dyn_cast<llvm::ConstantInt>(llvmVar->getInitializer());
 
-            varDef->type = std::make_unique<ASTBuiltinType>("i64");
+            auto varDef = std::make_unique<VariableDeclarationNode>(name, std::make_unique<ASTBuiltinType>("i64"));
             if (isSigned)
                 varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getSExtValue());
             else
                 varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getZExtValue());
+            llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
             return varDef;
         } else if (declType->isConstantArrayType() && declType->getPointeeOrArrayElementType()->isAnyCharacterType()) {
             auto varInitializer = llvm::dyn_cast<llvm::ConstantDataArray>(llvmVar->getInitializer()->getOperand(0));
 
-            varDef->type = std::make_unique<ASTBuiltinType>("str");
+            auto varDef = std::make_unique<VariableDeclarationNode>(name, std::make_unique<ASTBuiltinType>("str"));
+            llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
             varDef->initialValue = std::make_unique<ConstantStringNode>(varInitializer->getAsString().str());
+            return varDef;
         } else {
+            llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
             return nullptr;
         }
-
-        llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
-
-        return varDef;
     }
 
 private:
@@ -350,7 +349,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 auto returnType = clangToASTType(*parseHeaderContext, resType);
 
                 bool unknownType = returnType == nullptr;
-                FunctionNode::Args arguments;
+                ArgList arguments;
 
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {
                     auto argCursor = clang_Cursor_getArgument(c, i);
@@ -533,9 +532,8 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                             != parseContext->parseHeaderContext.module->globalVariables.end())
                             return CXChildVisit_Break;
 
-                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName);
-                        varDef->type = std::make_unique<ASTBuiltinType>(parseContext->enumTypeName);
-
+                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName,
+                                                                                std::make_unique<ASTBuiltinType>(parseContext->enumTypeName));
                         if (parseContext->enumTypeName[0] == 'i')
                             varDef->initialValue = std::make_unique<ConstantIntNode>(
                                 ASTBuiltinType(parseContext->enumTypeName), (int64_t)clang_getEnumConstantDeclValue(c)
@@ -609,15 +607,21 @@ void processImportsRecursive(std::vector<ModuleNode::Import> moduleImports,
 
             Parser parser;
             auto res = parser.parse(targetPath);
-            if (res == false)
+            if (res == false) {
+                parser.dumpErrors();
                 throw CodegenError(
                     fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
                     );
-
-            auto codegen = [](CodegenContext *, const Parser::Expression *) {
-                return std::make_unique<ModuleNode>("temp");
-            };
-            auto moduleAST = codegen(&codegenCont, parser.getSyntaxTree());
+            }
+            SemanticAnalyzer sem;
+            res = sem.run(parser);
+            if (res == false) {
+                sem.dumpErrors();
+                throw CodegenError(
+                    fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
+                    );
+            }
+            auto moduleAST = sem.releaseModule();
             if (moduleAST->name != import.target)
                 throw CodegenError(fmt::format(
                                        "Module was imported as {}, but the name declared in the module was {}", import.target,
@@ -700,24 +704,22 @@ args::ArgumentParser argParser("fulcrum");
     if (!fileArg) {
         res = parser.parse();
     } else {
-        res = parser.parse(fileArg.Get());
+        res = parser.parse(std::filesystem::path(fileArg.Get()));
     }
 
     if (!res) {
-        std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
+        std::cerr << fmt::format("Failed to parse module {}\n", fileArg.Get());
+        parser.dumpErrors();
         return 1;
     }
-
-    auto codegen = [](CodegenContext *, const Parser::Expression *) {
-        return std::make_unique<ModuleNode>("temp");
-    };
-
-    moduleAST = codegen(&codegenCont, parser.getSyntaxTree());
-    if (moduleAST == nullptr) {
-        std::cout << "-----xxxxxx parsing failure xxxxxx-----\n";
+    SemanticAnalyzer sem;
+    res = sem.run(parser);
+    if (res == false) {
+        std::cerr << fmt::format("Failed to perform semantic analysis of module {}\n", fileArg.Get());
+        sem.dumpErrors();
         return 1;
     }
-
+    moduleAST = sem.releaseModule();
     auto includedModules = processImports(moduleAST->imports, codegenCont);
     auto importNames = [&includedModules](ModuleNode *importTo) {
         for (auto &import : importTo->imports) {
