@@ -496,6 +496,23 @@ LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext)
     return type;
 }
 
+llvm::Value *FunctionCall::addrofProcessor(ExpressionGenContext &genContext) {
+     if (args.size() != 1) {
+        throw CodegenError("'addr-of' expects exactly one argument");
+    }
+
+     const auto &target = args[0];
+     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+     if (maybeVar == nullptr) {
+         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
+     }
+
+     auto varType = maybeVar->languageType(genContext);
+     auto ptrTypeName = varType->signature() + "*";
+     genContext.codegenContext.ensureType<PointerType>(ptrTypeName, varType);
+     return maybeVar->varAddress(genContext);
+}
+
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     if (specialFunctions.contains(name)) return specialFunctions.at(name).first(this, genContext);
 
@@ -646,30 +663,6 @@ llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genCont) {
 }
 
 std::string VarAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
-
-AddrOf::AddrOf(std::unique_ptr<Expression> &&target)
-    : Expression(nullptr),
-      target(std::move(target)) {}
-
-LanguageType *AddrOf::languageType(ExpressionGenContext &genCont) {
-    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
-    if (maybeVar == nullptr)
-        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
-
-    auto varType = maybeVar->languageType(genCont);
-    auto ptrTypeName = varType->signature() + "*";
-    return genCont.codegenContext.getOrEmplaceType<PointerType>(ptrTypeName, varType);
-}
-
-llvm::Value *AddrOf::llvmValue(ExpressionGenContext &genCont) {
-    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
-    if (maybeVar == nullptr)
-        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
-
-    return maybeVar->varAddress(genCont);
-}
-
-std::string AddrOf::dump(int indent) { return fmt::format("{}&{}", indentSpaces(indent), target->dump(0)); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
