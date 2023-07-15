@@ -555,7 +555,7 @@ std::string FunctionCall::dump(int indent) {
         }
     }
 
-    return fmt::format("{}({} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
+    return fmt::format("{}($call {} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
 
 VarAccess::VarAccess(const std::string &name)
