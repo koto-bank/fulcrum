@@ -40,9 +40,8 @@
 
 namespace {
 std::string cxToString(CXString &&str) {
-    auto res = std::string((char *)str.data);
+    auto res = std::string(clang_getCString(str));
     clang_disposeString(str);
-
     return res;
 }
 
