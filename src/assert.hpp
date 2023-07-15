@@ -7,3 +7,5 @@
 #else
 #define fc_assert(e) ((void)0)
 #endif
+
+#define fc_unreachable() fc_assert(!"unreachable code")
