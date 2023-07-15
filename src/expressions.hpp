@@ -7,6 +7,8 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+#include "is_long_integer.hpp"
+
 namespace llvm {
 class Type;
 class Value;
@@ -68,9 +70,6 @@ struct ConstantExpression : Expression {
 
     virtual llvm::Constant *llvmConstant(CodegenContext &context);
 };
-
-template<typename T>
-concept IsLongInteger = std::same_as<T, uint64_t> || std::same_as<T, int64_t>;
 
 struct IntegerConstant : ConstantExpression {
     std::variant<uint64_t, int64_t> constValue;
