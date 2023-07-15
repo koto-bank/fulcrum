@@ -473,26 +473,26 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
             return std::make_unique<DereferenceNode>(std::move(target.value()));
         } else if (sym == "cast") {
             if (form.children.size() < 3) {
-                reportError(symForm.token, "cast must have type and target");
+                reportError(symForm.token, "cast must have target and type");
                 return std::nullopt;
             }
 
             if (form.children.size() > 3) {
-                reportError(symForm.token, "expected exactly two arguments for cast: type and target");
+                reportError(symForm.token, "expected exactly two arguments for cast: target and type");
                 return std::nullopt;
             }
 
-            auto type = parseType(form.children[1]);
-            if (type == std::nullopt) {
-                return std::nullopt;
-            }
-
-            auto target = parseArgExpression(form.children[2]);
+            auto target = parseArgExpression(form.children[1]);
             if (target == std::nullopt) {
                 return std::nullopt;
             }
 
-            return std::make_unique<CastNode>(std::move(type.value()), std::move(target.value()));
+            auto type = parseType(form.children[2]);
+            if (type == std::nullopt) {
+                return std::nullopt;
+            }
+
+            return std::make_unique<CastNode>(std::move(target.value()), std::move(type.value()));
         } else if (sym == "size-of") {
             if (form.children.size() != 2) {
                 reportError(symForm.token, "size-of must have exaclty one argument");
