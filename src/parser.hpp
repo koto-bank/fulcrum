@@ -16,10 +16,10 @@ public:
     bool parse(const std::string &str);
 
     struct Error {
-        std::string sourceLine;
-        std::string error;
-        uint32_t line;
-        uint32_t col;
+        const std::string sourceLine;
+        const std::string error;
+        const uint32_t line;
+        const uint32_t col;
     };
 
     std::string currentFileName;
