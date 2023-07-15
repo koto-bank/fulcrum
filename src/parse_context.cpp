@@ -28,8 +28,8 @@ LanguageType *ASTBuiltinType::languageType(ModuleNode *, CodegenContext &context
     return context.getNamed<NamedTypeValue>(builtinName);
 };
 
-ASTIntegerType::ASTIntegerType(const std::string &name, bool isSigned, uint32_t bits)
-    : ASTBuiltinType(name)
+ASTIntegerType::ASTIntegerType(bool isSigned, uint32_t bits)
+    : ASTBuiltinType(fmt::format("{}{}", isSigned ? 'i' : 'u', bits))
     , bits(bits)
     , isSigned(isSigned) {}
 

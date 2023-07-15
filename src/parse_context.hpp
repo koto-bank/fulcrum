@@ -30,7 +30,7 @@ struct ASTIntegerType : ASTBuiltinType {
     const uint32_t bits;
     const bool isSigned;
 
-    ASTIntegerType(const std::string &name, bool isSigned, uint32_t bits);
+    ASTIntegerType(bool isSigned, uint32_t bits);
 };
 
 struct ASTNamedType : ASTType {
