@@ -247,8 +247,7 @@ LanguageType *CodegenContext::getLanguageType(const ModuleNode &moduleNode,
         fc_assert(existsNamed(t->builtinName));
         return getNamed<NamedTypeValue>(t->builtinName);
     } else if (auto t = dynamic_cast<const ASTIntegerType *>(type.get()); t != nullptr) {
-        auto signature = fmt::format("{}{}", t->isSigned ? 'i' : 'u', t->bits);
-        return getNamed<NamedTypeValue>(signature);
+        return getNamed<NamedTypeValue>(t->builtinName);
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type.get()); t != nullptr) {
         auto fullName = moduleNode.resolveName(t->name);
         return getNamed<NamedTypeValue>(fullName);
