@@ -736,10 +736,10 @@ args::ArgumentParser argParser("fulcrum");
         std::cout << fmt::format("Compiling {}", name) << std::endl;
 
         importNames(ast.get());
-        ast->generate(codegenCont);
+        codegenCont.generate(std::move(ast));
     }
     importNames(moduleAST.get());
-    moduleAST->generate(codegenCont);
+    codegenCont.generate(std::move(moduleAST));
 
     ExpressionGenContext exprGenContext{ .builder = builder, .codegenContext = codegenCont };
     for (auto &[name, named] : codegenCont.names) {

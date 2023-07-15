@@ -8,9 +8,16 @@
 #include "expressions.hpp"
 #include "types.hpp"
 
+struct AliasNode;
 struct ASTModuleNode;
-struct ExpressionGenContext;
+struct ASTType;
+struct ASTNode;
 struct CodegenContext;
+struct ExpressionGenContext;
+struct FunctionNode;
+struct ModuleNode;
+struct StructNode;
+struct VarDeclarationNode;
 struct VariableDefinition;
 
 namespace llvm {
@@ -36,10 +43,13 @@ private:
 public:
     bool isPublic;
 
-    Function(
-        CodegenContext &context, llvm::Module &module, const std::string &name, const Args &arguments,
-        LanguageType *returnType, Body &&body, bool isPublic
-    );
+    Function(CodegenContext &context,
+             llvm::Module &module,
+             const std::string &name,
+             const Args &arguments,
+             LanguageType *returnType,
+             Body &&body,
+             bool isPublic);
 
     const std::string &getName() const;
     FunctionType *functionType();
@@ -127,7 +137,22 @@ struct CodegenContext {
 
     std::map<std::string, std::unique_ptr<NamedValue>> names;
 
-    bool existsNamed(const std::string &name) const { return names.contains(name); }
+    std::vector<std::filesystem::path> includeDirectories;
+
+    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
+
+    bool existsNamed(const std::string &name) const;
+
+    void generate(std::unique_ptr<ModuleNode> &&moduleNode);
+
+    LanguageType *getLanguageType(const ModuleNode &moduleNode, const std::unique_ptr<ASTType> &type);
+    std::unique_ptr<Expression> getExpression(const ModuleNode &moduleNode, const std::unique_ptr<ASTNode> &node);
+
+    void emplaceStructType(const ModuleNode &, const std::unique_ptr<StructNode> &);
+    void emplaceAliasType(const ModuleNode &, const std::unique_ptr<AliasNode> &);
+    void emplaceGlobalVar(const ModuleNode &, const std::unique_ptr<VarDeclarationNode> &);
+    void emplaceFunction(const ModuleNode &, const std::unique_ptr<FunctionNode> &);
+    void fillStructTypeFields(const ModuleNode &, const std::unique_ptr<StructNode> &);
 
     template<typename T> typename T::ValueType *getNamed(const std::string &name) const {
         if (!names.contains(name)) throw CodegenError(fmt::format("Undefined {}: {}", T::namedType(), name));
@@ -160,10 +185,6 @@ struct CodegenContext {
         names.emplace(name, std::make_unique<T>(std::forward<Args>(args)...));
     }
 
-    std::vector<std::filesystem::path> includeDirectories;
-
-    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
-
     template<typename Type, typename... Args> Type *getOrEmplaceType(const std::string &name, Args &&...args) {
         if (!existsNamed(name))
             emplaceNamed<NamedTypeValue>(name, std::make_unique<Type>(*this, std::forward<Args>(args)...));
@@ -183,9 +204,4 @@ struct CodegenContext {
     std::unique_ptr<Expr> makeExpression(Type *type, Args &&...args) {
         return std::make_unique<Expr>(context, type, std::forward<Args>(args)...);
     }
-
-    void emplaceFn(
-        const std::string &langName, const std::string &funcName, const Function::Args &args, LanguageType *returnType,
-        Function::Body &&body, bool isPublic
-    );
 };

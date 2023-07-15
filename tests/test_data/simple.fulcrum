@@ -2,5 +2,5 @@
 
 (fn main i32 ((argc i32) (argv (array 100 (ptr u8))))
   (var i i32 (+ 12 24 5))
-  (var j u32 (+ 1 2 3))
-  (return (+ i j)))
+  (var j u32 (+ 1u 2u 3u))
+  (return (+ i (cast j i32))))
