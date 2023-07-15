@@ -74,7 +74,7 @@ TEST(parser, empty_list) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     EXPECT_FALSE(tree->children.empty());
     EXPECT_EQ(tree->children.size(), 1);
     EXPECT_EQ(tree->children[0].children.size(), 0);
@@ -94,7 +94,7 @@ TEST(parser, nested_list) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
 
     auto matcher = makeMatcher();
     res = matcher.match(tree,
@@ -118,7 +118,7 @@ TEST(parser, nested_lists) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
 
     auto matcher = makeMatcher();
     res = matcher.match(tree,
@@ -146,7 +146,7 @@ TEST(parser, empty_lists) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     EXPECT_FALSE(tree->children.empty());
     EXPECT_EQ(tree->children.size(), 4);
     EXPECT_EQ(tree->children[0].children.size(), 0);
@@ -173,7 +173,7 @@ TEST(parser, simple_1) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     EXPECT_FALSE(tree->children.empty());
     EXPECT_EQ(tree->children.size(), 3);
     EXPECT_EQ(tree->children[0].children.size(), 3);
@@ -234,7 +234,7 @@ TEST(parser, simple_error) {
     auto res = parser.parse(program);
     EXPECT_FALSE(res); // unclosed paren
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
                         L(N<token::Symbol>("module"),
@@ -255,7 +255,7 @@ TEST(parser, closing_paren_error) {
     auto res = parser.parse(program);
     EXPECT_FALSE(res); // stray RParen
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
                         L(N<token::Symbol>("module"),
@@ -278,7 +278,7 @@ TEST(parser, simple_3) {
     Parser parser;
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
-    auto tree = parser.getSyntaxTree();
+    auto tree = parser.releaseSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
                         L(N<token::Symbol>("module"),
@@ -308,7 +308,7 @@ TEST(parser, simple_4) {
     Parser parser;
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
-    auto tree = parser.getSyntaxTree();
+    auto tree = parser.releaseSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
                         L(N<token::Symbol>("module"),

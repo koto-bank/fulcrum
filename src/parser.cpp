@@ -28,8 +28,12 @@ void printError(const std::string &fileName, const Parser::Error &e) {
 Parser::Expression::Expression(Parser::Expression *_parent)
     : parent(_parent) {}
 
+std::unique_ptr<Parser::Expression> Parser::releaseSyntaxTree() {
+    return std::move(syntaxTree);
+}
+
 const Parser::Expression *Parser::getSyntaxTree() const {
-    return &syntaxTree;
+    return syntaxTree.get();
 }
 
 void Parser::Expression::dump(uint32_t indent) const {
@@ -87,9 +91,9 @@ bool Parser::parse(const std::filesystem::path &path) {
 bool Parser::process(std::istream *stream) {
     Lexer lexer;
     tokens = lexer.lex(stream);
-
-    syntaxTree.children.clear();
-    currentExpression = &syntaxTree;
+    syntaxTree = std::make_unique<Expression>();
+    syntaxTree->children.clear();
+    currentExpression = syntaxTree.get();
     nextToken = tokens.begin();
     return parseProgram();
 }

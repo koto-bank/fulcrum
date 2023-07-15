@@ -38,6 +38,7 @@ public:
         void dump(uint32_t indent = 0u) const;
     };
 
+    std::unique_ptr<Expression> releaseSyntaxTree();
     const Expression *getSyntaxTree() const;
 
 private:
@@ -55,7 +56,7 @@ private:
     void pushExpression();
     void popExpression();
 
-    Expression syntaxTree;
+    std::unique_ptr<Expression> syntaxTree;
     Expression *currentExpression;
 
 // Errors and recovery:
