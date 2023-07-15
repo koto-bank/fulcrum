@@ -20,8 +20,10 @@
 
 namespace {
 void printError(const std::string &fileName, const Parser::Error &e) {
-    std::cerr << fmt::format("{}:{}:{}: error: {}\n", fileName, e.line, e.col, e.error)
-              << e.sourceLine << '\n';
+    std::cerr << fmt::format("{}:{}:{}: error: {}\n", fileName, e.line, e.col, e.error);
+    if (!e.sourceLine.empty()) {
+        std::cerr << e.sourceLine << '\n';
+    }
 }
 }
 
