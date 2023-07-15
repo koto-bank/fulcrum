@@ -560,7 +560,25 @@ std::string FunctionCall::dump(int indent) {
 
 VarAccess::VarAccess(const std::string &name)
     : Expression(nullptr),
-      name(name) {}
+      name(name) {
+    if (varPath.size() == 0) {
+        if (std::find(name.begin(), name.end(), '.') != name.end()) {
+            std::string currentName;
+
+            for (auto i = 0u; i < name.size(); i++) {
+                if (name[i] == '.') {
+                    varPath.push_back(currentName);
+                    currentName = "";
+                } else {
+                    currentName += name[i];
+                }
+            }
+            varPath.push_back(currentName);
+        } else {
+            varPath.push_back(name);
+        }
+    }
+}
 
 LanguageType *VarAccess::languageType(const ExpressionGenContext &genCont) {
     auto pathName = path();
@@ -592,25 +610,7 @@ LanguageType *VarAccess::languageType(const ExpressionGenContext &genCont) {
     }
 }
 
-const std::vector<std::string> &VarAccess::path() {
-    if (varPath.size() == 0) {
-        if (std::find(name.begin(), name.end(), '.') != name.end()) {
-            std::string currentName;
-
-            for (auto i = 0u; i < name.size(); i++) {
-                if (name[i] == '.') {
-                    varPath.push_back(currentName);
-                    currentName = "";
-                } else {
-                    currentName += name[i];
-                }
-            }
-            varPath.push_back(currentName);
-        } else {
-            varPath.push_back(name);
-        }
-    }
-
+const std::vector<std::string> &VarAccess::path() const {
     return varPath;
 }
 
