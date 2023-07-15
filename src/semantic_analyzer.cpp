@@ -415,11 +415,11 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         }
         case token::Type::IntegerLiteral: {
             auto t = form.token->as<token::IntegerLiteral>();
-            auto type = ASTIntegerType(makeIntTypeSignature(*t), t->isSigned, t->bits);
+            auto type = std::make_unique<ASTIntegerType>(t->isSigned, t->bits);
             if (t->isSigned) {
-                return std::make_unique<ConstantIntNode>(type, std::get<int64_t>(t->value));
+                return std::make_unique<ConstantIntNode>(std::move(type), std::get<int64_t>(t->value));
             } else {
-                return std::make_unique<ConstantIntNode>(type, std::get<uint64_t>(t->value));
+                return std::make_unique<ConstantIntNode>(std::move(type), std::get<uint64_t>(t->value));
             }
         }
         case token::Type::CharLiteral: {

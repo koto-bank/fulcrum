@@ -103,15 +103,15 @@ struct ParseHeaderContext {
             auto varType = llvmVar->getValueType();
 
             bool isSigned = declType->isSignedIntegerType();
-            auto valType = ASTBuiltinType(fmt::format("{}{}", isSigned ? "i" : "u", varType->getIntegerBitWidth()));
+            auto valType = std::make_unique<ASTIntegerType>(isSigned, varType->getIntegerBitWidth());
 
             auto initializer = llvm::dyn_cast<llvm::ConstantInt>(llvmVar->getInitializer());
 
             auto varDef = std::make_unique<VarDeclarationNode>(name, std::make_unique<ASTBuiltinType>("i64"));
             if (isSigned)
-                varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getSExtValue());
+                varDef->initialValue = std::make_unique<ConstantIntNode>(std::move(valType), initializer->getSExtValue());
             else
-                varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getZExtValue());
+                varDef->initialValue = std::make_unique<ConstantIntNode>(std::move(valType), initializer->getZExtValue());
             llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
             return varDef;
         } else if (declType->isConstantArrayType() && declType->getPointeeOrArrayElementType()->isAnyCharacterType()) {
@@ -536,13 +536,14 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                                                                                 std::make_unique<ASTBuiltinType>(parseContext->enumTypeName));
                         if (parseContext->enumTypeName[0] == 'i')
                             varDef->initialValue = std::make_unique<ConstantIntNode>(
-                                ASTBuiltinType(parseContext->enumTypeName), (int64_t)clang_getEnumConstantDeclValue(c)
-                            );
+                                std::make_unique<ASTBuiltinType>(parseContext->enumTypeName),
+                                (int64_t)clang_getEnumConstantDeclValue(c)
+                                );
                         else
                             varDef->initialValue = std::make_unique<ConstantIntNode>(
-                                ASTBuiltinType(parseContext->enumTypeName),
+                                std::make_unique<ASTBuiltinType>(parseContext->enumTypeName),
                                 (uint64_t)clang_getEnumConstantDeclUnsignedValue(c)
-                            );
+                                );
                         parseContext->parseHeaderContext.module->globalVariables.push_back(std::move(varDef));
 
                         return CXChildVisit_Continue;
