@@ -17,7 +17,7 @@ VariableDefinition::VariableDefinition(const std::string &name, LanguageType *ty
     : name(name),
       type(type) {}
 
-VariableDefinition *ExpressionGenContext::lookupVariable(const std::string &name) {
+const VariableDefinition *ExpressionGenContext::lookupVariable(const std::string &name) const {
     for (auto scope = variableScopes.rbegin(); scope != variableScopes.rend(); ++scope) {
         if (scope->contains(name)) return &scope->at(name);
     }
@@ -53,7 +53,7 @@ std::string Expression::indentSpaces(int n) { return fmt::format("{: >{}}", "", 
 Expression::Expression(LanguageType *type)
     : type(type) {}
 
-LanguageType *Expression::languageType(ExpressionGenContext &) { return type; }
+LanguageType *Expression::languageType(const ExpressionGenContext &) { return type; }
 
 llvm::Type *Expression::llvmType(ExpressionGenContext &genContext) { return languageType(genContext)->llvmType(); }
 
@@ -370,19 +370,19 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
     return result;
 }
 
-LanguageType *FunctionCall::voidProcessorType(ExpressionGenContext &genContext) {
+LanguageType *FunctionCall::voidProcessorType(const ExpressionGenContext &genContext) const {
     return genContext.codegenContext.getNamed<NamedTypeValue>("void");
 }
 
-LanguageType *FunctionCall::notProcessorType(ExpressionGenContext &genContext) {
+LanguageType *FunctionCall::notProcessorType(const ExpressionGenContext &genContext) const {
     return genContext.codegenContext.getNamed<NamedTypeValue>("bool");
 }
 
-LanguageType *FunctionCall::arithmeticsProcessorType(ExpressionGenContext &genCont) {
+LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext &genCont) const {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
         return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
-
+    // TODO: move type processing to separate step
     return args[0]->languageType(genCont);
 }
 
@@ -484,10 +484,10 @@ llvm::Value *FunctionCall::notProcessor(ExpressionGenContext &genContext) {
     return genContext.builder.CreateNot(args[0]->llvmValue(genContext));
 }
 
-LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
+LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext) {
     if (type == nullptr) {
         if (specialFunctions.contains(name)) {
-            type = specialFunctions[name].second(this, genContext);
+            type = specialFunctions.at(name).second(this, genContext);
         } else {
             type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)->functionType()->returnType;
         }
@@ -497,7 +497,7 @@ LanguageType *FunctionCall::languageType(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
-    if (specialFunctions.contains(name)) return specialFunctions[name].first(this, genContext);
+    if (specialFunctions.contains(name)) return specialFunctions.at(name).first(this, genContext);
 
     auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
 
@@ -545,7 +545,7 @@ VarAccess::VarAccess(const std::string &name)
     : Expression(nullptr),
       name(name) {}
 
-LanguageType *VarAccess::languageType(ExpressionGenContext &genCont) {
+LanguageType *VarAccess::languageType(const ExpressionGenContext &genCont) {
     auto pathName = path();
 
     if (pathName.size() > 1) {
@@ -675,7 +675,7 @@ Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
       target(std::move(target)) {}
 
-LanguageType *Dereference::languageType(ExpressionGenContext &genCont) {
+LanguageType *Dereference::languageType(const ExpressionGenContext &genCont) {
     auto derefing = target->languageType(genCont);
     auto ptrType = dynamic_cast<PointerType *>(derefing);
     if (ptrType == nullptr)
