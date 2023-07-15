@@ -46,9 +46,9 @@ LParen::LParen()
 RParen::RParen()
     : Token(Type::RParen) {}
 
-Id::Id(const std::string& id)
-    : Token(Type::Id)
-    , id(id) {}
+Symbol::Symbol(const std::string& symbol)
+    : Token(Type::Symbol)
+    , symbol(symbol) {}
 
 Keyword::Keyword(const std::string &_name)
     : Token(Type::Keyword)
@@ -109,8 +109,8 @@ std::ostream &operator<<(std::ostream &os, const token::Type &type) {
     case token::Type::RParen:
         os << "RParen";
         break;
-    case token::Type::Id:
-        os << "Id";
+    case token::Type::Symbol:
+        os << "Symbol";
         break;
     case token::Type::Keyword:
         os << "Keyword";

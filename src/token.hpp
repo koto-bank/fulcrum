@@ -13,7 +13,7 @@ enum class Type : uint32_t {
 
     LParen,
     RParen,
-    Id,
+    Symbol,
     Keyword,
 
     BooleanLiteral,
@@ -87,9 +87,9 @@ struct RParen final : public Token {
     RParen();
 };
 
-struct Id final : public Token {
-    Id(const std::string &id);
-    const std::string id;
+struct Symbol final : public Token {
+    Symbol(const std::string &symbol);
+    const std::string symbol;
 };
 
 struct Keyword final : public Token {
@@ -152,7 +152,7 @@ struct EndOfFile final : Token {
 
 template <typename T>
 auto classToType() {
-    if constexpr (std::is_same_v<T, Id>) { return Type::Id; }
+    if constexpr (std::is_same_v<T, Symbol>) { return Type::Symbol; }
     else if (std::is_same_v<T, Keyword>) { return Type::Keyword; }
     else if (std::is_same_v<T, BooleanLiteral>) { return Type::BooleanLiteral; }
     else if (std::is_same_v<T, IntegerLiteral>) { return Type::IntegerLiteral; }

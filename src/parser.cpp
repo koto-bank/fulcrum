@@ -14,7 +14,7 @@
 // expr -> atom
 //      |  list
 // atom -> literal
-//      |  id
+//      |  symbol
 //      |  kw
 // list -> '(' expr * ')'
 
