@@ -496,8 +496,8 @@ TEST(lexer_float, f32_hex) {
     EXPECT_EQ(r->bits, 32u);
 }
 
-// Ids and keywords
-TEST(lexer_id, boolean_true) {
+// Symbols and keywords
+TEST(lexer_symbol, boolean_true) {
     const std::string i = "true";
 
     auto res = processString(i);
@@ -518,14 +518,14 @@ TEST(lexer_id, boolean_true_negative_case) {
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "True");
+    EXPECT_EQ(r->symbol, "True");
 }
 
-TEST(lexer_id, boolean_false) {
+TEST(lexer_symbol, boolean_false) {
     const std::string i = "false";
 
     auto res = processString(i);
@@ -539,96 +539,96 @@ TEST(lexer_id, boolean_false) {
     EXPECT_EQ(r->value, false);
 }
 
-TEST(lexer_id, boolean_false_negative_case) {
+TEST(lexer_symbol, boolean_false_negative_case) {
     const std::string i = "False";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "False");
+    EXPECT_EQ(r->symbol, "False");
 }
 
-TEST(lexer_id, id_default) {
+TEST(lexer_symbol, symbol_default) {
     const std::string i = "some-id";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "some-id");
+    EXPECT_EQ(r->symbol, "some-id");
 }
 
-TEST(lexer_id, id_non_ascii) {
+TEST(lexer_symbol, symbol_non_ascii) {
     const std::string i = "識別名";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "識別名");
+    EXPECT_EQ(r->symbol, "識別名");
 }
 
-TEST(lexer_id, id_emoji) {
+TEST(lexer_symbol, symbol_emoji) {
     const std::string i = "🤔";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "🤔");
+    EXPECT_EQ(r->symbol, "🤔");
 }
 
-TEST(lexer_id, id_and_newline) {
-    const std::string i = "some-id\n";
+TEST(lexer_symbol, symbol_and_newline) {
+    const std::string i = "some-symbol\n";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 2);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "some-id");
+    EXPECT_EQ(r->symbol, "some-symbol");
 }
 
-TEST(lexer_id, multiple_ids_and_newlines) {
-    const std::string i = "id-1\nid-2\n";
+TEST(lexer_symbol, multiple_symbols_and_newlines) {
+    const std::string i = "symbol-1\nsymbol-2\n";
 
     auto res = processString(i);
     ASSERT_EQ(res.size(), 3);
     checkError(res[0]);
 
-    ASSERT_EQ(res[0]->type, token::Type::Id);
-    auto r = res[0]->as<token::Id>();
+    ASSERT_EQ(res[0]->type, token::Type::Symbol);
+    auto r = res[0]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "id-1");
+    EXPECT_EQ(r->symbol, "symbol-1");
 
     checkError(res[1]);
 
-    ASSERT_EQ(res[1]->type, token::Type::Id);
-    r = res[1]->as<token::Id>();
+    ASSERT_EQ(res[1]->type, token::Type::Symbol);
+    r = res[1]->as<token::Symbol>();
     ASSERT_NE(r, nullptr);
 
-    EXPECT_EQ(r->id, "id-2");
+    EXPECT_EQ(r->symbol, "symbol-2");
 }
 
 TEST(lexer_keyword, simple) {
@@ -772,8 +772,8 @@ TEST(lexer_compounds, simple_2) {
 
     EXPECT_EQ(res[0]->type, token::Type::LParen);
 
-    EXPECT_EQ(res[1]->type, token::Type::Id);
-    EXPECT_EQ(res[1]->as<token::Id>()->id, "+");
+    EXPECT_EQ(res[1]->type, token::Type::Symbol);
+    EXPECT_EQ(res[1]->as<token::Symbol>()->symbol, "+");
 
     EXPECT_EQ(res[2]->type, token::Type::IntegerLiteral);
     EXPECT_EQ(res[2]->as<token::IntegerLiteral>()->get<uint8_t>(), 123u);
@@ -795,8 +795,8 @@ TEST(lexer_compounds, compound_1) {
 
     EXPECT_EQ(res[0]->type, token::Type::LParen);
 
-    EXPECT_EQ(res[1]->type, token::Type::Id);
-    EXPECT_EQ(res[1]->as<token::Id>()->id, "format");
+    EXPECT_EQ(res[1]->type, token::Type::Symbol);
+    EXPECT_EQ(res[1]->as<token::Symbol>()->symbol, "format");
 
     EXPECT_EQ(res[2]->type, token::Type::BooleanLiteral);
     EXPECT_EQ(res[2]->as<token::BooleanLiteral>()->value, true);
@@ -809,17 +809,17 @@ TEST(lexer_compounds, compound_1) {
 
     EXPECT_EQ(res[5]->type, token::Type::LParen);
 
-    EXPECT_EQ(res[6]->type, token::Type::Id);
-    EXPECT_EQ(res[6]->as<token::Id>()->id, "*");
+    EXPECT_EQ(res[6]->type, token::Type::Symbol);
+    EXPECT_EQ(res[6]->as<token::Symbol>()->symbol, "*");
 
-    EXPECT_EQ(res[7]->type, token::Type::Id);
-    EXPECT_EQ(res[7]->as<token::Id>()->id, "a");
+    EXPECT_EQ(res[7]->type, token::Type::Symbol);
+    EXPECT_EQ(res[7]->as<token::Symbol>()->symbol, "a");
 
-    EXPECT_EQ(res[8]->type, token::Type::Id);
-    EXPECT_EQ(res[8]->as<token::Id>()->id, "b");
+    EXPECT_EQ(res[8]->type, token::Type::Symbol);
+    EXPECT_EQ(res[8]->as<token::Symbol>()->symbol, "b");
 
-    EXPECT_EQ(res[9]->type, token::Type::Id);
-    EXPECT_EQ(res[9]->as<token::Id>()->id, "c");
+    EXPECT_EQ(res[9]->type, token::Type::Symbol);
+    EXPECT_EQ(res[9]->as<token::Symbol>()->symbol, "c");
 
     EXPECT_EQ(res[10]->type, token::Type::IntegerLiteral);
     EXPECT_EQ(res[10]->as<token::IntegerLiteral>()->get<uint8_t>(), 0x12u);

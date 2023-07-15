@@ -56,10 +56,10 @@ TEST(parser, sanity_check) {
     i2.col = 1;
     EXPECT_NE(i1, i2);
 
-    auto id1 = token::Id("foo");
-    auto id2 = token::Id("foo");
+    auto symbol1 = token::Symbol("foo");
+    auto symbol2 = token::Symbol("foo");
 
-    EXPECT_EQ(id1, id2);
+    EXPECT_EQ(symbol1, symbol2);
 
     auto kw1 = token::Keyword(":foo");
     auto kw2 = token::Keyword(":foo");
@@ -182,14 +182,14 @@ TEST(parser, simple_1) {
 
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("+"),
-                          L(N<token::Id>("*"),
+                        L(N<token::Symbol>("+"),
+                          L(N<token::Symbol>("*"),
                             N<token::IntegerLiteral>((int64_t)1, 32),
                             N<token::IntegerLiteral>((int64_t)2, 32)),
-                          L(N<token::Id>("-"),
+                          L(N<token::Symbol>("-"),
                             N<token::IntegerLiteral>((int64_t)3, 32),
                             N<token::IntegerLiteral>((int64_t)4, 32))),
-                        L(N<token::Id>("foo")),
+                        L(N<token::Symbol>("foo")),
                         L());
     checkParseResult(res, parser, program);
     EXPECT_TRUE(res);
@@ -204,22 +204,22 @@ TEST(parser, simple_2) {
     auto res = parser.parse(program);
     EXPECT_TRUE(res);
 
-    const auto tree = parser.getSyntaxTree();
+    const auto tree = parser.releaseSyntaxTree();
     EXPECT_FALSE(tree->children.empty());
     EXPECT_EQ(tree->children.size(), 1);
     EXPECT_EQ(tree->children[0].children.size(), 5);
 
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("fn"),
-                          N<token::Id>("test"),
+                        L(N<token::Symbol>("fn"),
+                          N<token::Symbol>("test"),
                           N<token::Keyword>(":attr"),
-                          L(N<token::Id>("a"),
-                            N<token::Id>("b")),
-                          L(N<token::Id>("+"),
+                          L(N<token::Symbol>("a"),
+                            N<token::Symbol>("b")),
+                          L(N<token::Symbol>("+"),
                             N<token::IntegerLiteral>((int64_t)123, 32),
-                            N<token::Id>("a"),
-                            N<token::Id>("b"))));
+                            N<token::Symbol>("a"),
+                            N<token::Symbol>("b"))));
     checkParseResult(res, parser, program);
 
     EXPECT_TRUE(res);
@@ -237,8 +237,8 @@ TEST(parser, simple_error) {
     const auto tree = parser.getSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("module"),
-                          N<token::Id>("simple")));
+                        L(N<token::Symbol>("module"),
+                          N<token::Symbol>("simple")));
     checkParseResult(res, parser, program);
     const auto &errors = parser.getErrors();
     EXPECT_EQ(errors.size(), 1);
@@ -258,8 +258,8 @@ TEST(parser, closing_paren_error) {
     const auto tree = parser.getSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("module"),
-                          N<token::Id>("simple")));
+                        L(N<token::Symbol>("module"),
+                          N<token::Symbol>("simple")));
     checkParseResult(res, parser, program);
     const auto &errors = parser.getErrors();
     EXPECT_EQ(errors.size(), 1);
@@ -281,13 +281,13 @@ TEST(parser, simple_3) {
     auto tree = parser.getSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("module"),
-                          N<token::Id>("simple")),
-                        L(N<token::Id>("fn"),
-                          N<token::Id>("main"),
-                          N<token::Id>("i32"),
+                        L(N<token::Symbol>("module"),
+                          N<token::Symbol>("simple")),
+                        L(N<token::Symbol>("fn"),
+                          N<token::Symbol>("main"),
+                          N<token::Symbol>("i32"),
                           L(),
-                          L(N<token::Id>("return"),
+                          L(N<token::Symbol>("return"),
                             N<token::IntegerLiteral>((int64_t)0, 32))));
     checkParseResult(res, parser, program);
 
@@ -311,33 +311,33 @@ TEST(parser, simple_4) {
     auto tree = parser.getSyntaxTree();
     auto matcher = makeMatcher();
     res = matcher.match(tree,
-                        L(N<token::Id>("module"),
-                          N<token::Id>("simple")),
-                        L(N<token::Id>("fn"),
-                          N<token::Id>("main"),
-                          N<token::Id>("i32"),
-                          L(L(N<token::Id>("argc"),
-                              N<token::Id>("i32")),
-                            L(N<token::Id>("argv"),
-                              L(N<token::Id>("array"),
+                        L(N<token::Symbol>("module"),
+                          N<token::Symbol>("simple")),
+                        L(N<token::Symbol>("fn"),
+                          N<token::Symbol>("main"),
+                          N<token::Symbol>("i32"),
+                          L(L(N<token::Symbol>("argc"),
+                              N<token::Symbol>("i32")),
+                            L(N<token::Symbol>("argv"),
+                              L(N<token::Symbol>("array"),
                                 N<token::IntegerLiteral>((int64_t)100, 32),
-                                L(N<token::Id>("ptr"),
-                                  N<token::Id>("u8"))))),
-                          L(N<token::Id>("var"),
-                            L(N<token::Id>("i"),
-                              N<token::Id>("i32"),
-                              L(N<token::Id>("+"),
+                                L(N<token::Symbol>("ptr"),
+                                  N<token::Symbol>("u8"))))),
+                          L(N<token::Symbol>("var"),
+                            L(N<token::Symbol>("i"),
+                              N<token::Symbol>("i32"),
+                              L(N<token::Symbol>("+"),
                                 N<token::IntegerLiteral>((int64_t)12, 32),
                                 N<token::IntegerLiteral>((int64_t)34, 32),
                                 N<token::IntegerLiteral>((int64_t)56, 32))),
-                            L(N<token::Id>("j"),
-                              N<token::Id>("u32"),
-                              L(N<token::Id>("sizeof"),
-                                N<token::Id>("i32")))),
-                          L(N<token::Id>("return"),
-                            L(N<token::Id>("+"),
-                              N<token::Id>("i"),
-                              N<token::Id>("j")))));
+                            L(N<token::Symbol>("j"),
+                              N<token::Symbol>("u32"),
+                              L(N<token::Symbol>("size-of"),
+                                N<token::Symbol>("i32")))),
+                          L(N<token::Symbol>("return"),
+                            L(N<token::Symbol>("+"),
+                              N<token::Symbol>("i"),
+                              N<token::Symbol>("j")))));
     checkParseResult(res, parser, program);
 
     EXPECT_TRUE(res);

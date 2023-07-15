@@ -175,7 +175,7 @@ void Lexer::pushToken() {
         } else if (currentTokenStr[0] == ':') {
             pushToken<token::Keyword>(currentTokenStr);
         } else {
-            pushToken<token::Id>(currentTokenStr);
+            pushToken<token::Symbol>(currentTokenStr);
         }
     }
     currentTokenStr.clear();
