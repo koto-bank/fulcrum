@@ -140,13 +140,13 @@ struct ConstantStringNode : ASTNode {
 };
 
 struct ConstantIntNode : ASTNode {
-    ASTBuiltinType intType;
+    std::unique_ptr<ASTType> intType;
     std::variant<uint64_t, int64_t> value;
     bool isSigned;
 
-    ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
+    ConstantIntNode(std::unique_ptr<ASTType> &&intType, IsLongInteger auto constValue);
 };
 
 struct ConstantBoolNode : ASTNode {

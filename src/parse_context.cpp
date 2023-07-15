@@ -164,19 +164,19 @@ std::unique_ptr<Expression> ConstantStringNode::expression(ModuleNode *, Codegen
     return std::make_unique<StringConstant>(context.getNamed<NamedTypeValue>("str"), value);
 }
 
-ConstantIntNode::ConstantIntNode(ASTBuiltinType intType, IsLongInteger auto constValue_)
-    : intType(intType),
+ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&intType, IsLongInteger auto constValue_)
+    : intType(std::move(intType)),
       value(constValue_) {
     isSigned = std::holds_alternative<int64_t>(value);
 }
-template ConstantIntNode::ConstantIntNode(ASTBuiltinType, int64_t);
-template ConstantIntNode::ConstantIntNode(ASTBuiltinType, uint64_t);
 
 std::unique_ptr<Expression> ConstantIntNode::expression(ModuleNode *module, CodegenContext &context) {
     auto tp = (IntegerType *)intType.languageType(module, context);
     return isSigned ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(value))
                     : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(value));
 }
+template ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&, int64_t);
+template ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&, uint64_t);
 
 ConstantBoolNode::ConstantBoolNode(bool value)
     : value(value) {}
