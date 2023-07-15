@@ -27,7 +27,7 @@ struct SemanticAnalyzer {
     std::optional<ArgList> parseArgList(const Parser::Expression &form);
     std::optional<std::unique_ptr<ASTNode>> parseBodyForm(const Parser::Expression &form);
 
-    std::optional<std::unique_ptr<VariableDeclarationNode>> parseVariableDeclaraion(const Parser::Expression &form);
+    std::optional<std::unique_ptr<VarDeclarationNode>> parseVariableDeclaraion(const Parser::Expression &form);
     std::optional<std::unique_ptr<FunctionCallNode>> parseFunctionCall(const Parser::Expression &form);
     std::optional<std::unique_ptr<ASTNode>> parseArgExpression(const Parser::Expression &form);
 

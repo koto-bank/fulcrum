@@ -75,7 +75,7 @@ struct ParseHeaderContext {
         llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
     }
 
-    std::unique_ptr<VariableDeclarationNode> evalMacro(const std::string &name) {
+    std::unique_ptr<VarDeclarationNode> evalMacro(const std::string &name) {
         auto varName = fmt::format("macro_{}", name);
         auto tuOrErr
             = interp->Parse(std::string(fmt::format(R"(extern "C" constexpr decltype(auto) {} = {};)", varName, name)));
@@ -107,7 +107,7 @@ struct ParseHeaderContext {
 
             auto initializer = llvm::dyn_cast<llvm::ConstantInt>(llvmVar->getInitializer());
 
-            auto varDef = std::make_unique<VariableDeclarationNode>(name, std::make_unique<ASTBuiltinType>("i64"));
+            auto varDef = std::make_unique<VarDeclarationNode>(name, std::make_unique<ASTBuiltinType>("i64"));
             if (isSigned)
                 varDef->initialValue = std::make_unique<ConstantIntNode>(valType, initializer->getSExtValue());
             else
@@ -117,7 +117,7 @@ struct ParseHeaderContext {
         } else if (declType->isConstantArrayType() && declType->getPointeeOrArrayElementType()->isAnyCharacterType()) {
             auto varInitializer = llvm::dyn_cast<llvm::ConstantDataArray>(llvmVar->getInitializer()->getOperand(0));
 
-            auto varDef = std::make_unique<VariableDeclarationNode>(name, std::make_unique<ASTBuiltinType>("str"));
+            auto varDef = std::make_unique<VarDeclarationNode>(name, std::make_unique<ASTBuiltinType>("str"));
             llvm::handleAllErrors(interp->Execute(tuOrErr.get()));
             varDef->initialValue = std::make_unique<ConstantStringNode>(varInitializer->getAsString().str());
             return varDef;
@@ -532,7 +532,7 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                             != parseContext->parseHeaderContext.module->globalVariables.end())
                             return CXChildVisit_Break;
 
-                        auto varDef = std::make_unique<VariableDeclarationNode>(variantName,
+                        auto varDef = std::make_unique<VarDeclarationNode>(variantName,
                                                                                 std::make_unique<ASTBuiltinType>(parseContext->enumTypeName));
                         if (parseContext->enumTypeName[0] == 'i')
                             varDef->initialValue = std::make_unique<ConstantIntNode>(

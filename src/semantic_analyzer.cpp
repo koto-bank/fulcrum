@@ -366,7 +366,7 @@ std::optional<std::unique_ptr<FunctionCallNode>> SemanticAnalyzer::parseFunction
     return fnCall;
 }
 
-std::optional<std::unique_ptr<VariableDeclarationNode>>
+std::optional<std::unique_ptr<VarDeclarationNode>>
 SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
     if (form.token != nullptr) {
         reportError(form.token, "variable declaration must be a list");
@@ -393,14 +393,14 @@ SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
     if (form.children.size() == 4) {
         auto initialValue = parseArgExpression(form.children[3]);
         if (initialValue != std::nullopt) {
-            auto res = std::make_unique<VariableDeclarationNode>(varName.value(), std::move(type.value()));
+            auto res = std::make_unique<VarDeclarationNode>(varName.value(), std::move(type.value()));
             res->initialValue = std::move(initialValue.value());
             return res;
         } else {
             return std::nullopt;
         }
     } else {
-        return std::make_unique<VariableDeclarationNode>(varName.value(), std::move(type.value()));
+        return std::make_unique<VarDeclarationNode>(varName.value(), std::move(type.value()));
     }
 }
 

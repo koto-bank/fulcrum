@@ -209,7 +209,7 @@ std::unique_ptr<Expression> DereferenceNode::expression(ModuleNode *module, Code
     return std::make_unique<Dereference>(target->expression(module, context));
 }
 
-VariableDeclarationNode::VariableDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type)
+VarDeclarationNode::VarDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type)
     : type(std::move(type))
     , name(name) {}
 
