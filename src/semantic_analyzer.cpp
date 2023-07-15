@@ -51,11 +51,7 @@ std::optional<std::unique_ptr<ASTBuiltinType>> parseIntType(const std::string &t
     if (bits > 999) {
         return std::nullopt;
     }
-    return std::make_unique<ASTIntegerType>(type, isSigned, bits);
-}
-
-std::string makeIntTypeSignature(const token::IntegerLiteral &token) {
-    return fmt::format("{}{}", token.isSigned ? 'i' : 'u', token.bits);
+    return std::make_unique<ASTIntegerType>(isSigned, bits);
 }
 
 template <typename T>
