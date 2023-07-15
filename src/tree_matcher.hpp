@@ -22,7 +22,7 @@ using NodeMatcherFn = std::function<void(const token::Token &, const token::Toke
 
 struct TreeMatcher {
     template <typename ...Args>
-    bool match(const Parser::Expression *tree, Args &&...args);
+    bool match(const std::unique_ptr<Parser::Expression> &tree, Args &&...args);
 
     TreeMatcher &matchExprType(ExprTypeMatcherFn matcher);
     TreeMatcher &matchListSize(ListSizeMatcherFn matcher);
@@ -177,9 +177,9 @@ auto createList(Args &&...args) {
 }
 
 template <typename ...Args>
-bool TreeMatcher::match(const Parser::Expression *tree, Args &&...args) {
+bool TreeMatcher::match(const std::unique_ptr<Parser::Expression> &tree, Args &&...args) {
     List l;
     l.construct(std::forward<Args>(args)...);
-    return l.match(tree, *this);
+    return l.match(tree.get(), *this);
 }
 }
