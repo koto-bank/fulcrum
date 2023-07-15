@@ -32,7 +32,7 @@ public:
         Expression(Expression *parent);
 
         Expression *parent = nullptr;
-        std::unique_ptr<token::Token> token; // lists have nullptr, terminals -- a corresponding token
+        std::unique_ptr<token::Token> token; // lists have nullptr, atoms -- a corresponding token
         std::vector<Expression> children;
 
         void dump(uint32_t indent = 0u) const;
@@ -47,11 +47,11 @@ private:
     bool parseExpression();
 
     bool parseList();
-    bool parseTerminal();
+    bool parseAtom();
     bool parseEndOfInput();
 
     bool matchNextToken(token::Type expectedType);
-    bool matchNextTokenAndPushTerminal(token::Type expectedTerminalType);
+    bool matchNextTokenAndPushAtom(token::Type expectedAtomType);
 
     void pushExpression();
     void popExpression();

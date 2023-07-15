@@ -9,7 +9,7 @@
 #include "parser.hpp"
 #include "utils.hpp"
 
-// The grammar:
+// The grammar (just for reference):
 // program -> expr * end
 // expr -> atom
 //      |  list
@@ -113,7 +113,7 @@ bool Parser::parseProgram() {
 
 bool Parser::parseExpression() {
     auto save = nextToken;
-    return parseTerminal()
+    return parseAtom()
         || (nextToken = save, parseList());
 }
 
@@ -145,16 +145,16 @@ bool Parser::parseList() {
     return true;
 }
 
-bool Parser::parseTerminal() {
+bool Parser::parseAtom() {
     auto save = nextToken;
-    if (matchNextTokenAndPushTerminal(token::Type::Id)
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::Keyword))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::BooleanLiteral))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::CharLiteral))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::StringLiteral))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::IntegerLiteral))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::FloatLiteral))
-        || (nextToken = save, matchNextTokenAndPushTerminal(token::Type::Error))) {
+    if (matchNextTokenAndPushAtom(token::Type::Symbol)
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::Keyword))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::BooleanLiteral))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::CharLiteral))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::StringLiteral))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::IntegerLiteral))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::FloatLiteral))
+        || (nextToken = save, matchNextTokenAndPushAtom(token::Type::Error))) {
         return true;
     } else {
         return false;
@@ -166,9 +166,9 @@ bool Parser::matchNextToken(token::Type expectedType) {
             && (*nextToken++)->type == expectedType);
 }
 
-bool Parser::matchNextTokenAndPushTerminal(token::Type expectedTerminalType) {
+bool Parser::matchNextTokenAndPushAtom(token::Type expectedAtomType) {
     if (nextToken != tokens.end()
-        && (*nextToken)->type == expectedTerminalType) {
+        && (*nextToken)->type == expectedAtomType) {
         pushExpression();
         currentExpression->token = std::move(*nextToken++);
         popExpression();
