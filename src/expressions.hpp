@@ -122,6 +122,7 @@ private:
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
     llvm::Value *notProcessor(ExpressionGenContext &genContext);
+    llvm::Value *addrofProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
@@ -145,6 +146,7 @@ public:
         { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
         { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
         { "not", { &FunctionCall::notProcessor, &FunctionCall::notProcessorType } },
+        { "addr-of", { &FunctionCall::addrofProcessor, &FunctionCall::voidProcessorType } },
 
         { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
@@ -179,17 +181,6 @@ public:
 
     const std::vector<std::string> &path() const;
     llvm::Value *varAddress(ExpressionGenContext &genContext);
-};
-
-struct AddrOf : Expression {
-private:
-    std::unique_ptr<Expression> target;
-
-public:
-    AddrOf(std::unique_ptr<Expression> &&target);
-    LanguageType *languageType(ExpressionGenContext &genContext) override;
-    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
 };
 
 struct Dereference : Expression {
