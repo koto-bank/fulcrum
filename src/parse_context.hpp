@@ -9,35 +9,34 @@
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 
-union ParsedLine {
-    long iNum;
-    double fNum;
-    char *str;
-    bool boolConst;
-};
-
 struct ModuleNode;
 
 // Types
 
 struct ASTType {
-    virtual ~ASTType() {}
-
+    virtual ~ASTType() = default;
     virtual LanguageType *languageType(ModuleNode *module, CodegenContext &context) = 0;
 };
 
 struct ASTBuiltinType : ASTType {
-    std::string builtinName;
+    const std::string builtinName;
 
-    ASTBuiltinType(std::string name);
+    ASTBuiltinType(const std::string &name);
 
     LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
+};
+
+struct ASTIntegerType : ASTBuiltinType {
+    const uint32_t bits;
+    const bool isSigned;
+
+    ASTIntegerType(const std::string &name, bool isSigned, uint32_t bits);
 };
 
 struct ASTNamedType : ASTType {
     std::string name;
 
-    ASTNamedType(std::string name);
+    ASTNamedType(const std::string &name);
 
     LanguageType *languageType(ModuleNode *module, CodegenContext &context) override;
 };
@@ -112,20 +111,21 @@ struct AliasNode : ASTNode {
     void emplaceAliasType(ModuleNode *module, CodegenContext &context);
 };
 
+using ArgList = std::vector<std::pair<std::string, std::unique_ptr<ASTType>>>;
+
 struct FunctionNode : ASTNode {
-    using Args = std::vector<std::pair<std::string, std::unique_ptr<ASTType>>>;
     using Body = std::vector<std::unique_ptr<ASTNode>>;
 
     std::string name;
     bool isPublic;
 
-    Args arguments;
+    ArgList arguments;
     std::unique_ptr<ASTType> returnType;
 
     Body body;
 
     FunctionNode() = default;
-    FunctionNode(std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
+    FunctionNode(std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
     void emplaceFunction(ModuleNode *module, CodegenContext &context);
@@ -174,28 +174,21 @@ struct VarAccessNode : ASTNode {
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
-struct AddrOfNode : ASTNode {
-    std::unique_ptr<ASTNode> target;
-
-    AddrOfNode(std::unique_ptr<ASTNode> &&target);
-
-    std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
-};
-
 struct DereferenceNode : ASTNode {
     std::unique_ptr<ASTNode> target;
 
-    DereferenceNode() = default;
+    DereferenceNode(std::unique_ptr<ASTNode> &&target);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
 
 struct VariableDeclarationNode : ASTNode {
     std::unique_ptr<ASTNode> initialValue = nullptr;
-    std::unique_ptr<ASTType> type;
-    std::string name;
 
-    VariableDeclarationNode(const std::string &name);
+    std::unique_ptr<ASTType> type;
+    const std::string name;
+
+    VariableDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
     void emplaceGlobalVar(ModuleNode *module, CodegenContext &context);
@@ -213,7 +206,7 @@ struct CastNode : ASTNode {
     std::unique_ptr<ASTType> targetType;
     std::unique_ptr<ASTNode> targetExpression;
 
-    CastNode(std::unique_ptr<ASTType> &&targetType);
+    CastNode(std::unique_ptr<ASTType> &&targetType, std::unique_ptr<ASTNode> &&target);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 };
@@ -233,8 +226,7 @@ struct ModuleNode : ASTNode {
     std::vector<std::unique_ptr<AliasNode>> aliases;
     std::vector<std::unique_ptr<VariableDeclarationNode>> globalVariables;
 
-    ModuleNode(std::string name);
-    ModuleNode() = default;
+    ModuleNode(const std::string &name);
 
     std::unique_ptr<Expression> expression(ModuleNode *module, CodegenContext &context) override;
 
@@ -242,33 +234,4 @@ struct ModuleNode : ASTNode {
 
     std::map<std::string, std::string> allNames();
     void importName(const std::string &baseName, const std::string &fullName);
-};
-
-struct ParseContext {
-    std::unique_ptr<ModuleNode> module;
-
-    struct IntLiteral {
-        union {
-            uint64_t u;
-            int64_t i;
-        } num;
-        std::string str;
-        std::string bits;
-        bool isSigned;
-    };
-
-    std::unique_ptr<ModuleNode::Import> import;
-    std::unique_ptr<FunctionNode> fnDef;
-    std::unique_ptr<FunctionCallNode> fnCall;
-
-    std::unique_ptr<ASTType> type = nullptr;
-    std::unique_ptr<StructNode> structDef;
-    std::vector<std::unique_ptr<ASTNode>> exprStack;
-
-    std::string structFieldName;
-    bool isSigned; // for integer types and literals
-
-    IntLiteral intLiteral;
-
-    size_t arraySize;
 };

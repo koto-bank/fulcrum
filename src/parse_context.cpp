@@ -20,16 +20,20 @@ std::string resolveName(ModuleNode *module, const std::string &name) {
 }
 }
 
-ASTBuiltinType::ASTBuiltinType(std::string name)
+ASTBuiltinType::ASTBuiltinType(const std::string& name)
     : builtinName(name) {}
 
 LanguageType *ASTBuiltinType::languageType(ModuleNode *, CodegenContext &context) {
     fc_assert(context.existsNamed(builtinName));
-
     return context.getNamed<NamedTypeValue>(builtinName);
 };
 
-ASTNamedType::ASTNamedType(std::string name)
+ASTIntegerType::ASTIntegerType(const std::string &name, bool isSigned, uint32_t bits)
+    : ASTBuiltinType(name)
+    , bits(bits)
+    , isSigned(isSigned) {}
+
+ASTNamedType::ASTNamedType(const std::string &name)
     : name(name) {}
 
 LanguageType *ASTNamedType::languageType(ModuleNode *module, CodegenContext &context) {
@@ -126,7 +130,7 @@ void AliasNode::emplaceAliasType(ModuleNode *module, CodegenContext &context) {
 }
 
 FunctionNode::FunctionNode(
-    std::string name, Args &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic
+    std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic
 )
     : name(name),
       isPublic(isPublic),
@@ -201,19 +205,13 @@ std::unique_ptr<Expression> VarAccessNode::expression(ModuleNode *module, Codege
     return std::make_unique<VarAccess>(resolveName(module, name));
 }
 
-AddrOfNode::AddrOfNode(std::unique_ptr<ASTNode> &&target)
-    : target(std::move(target)) {}
-
-std::unique_ptr<Expression> AddrOfNode::expression(ModuleNode *module, CodegenContext &context) {
-    return std::make_unique<AddrOf>(target->expression(module, context));
-}
-
 std::unique_ptr<Expression> DereferenceNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<Dereference>(target->expression(module, context));
 }
 
-VariableDeclarationNode::VariableDeclarationNode(const std::string &name)
-    : name(name) {}
+VariableDeclarationNode::VariableDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type)
+    : type(std::move(type))
+    , name(name) {}
 
 std::unique_ptr<Expression> VariableDeclarationNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<VariableDeclaration>(
@@ -247,9 +245,12 @@ SizeofNode::SizeofNode(std::unique_ptr<ASTType> &&targetType)
 std::unique_ptr<Expression> SizeofNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<Sizeof>(context, targetType->languageType(module, context));
 }
+DereferenceNode::DereferenceNode(std::unique_ptr<ASTNode> &&target)
+    : target(std::move(target)) {}
 
-CastNode::CastNode(std::unique_ptr<ASTType> &&targetType)
-    : targetType(std::move(targetType)) {}
+CastNode::CastNode(std::unique_ptr<ASTType> &&targetType, std::unique_ptr<ASTNode> &&target)
+    : targetType(std::move(targetType))
+    , targetExpression(std::move(target)) {}
 
 std::unique_ptr<Expression> CastNode::expression(ModuleNode *module, CodegenContext &context) {
     return std::make_unique<Cast>(
@@ -257,8 +258,8 @@ std::unique_ptr<Expression> CastNode::expression(ModuleNode *module, CodegenCont
     );
 }
 
-ModuleNode::ModuleNode(std::string name)
-    : name(name){};
+ModuleNode::ModuleNode(const std::string &name)
+    : name(name) {};
 
 std::unique_ptr<Expression> ModuleNode::expression(ModuleNode *, CodegenContext &) { return nullptr; }
 

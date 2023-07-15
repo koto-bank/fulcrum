@@ -300,7 +300,7 @@ TEST(parser, simple_4) {
 
 (fn main i32 ((argc i32) (argv (array 100 (ptr u8))))
   (var (i i32 (+ 12 34 56))
-       (j u32 (sizeof
+       (j u32 (size-of
                i32)))
   (return (+ i j)))
 )"";
