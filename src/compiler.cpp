@@ -273,6 +273,8 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
             auto enumDecl = clang_getTypeDeclaration(namedType);
 
             result = clangToASTType(context, clang_getEnumDeclIntegerType(enumDecl));
+        } else if (namedType.kind == CXType_Typedef) {
+            result = clangTypedefToASTType(context, typeName, namedType);
         } else {
             auto kindName = cxToString(clang_getTypeKindSpelling(namedType.kind));
             std::cout << "Unknown elaborate type: " << kindName << std::endl;
