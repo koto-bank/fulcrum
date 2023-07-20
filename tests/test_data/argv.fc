@@ -1,0 +1,13 @@
+;;; On macOS compile like this: fulcrum -I"/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/" argv.fc
+
+(module print-args
+  (import :c "stdio.h"))
+
+(fn main i32 ((argc i32) (argv (ptr (ptr char))))
+  (var i i32 0)
+  (puts "Program arguments:")
+  (while (< i argc)
+    (puts (cast (deref (ptr- (ptr+ argv (- argc 1)) i))
+                str))
+    (set i (+ i 1)))
+  (return 0))

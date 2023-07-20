@@ -224,6 +224,42 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     return nullptr;
 }
 
+llvm::Value *FunctionCall::ptrArithmeticsProcessor(ExpressionGenContext &genContext) {
+    if (args.size() != 2) { throw CodegenError(fmt::format("Expected exaclty 2 arguments to {}, but got {}", name, args.size())); }
+
+    const auto &targetArg = args[0];
+    auto targetType = targetArg->languageType(genContext)->actualLanguageType();
+    auto ptrType = dynamic_cast<PointerType *>(targetType);
+    if (ptrType == nullptr) {
+        throw CodegenError(fmt::format(
+            "Expected first argument to {} to be of an integer type, but it was of type {}", name,
+            type->signature()
+        ));
+    }
+
+    const auto &offsetArg = args[1];
+    auto offsetType = offsetArg->languageType(genContext)->actualLanguageType();
+    auto intType = dynamic_cast<IntegerType *>(offsetType);
+    if (intType == nullptr) {
+        throw CodegenError(fmt::format(
+            "Expected first argument to {} to be of an integer type, but it was of type {}", name,
+            type->signature()
+        ));
+    }
+
+    auto offset = offsetArg->llvmValue(genContext);
+    auto &builder = genContext.builder;
+    if (name == "ptr-") {
+        offset = builder.CreateNeg(offset);
+    } else if (name != "ptr+") {
+        fc_unreachable();
+        return nullptr;
+    }
+    return builder.CreateGEP(targetArg->llvmType(genContext),
+                             targetArg->llvmValue(genContext),
+                             { offset });
+}
+
 llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext) {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if ((name == "=" || name[0] == '>' || name[0] == '<') && args.size() != 2)
@@ -386,6 +422,11 @@ LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext 
     return args[0]->languageType(genCont);
 }
 
+LanguageType *FunctionCall::ptrArithmeticsProcessorType(const ExpressionGenContext &genCont) const {
+    if (args.size() != 2) { throw CodegenError(fmt::format("Expected exactly 2 to {}, but got {}", name, args.size())); }
+    return args[0]->languageType(genCont);
+}
+
 llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
     if (args.size() % 2 != 0) {
         throw CodegenError(fmt::format("Expected an even number of arguments to set, but got {}", args.size()));
@@ -440,7 +481,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
-    if (args.size() != 2) { throw CodegenError(fmt::format("Expected 2 arguments to while, but got {}", args.size())); }
+    if (args.size() < 1) { throw CodegenError(fmt::format("Expected at least 1 argument to while")); }
     if (args[0]->languageType(genContext)->actualLanguageType()
         != genContext.codegenContext.getNamed<NamedTypeValue>("bool")) {
         throw CodegenError("First argument to while must be boolean");
@@ -457,8 +498,18 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     genContext.builder.SetInsertPoint(condTrueBlock);
 
     genContext.pushScope();
-    args[1]->llvmValue(genContext);
-    if (!args[1]->isTerminator()) { genContext.builder.CreateBr(whileCondBlock); }
+    bool terminatorPresent = false;
+    for (auto &arg : args ) {
+        arg->llvmValue(genContext);
+        if (arg->isTerminator()) {
+            terminatorPresent = true;
+        }
+    }
+
+    if (!terminatorPresent) {
+        genContext.builder.CreateBr(whileCondBlock);
+    }
+
     genContext.popScope();
 
     auto condAfterBlock = llvm::BasicBlock::Create(llContext, "while-after", genContext.function->llvmFunction());

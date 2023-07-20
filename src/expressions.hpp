@@ -119,12 +119,14 @@ private:
     llvm::Value *doProcessor(ExpressionGenContext &genContext);
     llvm::Value *ifProcessor(ExpressionGenContext &genContext);
     llvm::Value *arithmeticsProcessor(ExpressionGenContext &genContext);
+    llvm::Value *ptrArithmeticsProcessor(ExpressionGenContext &genContext);
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
     llvm::Value *notProcessor(ExpressionGenContext &genContext);
     llvm::Value *addrofProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
+    LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *notProcessorType(const ExpressionGenContext &genContext) const;
 
@@ -147,6 +149,9 @@ public:
         { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
         { "not", { &FunctionCall::notProcessor, &FunctionCall::notProcessorType } },
         { "addr-of", { &FunctionCall::addrofProcessor, &FunctionCall::voidProcessorType } },
+
+        { "ptr+", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
+        { "ptr-", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
 
         { "+", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         { "-", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
