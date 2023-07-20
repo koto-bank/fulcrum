@@ -187,8 +187,10 @@ void CodegenContext::emplaceGlobalVar(const ModuleNode &moduleNode,
 void CodegenContext::emplaceFunction(const ModuleNode &moduleNode,
                                      const std::unique_ptr<FunctionNode> &fnNode) {
     Function::Args exprArgs;
-    for (auto &[name, astType] : fnNode->arguments)
-        exprArgs.emplace_back(name, getLanguageType(moduleNode, astType));
+    for (auto &[name, astType] : fnNode->arguments) {
+        auto resolvedName = moduleNode.resolveName(name);
+        exprArgs.emplace_back(resolvedName, getLanguageType(moduleNode, astType));
+    }
     Function::Body exprBody;
     for (auto &node : fnNode->body)
         exprBody.push_back(getExpression(moduleNode, node));
