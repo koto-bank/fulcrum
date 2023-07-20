@@ -172,6 +172,21 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         if (typeName == "") typeName = prevName;
     }
 
+    auto clangTypedefToASTType = [](ParseHeaderContext &context, const std::string &typeName, CXType clangTp)
+        -> std::unique_ptr<ASTType> {
+        auto typeDecl = clang_getTypeDeclaration(clangTp);
+        auto underlying = clang_getTypedefDeclUnderlyingType(typeDecl);
+        auto aliasTo = clangToASTType(context, underlying);
+        if (aliasTo == nullptr) {
+            return nullptr;
+        }
+        // Special cases:
+        if (typeName == "__builtin_va_list") {
+            return std::make_unique<ASTBuiltinType>(VAType::Signature);
+        }
+        return std::make_unique<ASTNamedType>(typeName);
+    };
+
     std::unique_ptr<ASTType> result;
     switch (clangTp.kind) {
     case CXType_Int:
@@ -222,7 +237,9 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
             = clangTp.kind == CXType_Pointer ? clang_getPointeeType(clangTp) : clang_getArrayElementType(clangTp);
 
         auto pointee = clangToASTType(context, internalType);
-        if (pointee == nullptr) return nullptr;
+        if (pointee == nullptr) {
+            return nullptr;
+        }
 
         auto maybeBuiltin = dynamic_cast<ASTBuiltinType *>(pointee.get());
         if (maybeBuiltin != nullptr && maybeBuiltin->builtinName == "void") {
@@ -239,10 +256,7 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         break;
     }
     case CXType_Typedef: {
-        auto aliasTo = clangToASTType(context, clang_getTypedefDeclUnderlyingType(clang_getTypeDeclaration(clangTp)));
-        if (aliasTo == nullptr) return nullptr;
-
-        result = std::make_unique<ASTNamedType>(typeName);
+        result = clangTypedefToASTType(context, typeName, clangTp);
         break;
     }
     case CXType_Elaborated:
@@ -272,7 +286,10 @@ std::unique_ptr<ASTType> clangToASTType(ParseHeaderContext &context, CXType clan
         auto resType = clang_getResultType(clangTp);
         auto returnType = clangToASTType(context, resType);
 
-        bool unknownType = returnType == nullptr;
+        bool unknownType = false;
+        if (returnType == nullptr) {
+            unknownType = true;
+        }
 
         ASTFunctionType::Args arguments;
         for (auto i = 0; i < clang_getNumArgTypes(clangTp); i++) {
@@ -348,7 +365,11 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
                 auto resType = clang_getResultType(funcType);
                 auto returnType = clangToASTType(*parseHeaderContext, resType);
 
-                bool unknownType = returnType == nullptr;
+                bool unknownType = false;
+                if (returnType == nullptr) {
+                    unknownType = true;
+                }
+
                 ArgList arguments;
 
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {

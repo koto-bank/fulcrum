@@ -156,3 +156,12 @@ ArrayType::ArrayType(CodegenContext &context, LanguageType *targetType, size_t s
 llvm::Type *ArrayType::llvmType() { return llvm::ArrayType::get(targetType->llvmType(), size); }
 
 std::string ArrayType::signature() { return fmt::format("{}[{}]", targetType->signature(), size); }
+
+llvm::Type *VAType::llvmType() {
+    // TODO: handle va-list properly
+    return llvm::PointerType::get(context.context, 0);
+}
+
+std::string VAType::signature() {
+    return VAType::Signature;
+}

@@ -139,6 +139,7 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<IntegerType>("u64", 64, false);
     emplaceType<CharType>("char");
     emplaceType<StringType>("str");
+    emplaceType<VAType>(VAType::Signature);
 }
 
 bool CodegenContext::existsNamed(const std::string &name) const {
