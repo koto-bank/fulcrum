@@ -1,0 +1,6 @@
+(module puts-from-c
+  (import :c "stdio.h"))
+
+(fn main i32 ()
+  (puts "Hello, world!\n")
+  (return 0))
