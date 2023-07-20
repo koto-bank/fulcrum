@@ -154,3 +154,12 @@ public:
     llvm::Type *llvmType() override;
     std::string signature() override;
 };
+
+struct VAType : LanguageType {
+    using LanguageType::LanguageType;
+
+    llvm::Type *llvmType() override;
+    std::string signature() override;
+
+    constexpr static auto Signature = "(va-list)";
+};
