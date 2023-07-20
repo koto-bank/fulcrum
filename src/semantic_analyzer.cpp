@@ -539,6 +539,10 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
             return std::make_unique<ASTBuiltinType>("void");
         } else if (sym == "bool") {
             return std::make_unique<ASTBuiltinType>("bool");
+        } else if (sym == "char") {
+            return std::make_unique<ASTBuiltinType>("char");
+        } else if (sym == "str") {
+            return std::make_unique<ASTBuiltinType>("str");
         } else if (sym.value()[0] == 'i' || sym.value()[0] == 'u') {
             auto intType = parseIntType(sym.value());
             if (intType != std::nullopt) {
