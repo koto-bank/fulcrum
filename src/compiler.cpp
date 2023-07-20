@@ -589,46 +589,60 @@ std::unique_ptr<ParseHeaderContext> parseHeader(std::string path, CodegenContext
     return parseHeaderContext;
 }
 
-void processImportsRecursive(std::vector<ModuleNode::Import> moduleImports,
-               CodegenContext& codegenCont,
-               std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
+std::optional<std::filesystem::path> tryToFindImport(const std::string &importName, CodegenContext& codegenCont) {
+    namespace fs = std::filesystem;
+
+    fs::path targetPath;
+    bool found = false;
+    for (auto inclDir = codegenCont.includeDirectories.rbegin();
+         inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
+        fs::path includePath(*inclDir);
+        includePath.make_preferred();
+
+        if (!fs::is_directory(includePath.string())) {
+            std::cout << fmt::format(
+                "Include path '{}' does not exist or is not a directory", includePath.string()
+                );
+            continue;
+        }
+
+        targetPath = includePath / importName;
+        std::cout << "Checking " << targetPath << "\n";
+        if (fs::is_regular_file(targetPath)) {
+            found = true;
+            break;
+        }
+    }
+
+    if (found) {
+        return targetPath;
+    } else {
+        return std::nullopt;
+    }
+}
+
+void processImportsRecursive(const std::vector<ModuleNode::Import> &moduleImports,
+                             CodegenContext& codegenCont,
+                             std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
     for (auto &import : moduleImports) {
         if (includedModules.contains(import.target)) continue;
 
         if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-            auto resultContext = parseHeader(import.target, codegenCont);
+            auto targetPath = tryToFindImport(import.target, codegenCont);
+            if (targetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find C include '{}'", import.target));
+
+            auto cImport = targetPath.value();
+            auto resultContext = parseHeader(cImport, codegenCont);
             if (resultContext == nullptr) {
                 return;
             }
             includedModules.emplace(import.target, std::move(resultContext->module));
         } else {
-            namespace fs = std::filesystem;
 
-            fs::path targetPath;
-            bool found = false;
-            for (auto inclDir = codegenCont.includeDirectories.rbegin();
-                 inclDir != codegenCont.includeDirectories.rend(); inclDir++) {
-                fs::path includePath(*inclDir);
-                includePath.make_preferred();
+            auto maybeTargetPath = tryToFindImport(import.target, codegenCont);
+            if (maybeTargetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find module '{}'", import.target));
 
-                if (!fs::is_directory(includePath.string())) {
-                    std::cout << fmt::format(
-                        "Include path {} does not exist or is not a directory", includePath.string()
-                        );
-                    continue;
-                }
-
-                auto targetPathStr = import.target;
-                std::replace(targetPathStr.begin(), targetPathStr.end(), '.', fs::path::preferred_separator);
-                targetPath = includePath / targetPathStr;
-                targetPath.replace_extension(".fl");
-                if (fs::is_regular_file(targetPath)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) throw CodegenError(fmt::format("Could not find the module {}", import.target));
-
+            auto targetPath = maybeTargetPath.value();
             Parser parser;
             auto res = parser.parse(targetPath);
             if (res == false) {
@@ -663,6 +677,16 @@ processImports(std::vector<ModuleNode::Import> moduleImports, CodegenContext& co
     std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
     processImportsRecursive(moduleImports, codegenCont, includedModules);
     return includedModules;
+}
+
+void importNames(ModuleNode *importTo, std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
+    for (auto &import : importTo->imports) {
+        // TODO: actually add import names, for now everything is imported
+        auto &importedAST = includedModules[import.target];
+        for (auto &[basename, fullname] : importedAST->allNames()) {
+            importTo->importName(basename, fullname);
+        }
+    }
 }
 }
 
@@ -744,26 +768,35 @@ args::ArgumentParser argParser("fulcrum");
         return 1;
     }
     moduleAST = sem.releaseModule();
-    auto includedModules = processImports(moduleAST->imports, codegenCont);
-    auto importNames = [&includedModules](ModuleNode *importTo) {
-        for (auto &import : importTo->imports) {
-            // TODO: actually add import names, for now everything is imported
-            auto &importedAST = includedModules[import.target];
-            for (auto &[basename, fullname] : importedAST->allNames()) {
-                importTo->importName(basename, fullname);
-            }
-        }
-    };
 
-    for (auto &[name, ast] : includedModules) {
-        std::cout << fmt::format("Compiling {}", name) << std::endl;
-
-        importNames(ast.get());
-        codegenCont.generate(std::move(ast));
+    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
+    try {
+        includedModules = processImports(moduleAST->imports, codegenCont);
+    } catch (const CodegenError &err) {
+        std::cout << fmt::format(
+                "{}\n{}", fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold), err.whatIndented(4)
+            ) << std::endl;
+        return 1;
     }
-    importNames(moduleAST.get());
-    codegenCont.generate(std::move(moduleAST));
 
+    // TODO: better error collection, recovery and reporting
+    try {
+        for (auto &[name, ast] : includedModules) {
+            std::cout << fmt::format("Compiling {}", name) << std::endl;
+
+            importNames(ast.get(), includedModules);
+            codegenCont.generate(std::move(ast));
+        }
+
+    } catch (const CodegenError &err) {
+        std::cout << fmt::format(
+                "{}\n{}", fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold), err.whatIndented(4)
+            ) << std::endl;
+        return 1;
+    }
+
+    importNames(moduleAST.get(), includedModules);
+    codegenCont.generate(std::move(moduleAST));
     ExpressionGenContext exprGenContext{ .builder = builder, .codegenContext = codegenCont };
     for (auto &[name, named] : codegenCont.names) {
         try {
