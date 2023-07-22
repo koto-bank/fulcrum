@@ -148,6 +148,8 @@ args::ArgumentParser argParser("fulcrum");
         argParser, "path", "Directories to search modules in. Searched from last to first", { 'I', "include" }
     );
     args::HelpFlag helpArg(argParser, "help", "Display help", { 'h', "help" });
+    args::Flag picArg(argParser, "pic", "Create a dynamically linked position independent object", { "pic" });
+
     try {
         argParser.ParseCLI(argc, argv);
     } catch (const args::Help &) {
@@ -183,6 +185,9 @@ args::ArgumentParser argParser("fulcrum");
 
         llvm::TargetOptions options;
         auto rm = llvm::Optional<llvm::Reloc::Model>();
+        if (picArg) {
+            rm = llvm::Reloc::Model::PIC_;
+        }
         targetMachine = target->createTargetMachine(targetTriple, "generic", "", options, rm);
         codegenCont.module.setDataLayout(targetMachine->createDataLayout());
         codegenCont.module.setTargetTriple(targetTriple);
