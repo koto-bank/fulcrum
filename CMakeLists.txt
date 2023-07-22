@@ -25,7 +25,8 @@ add_library(${FULCRUM_LIB} OBJECT
   "src/parse_context.cpp"
   "src/semantic_analyzer.cpp"
   "src/tree_matcher.cpp"
-  "src/types.cpp")
+  "src/types.cpp"
+  "src/c_header_parser.cpp")
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
