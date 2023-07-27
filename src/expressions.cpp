@@ -436,7 +436,7 @@ LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext 
 }
 
 LanguageType *FunctionCall::ptrArithmeticsProcessorType(const ExpressionGenContext &genCont) const {
-    if (args.size() != 2) { throw CodegenError(fmt::format("Expected exactly 2 to {}, but got {}", name, args.size())); }
+    if (args.size() != 2) { throw CodegenError(fmt::format("Expected exactly 2 arguments to {}, but got {}", name, args.size())); }
     return args[0]->languageType(genCont);
 }
 
