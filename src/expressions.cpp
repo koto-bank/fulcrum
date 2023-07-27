@@ -257,7 +257,7 @@ llvm::Value *FunctionCall::ptrArithmeticsProcessor(ExpressionGenContext &genCont
     }
     return builder.CreateGEP(targetArg->llvmType(genContext),
                              targetArg->llvmValue(genContext),
-                             { offset });
+                             offset);
 }
 
 llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext) {
