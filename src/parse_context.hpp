@@ -164,26 +164,46 @@ struct CastNode : ASTNode {
     CastNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTType> &&targetType);
 };
 
-struct ModuleNode : ASTNode {
+struct FulcrumModule {
     std::string name;
 
     struct Import {
-        std::string target; // C header or Fulcrum module name
+        std::string target; // Import target
+        std::string nickname; // Import nickname
         std::vector<std::string> keywords;
     };
-    std::vector<Import> imports;
-
-    using ImportedNames = std::map<std::string, std::string>;
-    ImportedNames importedNames;
+    using Imports = std::vector<Import>;
+    Imports fulcrumImports;
+    Imports CImports;
 
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
     std::vector<std::unique_ptr<AliasNode>> aliases;
     std::vector<std::unique_ptr<VarDeclarationNode>> globalVariables;
 
-    ModuleNode(const std::string &name);
+    FulcrumModule(const std::string &name);
+
+    using ImportedNames = std::map<std::string, std::string>;
+    ImportedNames importedNames;
+    void importName(const std::string &baseName, const std::string &fullName);
 
     std::string resolveName(const std::string &name) const;
-    std::map<std::string, std::string> allNames();
-    void importName(const std::string &baseName, const std::string &fullName);
+
+    using IdFullNameMap = std::map<std::string, std::string>;
+    IdFullNameMap allNames() const;
+};
+
+struct CModule {
+    template <typename T>
+    using Imported = std::pair<std::string, std::unique_ptr<T>>;
+    // C header file name ----------'            |
+    // What we imported (see below) -------------'
+
+    std::vector<Imported<FunctionNode>> functions;
+    std::vector<Imported<StructNode>> structs;
+    std::vector<Imported<AliasNode>> aliases;
+    std::vector<Imported<VarDeclarationNode>> globalVariables;
+
+    using IdFullNameMap = std::map<std::string, std::string>;
+    IdFullNameMap allNames() const;
 };

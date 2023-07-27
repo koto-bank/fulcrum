@@ -22,6 +22,20 @@ std::string cxToString(CXString &&str) {
     clang_disposeString(str);
     return res;
 }
+
+std::string getSourceFileName(const CXCursor cur) {
+    auto loc = clang_getCursorLocation(cur);
+    CXFile fileName;
+    clang_getSpellingLocation(loc, &fileName, nullptr, nullptr, nullptr);
+    auto fileNameStr = clang_File_tryGetRealPathName(fileName);
+    if (clang_getCString(fileNameStr) == nullptr) {
+        fileNameStr = clang_getFileName(fileName);
+    }
+    auto name = cxToString(std::move(fileNameStr));
+    std::replace(name.begin(), name.end(), '/', '_');
+    std::replace(name.begin(), name.end(), '.', '_');
+    return name;
+}
 }
 
 std::string HeaderParser::getAnonName(const CXCursor cur) {
@@ -290,15 +304,12 @@ std::unique_ptr<clang::Interpreter> HeaderParser::createClangInterpreter() const
     return interp;
 }
 
-
 bool HeaderParser::parseHeader(const std::string &path) {
-    auto name = path;
-    std::replace(name.begin(), name.end(), '/', '_');
-    std::replace(name.begin(), name.end(), '.', '_');
     fc_assert(module == nullptr);
-    module = std::make_unique<ModuleNode>(name);
+    module = std::make_unique<CModule>();
 
-    includeHeader(path);
+    // What does it do?
+    //includeHeader(path);
 
     CXIndex index = clang_createIndex(0, 0);
     CXTranslationUnit unit;
@@ -327,12 +338,12 @@ bool HeaderParser::parseHeader(const std::string &path) {
 
                 if (std::find_if(
                         parseHeaderContext->module->functions.begin(), parseHeaderContext->module->functions.end(),
-                        [&funcName](auto &node) { return node->name == funcName; }
+                        [&funcName](const auto &node) { return node.second->name == funcName; }
                     )
                     != parseHeaderContext->module->functions.end())
                     break;
 
-                // std::cout << "Function decl: " << funcName << std::endl;
+                //std::cout << "File: " << getSourceFileName(c) << " Function decl: " << funcName << std::endl;
 
                 auto funcType = clang_getCursorType(c);
                 [[maybe_unused]] bool variadic = clang_isFunctionTypeVariadic(funcType);
@@ -366,9 +377,13 @@ bool HeaderParser::parseHeader(const std::string &path) {
                     return CXChildVisit_Continue;
                 }
 
-                parseHeaderContext->module->functions.push_back(std::make_unique<FunctionNode>(
-                    funcName, std::move(arguments), std::move(returnType), FunctionNode::Body{}, true
-                ));
+                parseHeaderContext->module->functions.push_back({ getSourceFileName(c),
+                        std::make_unique<FunctionNode>(
+                            funcName,
+                            std::move(arguments),
+                            std::move(returnType),
+                            FunctionNode::Body{},
+                            true) });
 
                 return CXChildVisit_Continue;
             }
@@ -380,7 +395,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                 if (std::find_if(
                         parseHeaderContext->module->globalVariables.begin(),
                         parseHeaderContext->module->globalVariables.end(),
-                        [&name](auto &node) { return node->name == name; }
+                        [&name](const auto &node) { return node.second->name == name; }
                     )
                     != parseHeaderContext->module->globalVariables.end())
                     break;
@@ -394,8 +409,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                 if (clang_getFileName(locFile).data == nullptr || name.starts_with("_")) return CXChildVisit_Continue;
 
                 auto varVal = parseHeaderContext->evalMacro(name);
-                if (varVal != nullptr) parseHeaderContext->module->globalVariables.push_back(std::move(varVal));
-
+                if (varVal != nullptr) parseHeaderContext->module->globalVariables.push_back({ getSourceFileName(c), std::move(varVal) });
                 break;
             }
             case CXCursor_TypedefDecl: {
@@ -403,16 +417,15 @@ bool HeaderParser::parseHeader(const std::string &path) {
 
                 if (std::find_if(
                         parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                        [&name](auto &node) { return node->name == name; }
-                    )
+                        [&name](const auto &node) { return node.second->name == name; }
+                        )
                     != parseHeaderContext->module->structs.end())
                     break;
 
                 auto aliasTo = parseHeaderContext->clangToASTType(clang_getTypedefDeclUnderlyingType(c));
                 if (aliasTo == nullptr) break;
 
-                parseHeaderContext->module->aliases.push_back(std::make_unique<AliasNode>(name, std::move(aliasTo)));
-
+                parseHeaderContext->module->aliases.push_back({ getSourceFileName(c), std::make_unique<AliasNode>(name, std::move(aliasTo)) });
                 break;
             }
             case CXCursor_UnionDecl: {
@@ -424,7 +437,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
 
                 if (std::find_if(
                         parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                        [&unionName](auto &node) { return node->name == unionName; }
+                        [&unionName](auto &node) { return node.second->name == unionName; }
                     )
                     != parseHeaderContext->module->structs.end())
                     break;
@@ -459,8 +472,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                 auto unionNode = std::make_unique<UnionNode>(unionName, std::move(data.fields), true);
                 unionNode->biggestSize = data.biggestSize;
 
-                parseHeaderContext->module->structs.push_back(std::move(unionNode));
-
+                parseHeaderContext->module->structs.push_back({ getSourceFileName(c), std::move(unionNode) });
                 break;
             }
             case CXCursor_StructDecl: {
@@ -470,7 +482,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
 
                 if (std::find_if(
                         parseHeaderContext->module->structs.begin(), parseHeaderContext->module->structs.end(),
-                        [&structName](auto &node) { return node->name == structName; }
+                        [&structName](auto &node) { return node.second->name == structName; }
                     )
                     != parseHeaderContext->module->structs.end())
                     break;
@@ -495,8 +507,8 @@ bool HeaderParser::parseHeader(const std::string &path) {
                     },
                     &data
                 );
-                parseHeaderContext->module->structs.emplace_back(
-                    std::make_unique<StructNode>(structName, std::move(data.fields), true)
+                parseHeaderContext->module->structs.emplace_back(getSourceFileName(c),
+                                                                 std::make_unique<StructNode>(structName, std::move(data.fields), true)
                 );
 
                 break;
@@ -523,7 +535,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                         if (std::find_if(
                                 parseContext->parseHeaderContext.module->globalVariables.begin(),
                                 parseContext->parseHeaderContext.module->globalVariables.end(),
-                                [&variantName](auto &node) { return node->name == variantName; }
+                                [&variantName](auto &node) { return node.second->name == variantName; }
                             )
                             != parseContext->parseHeaderContext.module->globalVariables.end())
                             return CXChildVisit_Break;
@@ -540,7 +552,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                                 std::make_unique<ASTBuiltinType>(parseContext->enumTypeName),
                                 (uint64_t)clang_getEnumConstantDeclUnsignedValue(c)
                                 );
-                        parseContext->parseHeaderContext.module->globalVariables.push_back(std::move(varDef));
+                        parseContext->parseHeaderContext.module->globalVariables.push_back({ getSourceFileName(c), std::move(varDef) });
 
                         return CXChildVisit_Continue;
                     },
@@ -562,6 +574,6 @@ bool HeaderParser::parseHeader(const std::string &path) {
     return true;
 }
 
-std::unique_ptr<ModuleNode> HeaderParser::releaseModule() {
+std::unique_ptr<CModule> HeaderParser::releaseModule() {
     return std::move(module);
 }

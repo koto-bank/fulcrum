@@ -14,7 +14,7 @@
 struct SemanticAnalyzer {
     bool run(Parser &parser);
 
-    std::unique_ptr<ModuleNode> releaseModule();
+    std::unique_ptr<FulcrumModule> releaseModule();
 
     bool parseModuleDefinition(const Parser::Expression &moduleForm);
     bool parseImport(const Parser::Expression &form);
@@ -43,6 +43,6 @@ struct SemanticAnalyzer {
     void dumpErrors() const;
 
     Parser *parser {};
-    std::unique_ptr<ModuleNode> module;
+    std::unique_ptr<FulcrumModule> module;
     std::vector<Error> errors;
 };
