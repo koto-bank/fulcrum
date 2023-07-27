@@ -70,70 +70,84 @@ std::optional<std::filesystem::path> tryToFindImport(const std::string &importNa
     }
 }
 
-void processImportsRecursive(const std::vector<ModuleNode::Import> &moduleImports,
+template <typename T>
+using ImportedModules = std::map<std::string, std::unique_ptr<T>>;
+using FulcrumImports = ImportedModules<FulcrumModule>;
+using CImports = ImportedModules<CModule>;
+
+void processImportsRecursive(const std::unique_ptr<FulcrumModule> &module,
                              CodegenContext& codegenCont,
-                             std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
-    for (auto &import : moduleImports) {
-        if (includedModules.contains(import.target)) continue;
+                             FulcrumImports &fulcrumModules,
+                             CImports &CModules) {
+    for (auto &import : module->fulcrumImports) {
+        if (fulcrumModules.contains(import.target)) continue;
+        auto maybeTargetPath = tryToFindImport(import.target, codegenCont);
+        if (maybeTargetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find module '{}'", import.target));
 
-        if (std::find(import.keywords.begin(), import.keywords.end(), "c") != import.keywords.end()) {
-            auto targetPath = tryToFindImport(import.target, codegenCont);
-            if (targetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find C include '{}'", import.target));
-
-            auto cImport = targetPath.value();
-            auto headerParser = HeaderParser(codegenCont);
-            auto res = headerParser.parseHeader(cImport);
-            if (!res) {
-                return;
-            }
-            includedModules.emplace(import.target, headerParser.releaseModule());
-        } else {
-
-            auto maybeTargetPath = tryToFindImport(import.target, codegenCont);
-            if (maybeTargetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find module '{}'", import.target));
-
-            auto targetPath = maybeTargetPath.value();
-            Parser parser;
-            auto res = parser.parse(targetPath);
-            if (res == false) {
-                parser.dumpErrors();
-                throw CodegenError(
-                    fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
-                    );
-            }
-            SemanticAnalyzer sem;
-            res = sem.run(parser);
-            if (res == false) {
-                sem.dumpErrors();
-                throw CodegenError(
-                    fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
-                    );
-            }
-            auto moduleAST = sem.releaseModule();
-            if (moduleAST->name != import.target)
-                throw CodegenError(fmt::format(
-                                       "Module was imported as {}, but the name declared in the module was {}", import.target,
-                                       moduleAST->name
-                                       ));
-
-            auto &emplaced = includedModules.emplace(import.target, std::move(moduleAST)).first->second;
-            processImportsRecursive(emplaced->imports, codegenCont, includedModules);
+        auto targetPath = maybeTargetPath.value();
+        Parser parser;
+        auto res = parser.parse(targetPath);
+        if (res == false) {
+            parser.dumpErrors();
+            throw CodegenError(
+                fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
+                );
         }
+        SemanticAnalyzer sem;
+        res = sem.run(parser);
+        if (res == false) {
+            sem.dumpErrors();
+            throw CodegenError(
+                fmt::format("Could not parse module {} ({})", import.target, targetPath.string())
+                );
+        }
+        auto moduleAST = sem.releaseModule();
+        if (moduleAST->name != import.target)
+            throw CodegenError(fmt::format(
+                                   "Module was imported as {}, but the name declared in the module was {}", import.target,
+                                   moduleAST->name
+                                   ));
+
+        auto &emplaced = fulcrumModules.emplace(import.target, std::move(moduleAST)).first->second;
+        processImportsRecursive(emplaced, codegenCont, fulcrumModules, CModules);
+    }
+
+    for (auto &import : module->CImports) {
+        auto targetPath = tryToFindImport(import.target, codegenCont);
+        if (targetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find C include '{}'", import.target));
+
+        auto cImport = targetPath.value();
+        HeaderParser headerParser(codegenCont);
+        auto res = headerParser.parseHeader(cImport);
+        if (!res) {
+            return;
+        }
+        CModules.emplace(import.target, headerParser.releaseModule());
     }
 }
 
-std::map<std::string, std::unique_ptr<ModuleNode>>
-processImports(std::vector<ModuleNode::Import> moduleImports, CodegenContext& codegenCont) {
-    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
-    processImportsRecursive(moduleImports, codegenCont, includedModules);
-    return includedModules;
+std::tuple<FulcrumImports, CImports>
+processImports(std::unique_ptr<FulcrumModule> &module, CodegenContext& codegenCont) {
+    FulcrumImports fulcrumModules;
+    CImports CModules;
+    processImportsRecursive(module, codegenCont, fulcrumModules, CModules);
+    return { std::move(fulcrumModules), std::move(CModules) };
 }
 
-void importNames(ModuleNode *importTo, std::map<std::string, std::unique_ptr<ModuleNode>> &includedModules) {
-    for (auto &import : importTo->imports) {
-        // TODO: actually add import names, for now everything is imported
-        auto &importedAST = includedModules[import.target];
-        for (auto &[basename, fullname] : importedAST->allNames()) {
+void importNames(FulcrumModule *importTo, const FulcrumImports &fulcrumImports, const CImports &CImports) {
+    // TODO: actually add import names, for now everything is imported
+    for (auto &import : importTo->fulcrumImports) {
+        auto module = fulcrumImports.find(import.target);
+        fc_assert(module != fulcrumImports.end());
+        for (auto &[basename, fullname] : module->second->allNames()) {
+            importTo->importName(basename, fullname);
+        }
+    }
+
+    for (auto &import : importTo->CImports) {
+        auto module = CImports.find(import.target);
+        fc_assert(module != CImports.end());
+        for (auto &[basename, fullname] : module->second->allNames()) {
             importTo->importName(basename, fullname);
         }
     }
@@ -201,7 +215,7 @@ args::ArgumentParser argParser("fulcrum");
         }
     }
 
-    std::unique_ptr<ModuleNode> moduleAST;
+    std::unique_ptr<FulcrumModule> moduleAST;
     Parser parser;
     bool res = false;
     if (!fileArg) {
@@ -224,9 +238,10 @@ args::ArgumentParser argParser("fulcrum");
     }
     moduleAST = sem.releaseModule();
 
-    std::map<std::string, std::unique_ptr<ModuleNode>> includedModules;
+    FulcrumImports includedFulcrumModules;
+    CImports includedCModules;
     try {
-        includedModules = processImports(moduleAST->imports, codegenCont);
+        std::tie(includedFulcrumModules, includedCModules) = processImports(moduleAST, codegenCont);
     } catch (const CodegenError &err) {
         std::cout << fmt::format(
                 "{}\n{}", fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold), err.whatIndented(4)
@@ -236,10 +251,15 @@ args::ArgumentParser argParser("fulcrum");
 
     // TODO: better error collection, recovery and reporting
     try {
-        for (auto &[name, ast] : includedModules) {
+        for (auto &[name, ast] : includedFulcrumModules) {
             std::cout << fmt::format("Compiling {}", name) << std::endl;
 
-            importNames(ast.get(), includedModules);
+            importNames(ast.get(), includedFulcrumModules, includedCModules);
+            codegenCont.generate(std::move(ast));
+        }
+
+        for (auto &[name, ast] : includedCModules) {
+            std::cout << fmt::format("Compiling {}", name) << std::endl;
             codegenCont.generate(std::move(ast));
         }
 
@@ -250,7 +270,7 @@ args::ArgumentParser argParser("fulcrum");
         return 1;
     }
 
-    importNames(moduleAST.get(), includedModules);
+    importNames(moduleAST.get(), includedFulcrumModules, includedCModules);
     codegenCont.generate(std::move(moduleAST));
     ExpressionGenContext exprGenContext{ .builder = builder, .codegenContext = codegenCont };
     for (auto &[name, named] : codegenCont.names) {

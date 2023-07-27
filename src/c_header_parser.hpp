@@ -7,7 +7,8 @@
 #include <clang-c/Index.h>
 
 struct CodegenContext;
-struct ModuleNode;
+struct CModule;
+struct ModuleNodeBase;
 struct VarDeclarationNode;
 struct ASTType;
 
@@ -20,13 +21,13 @@ struct HeaderParser {
     ~HeaderParser();
 
     bool parseHeader(const std::string &path);
-    std::unique_ptr<ModuleNode> releaseModule();
+    std::unique_ptr<CModule> releaseModule();
 
 private:
     CodegenContext &codegenContext;
     std::unique_ptr<clang::Interpreter> interp;
     std::map<std::string, int> anonymousNumbers;
-    std::unique_ptr<ModuleNode> module;
+    std::unique_ptr<CModule> module;
 
     std::string getAnonName(const CXCursor cur);
     std::unique_ptr<ASTType> clangToASTType(CXType clangTp);

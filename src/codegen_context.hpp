@@ -13,9 +13,10 @@ struct ASTModuleNode;
 struct ASTType;
 struct ASTNode;
 struct CodegenContext;
+struct CModule;
 struct ExpressionGenContext;
+struct FulcrumModule;
 struct FunctionNode;
-struct ModuleNode;
 struct StructNode;
 struct VarDeclarationNode;
 struct VariableDefinition;
@@ -143,16 +144,23 @@ struct CodegenContext {
 
     bool existsNamed(const std::string &name) const;
 
-    void generate(std::unique_ptr<ModuleNode> &&moduleNode);
+    void generate(std::unique_ptr<FulcrumModule> &&fulcrumModule);
+    void generate(std::unique_ptr<CModule> &&cModule);
 
-    LanguageType *getLanguageType(const ModuleNode &moduleNode, const std::unique_ptr<ASTType> &type);
-    std::unique_ptr<Expression> getExpression(const ModuleNode &moduleNode, const std::unique_ptr<ASTNode> &node);
+    using NameResolver = std::function<std::string(const std::string &)>;
+    LanguageType *getLanguageType(NameResolver resolveNameFn, const std::unique_ptr<ASTType> &type);
+    std::unique_ptr<Expression> getExpression(NameResolver resolveNameFn, const std::unique_ptr<ASTNode> &node);
 
-    void emplaceStructType(const ModuleNode &, const std::unique_ptr<StructNode> &);
-    void emplaceAliasType(const ModuleNode &, const std::unique_ptr<AliasNode> &);
-    void emplaceGlobalVar(const ModuleNode &, const std::unique_ptr<VarDeclarationNode> &);
-    void emplaceFunction(const ModuleNode &, const std::unique_ptr<FunctionNode> &);
-    void fillStructTypeFields(const ModuleNode &, const std::unique_ptr<StructNode> &);
+    void emplaceStructType(NameResolver, const std::unique_ptr<StructNode> &);
+    void emplaceAliasType(NameResolver, const std::unique_ptr<AliasNode> &);
+    void emplaceGlobalVar(NameResolver, const std::unique_ptr<VarDeclarationNode> &);
+    void emplaceFulcrumFunction(NameResolver, const std::unique_ptr<FunctionNode> &);
+    void fillStructTypeFields(NameResolver, const std::unique_ptr<StructNode> &);
+
+    void emplaceCStructType(NameResolver, const std::unique_ptr<StructNode> &);
+    void emplaceCAliasType(NameResolver, const std::unique_ptr<AliasNode> &);
+    void emplaceCFunction(NameResolver, const std::unique_ptr<FunctionNode> &);
+
 
     template<typename T> typename T::ValueType *getNamed(const std::string &name) const {
         if (!names.contains(name)) throw CodegenError(fmt::format("Undefined {}: {}", T::namedType(), name));

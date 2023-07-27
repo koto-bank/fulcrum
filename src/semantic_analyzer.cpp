@@ -108,7 +108,7 @@ bool SemanticAnalyzer::parseModuleDefinition(const Parser::Expression &moduleFor
         reportError(moduleForm.children[1].token, "module name expected");
         return false;
     }
-    module = std::make_unique<ModuleNode>(name.value());
+    module = std::make_unique<FulcrumModule>(name.value());
 
     // get imports
     auto res = true;
@@ -131,8 +131,9 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
         return false;
     }
 
-    ModuleNode::Import import;
+    FulcrumModule::Import import;
     bool targetSet = false;
+    bool isCImport = false;
     for(auto next = form.children.begin() + 1; next != form.children.end(); next++) {
         if (next->token == nullptr) {
             reportError(next->token, "expected keyword, Fulcrum module name or C header filename");
@@ -160,6 +161,11 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
         case token::Type::Keyword: {
             auto kw = next->token->as<token::Keyword>();
             import.keywords.push_back(kw->name);
+            if (kw->name == "c") {
+                isCImport = true;
+            } else if (kw->name == "as") {
+                // TODO: nicknames
+            }
             break;
         }
         default:
@@ -167,7 +173,11 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
             return false;
         }
     }
-    module->imports.push_back(std::move(import));
+    if (isCImport) {
+        module->CImports.push_back(std::move(import));
+    } else {
+        module->fulcrumImports.push_back(std::move(import));
+    }
     return true;
 }
 
@@ -636,6 +646,6 @@ void SemanticAnalyzer::dumpErrors() const {
     }
 }
 
-std::unique_ptr<ModuleNode> SemanticAnalyzer::releaseModule() {
+std::unique_ptr<FulcrumModule> SemanticAnalyzer::releaseModule() {
     return std::move(module);
 }

@@ -72,14 +72,18 @@ SizeofNode::SizeofNode(std::unique_ptr<ASTType> &&targetType)
 DereferenceNode::DereferenceNode(std::unique_ptr<ASTNode> &&target)
     : target(std::move(target)) {}
 
+ArrayNthNode::ArrayNthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript)
+    : array(std::move(array))
+    , subscript(std::move(subscript)) {}
+
 CastNode::CastNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTType> &&targetType)
     : targetType(std::move(targetType))
     , targetExpression(std::move(target)) {}
 
-ModuleNode::ModuleNode(const std::string &name)
+FulcrumModule::FulcrumModule(const std::string &name)
     : name(name) {};
 
-std::string ModuleNode::resolveName(const std::string &targetName) const {
+std::string FulcrumModule::resolveName(const std::string &targetName) const {
     auto isTargetNamespaced = targetName != "/" && targetName.find('/') != targetName.npos;
 
     std::string fullName;
@@ -94,25 +98,41 @@ std::string ModuleNode::resolveName(const std::string &targetName) const {
     return fullName;
 }
 
-std::map<std::string, std::string> ModuleNode::allNames() {
-    std::map<std::string, std::string> result;
-    for (auto &moduleStruct : structs)
+FulcrumModule::IdFullNameMap FulcrumModule::allNames() const {
+    IdFullNameMap result;
+    for (const auto &moduleStruct : structs)
         result.emplace(moduleStruct->name, resolveName(moduleStruct->name));
-    for (auto &moduleAlias : aliases)
+    for (const auto &moduleAlias : aliases)
         result.emplace(moduleAlias->name, resolveName(moduleAlias->name));
-    for (auto &globalVar : globalVariables)
+    for (const auto &globalVar : globalVariables)
         result.emplace(globalVar->name, resolveName(globalVar->name));
-    for (auto &function : functions)
+    for (const auto &function : functions)
         result.emplace(function->name, resolveName(function->name));
 
     return result;
 }
 
-void ModuleNode::importName(const std::string &baseName, const std::string &fullName) {
+void FulcrumModule::importName(const std::string &baseName, const std::string &fullName) {
     if (importedNames.contains(baseName)) {
         if (importedNames[baseName] != fullName)
             throw CodegenError(fmt::format("{} already imported as {}", baseName, importedNames[baseName]));
     }
 
     importedNames[baseName] = fullName;
+}
+
+CModule::IdFullNameMap CModule::allNames() const {
+    auto resolveName = [](const std::string &fileName, const std::string &name) {
+        return fmt::format("{}/{}", fileName, name);
+    };
+    IdFullNameMap result;
+    for (const auto &[fileName, moduleStruct] : structs)
+        result.emplace(moduleStruct->name, resolveName(fileName, moduleStruct->name));
+    for (const auto &[fileName, moduleAlias] : aliases)
+        result.emplace(moduleAlias->name, resolveName(fileName, moduleAlias->name));
+    for (const auto &[fileName, globalVar] : globalVariables)
+        result.emplace(globalVar->name, resolveName(fileName, globalVar->name));
+    for (const auto &[fileName, function] : functions)
+        result.emplace(function->name, resolveName(fileName, function->name));
+    return result;
 }
