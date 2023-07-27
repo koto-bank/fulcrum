@@ -477,6 +477,24 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
                 return std::nullopt;
             }
             return std::make_unique<DereferenceNode>(std::move(target.value()));
+        } else if (sym == "nth") {
+            if (form.children.size() != 3) {
+                reportError(symForm.token, "nth must have 2 arguments: an array and element number");
+                return std::nullopt;
+            }
+
+            auto target = parseArgExpression(form.children[1]);
+            if (target == std::nullopt) {
+                return std::nullopt;
+            }
+
+            auto subscript = parseArgExpression(form.children[2]);
+            if (subscript == std::nullopt) {
+                return std::nullopt;
+            }
+
+            return std::make_unique<ArrayNthNode>(std::move(target.value()),
+                                                  std::move(subscript.value()));
         } else if (sym == "cast") {
             if (form.children.size() < 3) {
                 reportError(symForm.token, "cast must have target and type");
@@ -529,7 +547,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
 std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser::Expression &form) {
 // can be ptr, array, basic or custom:
 // ptr: (ptr Type)
-// array: (array 10 Type)
+// array: (array Type 10)
 // basic: f32, f64, bool, void, i|u[1-999]
 // custom: Symbol
     if (form.token != nullptr) {
@@ -595,21 +613,21 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
 
             return std::make_unique<ASTPointerType>(std::move(pointeeType.value()));
         } else if (sym == "array") {
-            // (array IntLiteral Type)
+            // (array Type IntLiteral)
             if (form.children.size() != 3) {
                 reportError(kind.token, "malformed array declaration");
                 return std::nullopt;
             }
 
-            const auto &sizeExpr = form.children[1];
-            auto size = getInteger<size_t>(sizeExpr);
-            if (size == std::nullopt) {
-                reportError(sizeExpr.token, "malformed array declaration");
+            auto targetType = parseType(form.children[1]);
+            if (targetType == std::nullopt) {
                 return std::nullopt;
             }
 
-            auto targetType = parseType(form.children[2]);
-            if (targetType == std::nullopt) {
+            const auto &sizeExpr = form.children[2];
+            auto size = getInteger<size_t>(sizeExpr);
+            if (size == std::nullopt) {
+                reportError(sizeExpr.token, "malformed array declaration");
                 return std::nullopt;
             }
 

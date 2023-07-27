@@ -197,6 +197,18 @@ struct Dereference : Expression {
     std::string dump(int indent) override;
 };
 
+struct ArraySubscription : Expression {
+    std::unique_ptr<Expression> array;
+    std::unique_ptr<Expression> subscript;
+    LanguageType *ptrType;
+
+    ArraySubscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript);
+
+    LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    std::string dump(int indent) override;
+};
+
 struct VariableDeclaration : Expression {
     std::unique_ptr<Expression> initialValue = nullptr;
 

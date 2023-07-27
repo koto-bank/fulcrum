@@ -142,6 +142,13 @@ struct DereferenceNode : ASTNode {
     DereferenceNode(std::unique_ptr<ASTNode> &&target);
 };
 
+struct ArrayNthNode : ASTNode {
+    std::unique_ptr<ASTNode> array;
+    std::unique_ptr<ASTNode> subscript;
+
+    ArrayNthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript);
+};
+
 struct VarDeclarationNode : ASTNode {
     std::unique_ptr<ASTNode> initialValue = nullptr;
 
