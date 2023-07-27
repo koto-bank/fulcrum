@@ -1,0 +1,9 @@
+(module c-scanf
+  (import :c "stdio.h"))
+
+(fn main i32 ()
+  (var name str)
+  (var age i32)
+  (scanf "Please enter your name:%s\n" (addr-of name))
+  (scanf "Please enter your age:%d\n" (addr-of age))
+  (return 0))

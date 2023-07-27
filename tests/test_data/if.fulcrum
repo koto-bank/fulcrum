@@ -1,9 +1,0 @@
-(module if
-    (import :c "/usr/include/stdio.h"))
-
-(fn main i32 ((argc i32) (argv **u8))
-  (if true
-      (if false
-          (return 0)
-          )
-      (return 3)))
