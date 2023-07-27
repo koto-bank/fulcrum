@@ -123,12 +123,13 @@ private:
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
     llvm::Value *notProcessor(ExpressionGenContext &genContext);
-    llvm::Value *addrofProcessor(ExpressionGenContext &genContext);
+    llvm::Value *addrOfProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *notProcessorType(const ExpressionGenContext &genContext) const;
+    LanguageType *addrOfProcessorType(const ExpressionGenContext &genContext) const;
 
 public:
     using Args = std::vector<std::unique_ptr<Expression>>;
@@ -148,7 +149,7 @@ public:
         { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
         { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
         { "not", { &FunctionCall::notProcessor, &FunctionCall::notProcessorType } },
-        { "addr-of", { &FunctionCall::addrofProcessor, &FunctionCall::voidProcessorType } },
+        { "addr-of", { &FunctionCall::addrOfProcessor, &FunctionCall::addrOfProcessorType } },
 
         { "ptr+", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
         { "ptr-", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
