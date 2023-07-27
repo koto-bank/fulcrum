@@ -707,10 +707,15 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
     }
 }
 
-llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genCont) {
-    if (path().size() > 1) return genCont.builder.CreateLoad(llvmType(genCont), varAddress(genCont));
-
-    return genCont.builder.CreateLoad(llvmType(genCont), varAddress(genCont));
+llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genContext) {
+    if (path().size() > 1) { // TODO?
+            return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
+    }
+    auto maybeArray = languageType(genContext);
+    if (dynamic_cast<ArrayType *>(maybeArray) != nullptr) {
+        return varAddress(genContext);
+    }
+    return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
 std::string VarAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
@@ -733,6 +738,38 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
 }
 
 std::string Dereference::dump(int indent) { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
+
+ArraySubscription::ArraySubscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript)
+    : Expression(nullptr)
+    , array(std::move(array))
+    , subscript(std::move(subscript)) {}
+
+LanguageType *ArraySubscription::languageType(const ExpressionGenContext &genContext) {
+    auto maybeArrayType = array->languageType(genContext);
+    auto arrayType = dynamic_cast<ArrayType *>(maybeArrayType);
+    if (arrayType == nullptr) {
+        throw CodegenError(fmt::format("Subscripting a non-array type {}", maybeArrayType->signature()));
+    }
+
+    auto subscriptType = subscript->languageType(genContext);
+    auto intType = dynamic_cast<IntegerType *>(subscriptType);
+    if (intType == nullptr) {
+        throw CodegenError(fmt::format("Subscripting array with a value of non-integer type {}", subscriptType->signature()));
+    }
+    return arrayType->targetType;
+}
+
+llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
+    // TODO: this doesn't work at all
+    auto idx = subscript->llvmValue(genContext);
+    auto gep = genContext.builder.CreateGEP(
+        array->llvmType(genContext),
+        array->llvmValue(genContext),
+        { idx });
+    return genContext.builder.CreateLoad(llvmType(genContext), gep);
+}
+
+std::string ArraySubscription::dump(int indent) { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
 
 VariableDeclaration::VariableDeclaration(
     const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue
