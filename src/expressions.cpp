@@ -414,6 +414,19 @@ LanguageType *FunctionCall::notProcessorType(const ExpressionGenContext &genCont
     return genContext.codegenContext.getNamed<NamedTypeValue>("bool");
 }
 
+LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genContext) const {
+    if (args.size() != 1) { throw CodegenError(fmt::format("Expected exactly 1 argument to {}, but got {}", name, args.size())); }
+    const auto &target = args[0];
+    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    if (maybeVar == nullptr) {
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
+    }
+    auto varType = maybeVar->languageType(genContext);
+    auto ptrTypeName = varType->signature() + "*";
+    auto ret = genContext.codegenContext.getOrEmplaceType<PointerType>(ptrTypeName, varType);
+    return ret;
+}
+
 LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext &genCont) const {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
@@ -547,21 +560,16 @@ LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext)
     return type;
 }
 
-llvm::Value *FunctionCall::addrofProcessor(ExpressionGenContext &genContext) {
-     if (args.size() != 1) {
+llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
+    if (args.size() != 1) {
         throw CodegenError("'addr-of' expects exactly one argument");
     }
-
-     const auto &target = args[0];
-     auto maybeVar = dynamic_cast<VarAccess *>(target.get());
-     if (maybeVar == nullptr) {
-         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
-     }
-
-     auto varType = maybeVar->languageType(genContext);
-     auto ptrTypeName = varType->signature() + "*";
-     genContext.codegenContext.ensureType<PointerType>(ptrTypeName, varType);
-     return maybeVar->varAddress(genContext);
+    const auto &target = args[0];
+    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    if (maybeVar == nullptr) {
+        throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
+    }
+    return maybeVar->varAddress(genContext);
 }
 
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
