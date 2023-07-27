@@ -1,0 +1,10 @@
+(module main
+  (import :c "stdio.h"))
+
+(fn main i32 ((argc i32))
+  (if (= 0 (% argc 2))
+      (do
+       (puts "Even number of arguments")
+       (return 0))
+    (do (puts "Odd number of arguments")
+        (return 0))))

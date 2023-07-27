@@ -1,0 +1,12 @@
+(module main
+  (import :c "stdio.h"))
+
+(fn main i32 ((argc i32) (argv (ptr (ptr char))))
+  (if (> argc 10)
+      (do (puts "Too many arguments!")
+          (return 1))
+    (while (> argc 0)
+      (puts (cast (deref (ptr+ argv (- argc 1)))
+                  str))
+      (set argc (- argc 1))))
+  (return 0))
