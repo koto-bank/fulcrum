@@ -102,7 +102,7 @@ PointerType::PointerType(CodegenContext &context, LanguageType *pointerTo_)
     : LanguageType(context),
       pointerTo(pointerTo_) {}
 
-llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(context.context, 0); }
+llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(pointerTo->llvmType(), 0); }
 
 std::string PointerType::signature() { return pointerTo->signature() + "*"; }
 
