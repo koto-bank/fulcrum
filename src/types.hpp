@@ -144,11 +144,9 @@ public:
 };
 
 struct ArrayType : LanguageType {
-private:
     LanguageType *targetType;
     size_t size;
 
-public:
     ArrayType(CodegenContext &context, LanguageType *targetType, size_t size);
 
     llvm::Type *llvmType() override;
