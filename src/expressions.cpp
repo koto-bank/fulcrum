@@ -578,15 +578,19 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
 
     std::vector<llvm::Value *> argValues;
+    auto fnType = calledFunction->functionType();
     for (auto i = 0u; i < args.size(); i++) {
         LanguageType *argType = args[i]->languageType(genContext);
-        LanguageType *expectedType = calledFunction->functionType()->arguments[i];
-        if (argType->actualLanguageType() != expectedType->actualLanguageType()) {
-            throw CodegenError(fmt::format(
-                "Incompatible argument type in {}: for argument #{}"
-                " expected {}, but received {}",
-                name, i, expectedType->signature(), argType->signature()
-            ));
+
+        if (!fnType->isVariadic || i < fnType->arguments.size()) {
+            LanguageType *expectedType = fnType->arguments[i];
+            if (argType->actualLanguageType() != expectedType->actualLanguageType()) {
+                throw CodegenError(fmt::format(
+                                       "Incompatible argument type in {}: for argument #{}"
+                                       " expected {}, but received {}",
+                                       name, i, expectedType->signature(), argType->signature()
+                                       ));
+            }
         }
         argValues.push_back(args[i]->llvmValue(genContext));
     }

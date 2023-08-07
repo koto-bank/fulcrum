@@ -134,8 +134,9 @@ private:
 public:
     std::vector<LanguageType *> arguments;
     LanguageType *returnType;
+    bool isVariadic;
 
-    FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType);
+    FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType, bool isVariadic);
 
     llvm::Type *llvmType() override;
     std::string signature() override;

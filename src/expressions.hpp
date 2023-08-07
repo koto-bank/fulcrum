@@ -15,7 +15,7 @@ class Value;
 } // namespace llvm
 
 struct CodegenContext;
-class Function;
+struct Function;
 struct LanguageType;
 struct IntegerType;
 struct FloatType;

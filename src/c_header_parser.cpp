@@ -346,7 +346,7 @@ bool HeaderParser::parseHeader(const std::string &path) {
                 //std::cout << "File: " << getSourceFileName(c) << " Function decl: " << funcName << std::endl;
 
                 auto funcType = clang_getCursorType(c);
-                [[maybe_unused]] bool variadic = clang_isFunctionTypeVariadic(funcType);
+                bool variadic = clang_isFunctionTypeVariadic(funcType);
 
                 auto resType = clang_getResultType(funcType);
                 auto returnType = parseHeaderContext->clangToASTType(resType);
@@ -357,7 +357,6 @@ bool HeaderParser::parseHeader(const std::string &path) {
                 }
 
                 ArgList arguments;
-
                 for (auto i = 0; i < clang_getNumArgTypes(funcType); i++) {
                     auto argCursor = clang_Cursor_getArgument(c, i);
 
@@ -383,7 +382,8 @@ bool HeaderParser::parseHeader(const std::string &path) {
                             std::move(arguments),
                             std::move(returnType),
                             FunctionNode::Body{},
-                            true) });
+                            true,
+                            variadic) });
 
                 return CXChildVisit_Continue;
             }
