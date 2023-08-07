@@ -68,7 +68,7 @@ ConstantBoolNode::ConstantBoolNode(bool value)
 FunctionCallNode::FunctionCallNode(std::string name)
     : name(name) {}
 
-VarAccessNode::VarAccessNode(std::string name)
+VariableAccessNode::VariableAccessNode(std::string name)
     : name(name) {}
 
 VarDeclarationNode::VarDeclarationNode(const std::string &name, std::unique_ptr<ASTType> &&type)

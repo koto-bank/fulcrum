@@ -145,10 +145,10 @@ struct FunctionCallNode : ASTNode {
     FunctionCallNode(std::string name);
 };
 
-struct VarAccessNode : ASTNode {
+struct VariableAccessNode : ASTNode {
     std::string name;
 
-    VarAccessNode(std::string name);
+    VariableAccessNode(std::string name);
 };
 
 struct DereferenceNode : ASTNode {
