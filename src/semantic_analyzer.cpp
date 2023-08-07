@@ -443,7 +443,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         case token::Type::Symbol: {
             // variable access
             auto sym = form.token->as<token::Symbol>();
-            return std::make_unique<VarAccessNode>(sym->symbol);
+            return std::make_unique<VariableAccessNode>(sym->symbol);
         }
         default:
             reportError(form.token, "unexpected token");

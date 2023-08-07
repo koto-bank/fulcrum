@@ -417,7 +417,7 @@ LanguageType *FunctionCall::boolProcessorType(const ExpressionGenContext &genCon
 LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genContext) const {
     if (args.size() != 1) { throw CodegenError(fmt::format("Expected exactly 1 argument to {}, but got {}", name, args.size())); }
     const auto &target = args[0];
-    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    auto maybeVar = dynamic_cast<VariableAccess *>(target.get());
     if (maybeVar == nullptr) {
         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
     }
@@ -460,12 +460,13 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
             varAddress = derefTarget->llvmValue(genContext);
         }
         if (variableType == nullptr) {
-            auto maybeVarExpr = dynamic_cast<VarAccess *>(args[i].get());
+            auto maybeVarExpr = dynamic_cast<VariableAccess *>(args[i].get());
             if (maybeVarExpr != nullptr) {
                 variableType = maybeVarExpr->languageType(genContext);
                 varAddress = maybeVarExpr->varAddress(genContext);
             }
         }
+
         if (variableType == nullptr) {
             throw CodegenError(fmt::format(
                 "Expected argument #{} to set to be a variable name or pointer dereference, but "
@@ -590,7 +591,7 @@ llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
         throw CodegenError("'addr-of' expects exactly one argument");
     }
     const auto &target = args[0];
-    auto maybeVar = dynamic_cast<VarAccess *>(target.get());
+    auto maybeVar = dynamic_cast<VariableAccess *>(target.get());
     if (maybeVar == nullptr) {
         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
     }
@@ -646,7 +647,7 @@ std::string FunctionCall::dump(int indent) {
     return fmt::format("{}($call {} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
 
-VarAccess::VarAccess(const std::string &name)
+VariableAccess::VariableAccess(const std::string &name)
     : Expression(nullptr),
       name(name) {
     if (varPath.size() == 0) {
@@ -668,7 +669,7 @@ VarAccess::VarAccess(const std::string &name)
     }
 }
 
-LanguageType *VarAccess::languageType(const ExpressionGenContext &genCont) {
+LanguageType *VariableAccess::languageType(const ExpressionGenContext &genCont) {
     auto pathName = path();
 
     if (pathName.size() > 1) {
@@ -693,16 +694,15 @@ LanguageType *VarAccess::languageType(const ExpressionGenContext &genCont) {
     } else {
         auto var = genCont.lookupVariable(name);
         if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
-
         return var->type;
     }
 }
 
-const std::vector<std::string> &VarAccess::path() const {
+const std::vector<std::string> &VariableAccess::path() const {
     return varPath;
 }
 
-llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
+llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
     auto pathName = this->path();
 
     llvm::Value *currentValue = nullptr;
@@ -744,7 +744,7 @@ llvm::Value *VarAccess::varAddress(ExpressionGenContext &genCont) {
     }
 }
 
-llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genContext) {
+llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
     if (path().size() > 1) { // TODO?
             return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
     }
@@ -755,7 +755,7 @@ llvm::Value *VarAccess::llvmValue(ExpressionGenContext &genContext) {
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
-std::string VarAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
+std::string VariableAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),

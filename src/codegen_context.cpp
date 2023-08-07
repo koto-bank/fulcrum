@@ -396,8 +396,8 @@ std::unique_ptr<Expression> CodegenContext::getExpression(NameResolver resolveNa
         }
         std::string fullName = t->name == "main" ? t->name : (t->name);
         return std::make_unique<FunctionCall>(fullName, std::move(argsExprs));
-    } else if (auto t = dynamic_cast<const VarAccessNode *>(node.get()); t != nullptr) {
-        return std::make_unique<VarAccess>(resolveNameFn(t->name));
+    } else if (auto t = dynamic_cast<const VariableAccessNode *>(node.get()); t != nullptr) {
+        return std::make_unique<VariableAccess>(resolveNameFn(t->name));
     } else if (auto t = dynamic_cast<const DereferenceNode *>(node.get()); t != nullptr) {
         return std::make_unique<Dereference>(getExpression(resolveNameFn, t->target));
     } else if (auto t = dynamic_cast<const ArrayNthNode *>(node.get()); t != nullptr) {

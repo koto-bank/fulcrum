@@ -177,14 +177,14 @@ public:
     std::string dump(int indent) override;
 };
 
-struct VarAccess : Expression {
+struct VariableAccess : Expression {
 private:
     std::vector<std::string> varPath;
 
 public:
     std::string name;
 
-    VarAccess(const std::string &name);
+    VariableAccess(const std::string &name);
     LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
