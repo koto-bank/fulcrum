@@ -267,7 +267,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
     auto expectedType = args[0]->languageType(genContext)->actualLanguageType();
     auto intType = dynamic_cast<IntegerType *>(expectedType);
-    auto floatType = intType == nullptr ? nullptr : dynamic_cast<FloatType *>(expectedType);
+    auto floatType = intType == nullptr ? dynamic_cast<FloatType *>(expectedType) : nullptr;
 
     if (intType == nullptr && floatType == nullptr) {
         throw CodegenError(fmt::format(
