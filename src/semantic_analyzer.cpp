@@ -432,7 +432,9 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
             // TODO: oops, missing
         }
         case token::Type::FloatLiteral: {
-            // TODO: not implemented
+            auto t = form.token->as<token::FloatLiteral>();
+            auto type = std::make_unique<ASTFloatType>(t->bits);
+            return std::make_unique<ConstantFloatNode>(std::move(type), t->value);
         }
         case token::Type::StringLiteral: {
             auto s = form.token->as<token::StringLiteral>();
@@ -560,9 +562,9 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
 
         fc_assert(!sym.value().empty());
         if (sym == "f32") {
-            return std::make_unique<ASTBuiltinType>("f32");
+            return std::make_unique<ASTFloatType>(32);
         } else if (sym == "f64") {
-            return std::make_unique<ASTBuiltinType>("f64");
+            return std::make_unique<ASTFloatType>(64);
         } else if (sym == "void") {
             return std::make_unique<ASTBuiltinType>("void");
         } else if (sym == "bool") {

@@ -11,6 +11,10 @@ ASTIntegerType::ASTIntegerType(bool isSigned, uint32_t bits)
     , bits(bits)
     , isSigned(isSigned) {}
 
+ASTFloatType::ASTFloatType(uint32_t bits)
+    : ASTBuiltinType(fmt::format("f{}", bits))
+    , bits(bits) {}
+
 ASTNamedType::ASTNamedType(const std::string &name)
     : name(name) {}
 
@@ -46,13 +50,17 @@ FunctionNode::FunctionNode(
 ConstantStringNode::ConstantStringNode(std::string value)
     : value(value) {}
 
-ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&intType, IsLongInteger auto constValue_)
+ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&intType, IsLongInteger auto constValue)
     : intType(std::move(intType)),
-      value(constValue_) {
+      value(constValue) {
     isSigned = std::holds_alternative<int64_t>(value);
 }
 template ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&, int64_t);
 template ConstantIntNode::ConstantIntNode(std::unique_ptr<ASTType> &&, uint64_t);
+
+ConstantFloatNode::ConstantFloatNode(std::unique_ptr<ASTType> &&floatType,double constValue)
+    : floatType(std::move(floatType))
+    , value(constValue) {}
 
 ConstantBoolNode::ConstantBoolNode(bool value)
     : value(value) {}
