@@ -11,21 +11,21 @@ using llvm::LLVMContext;
 
 Function::Function(
     CodegenContext &context, llvm::Module &module, const std::string &name_, const Args &arguments,
-    LanguageType *returnType, Body &&body, bool isPublic
+    LanguageType *returnType, Body &&body, bool isPublic, bool isVariadic
 )
-    : name(name_),
-      body(std::move(body)),
-      isPublic(isPublic) {
+    : isPublic(isPublic),
+      name(name_),
+      body(std::move(body)) {
     std::vector<LanguageType *> argumentTypes;
-    for (auto &&[nm, tp] : arguments) {
-        argumentNames.push_back(nm);
-        argumentTypes.push_back(tp);
+    for (const auto &arg : arguments) {
+        argumentNames.push_back(arg.name);
+        argumentTypes.push_back(arg.type);
     }
-    type = std::make_unique<FunctionType>(context, argumentTypes, returnType);
 
+    type = std::make_unique<FunctionType>(context, argumentTypes, returnType, isVariadic);
     std::replace(name.begin(), name.end(), '/', '_');
 
-    auto funcType = (llvm::FunctionType *)type->llvmType();
+    auto funcType = static_cast<llvm::FunctionType *>(type->llvmType());
     function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
 
     for (auto i = 0u; i < function->arg_size(); i++)
@@ -205,23 +205,23 @@ void CodegenContext::emplaceFulcrumFunction(NameResolver resolveNameFn,
     Function::Args exprArgs;
     for (auto &[name, astType] : fnNode->arguments) {
         auto resolvedName = resolveNameFn(name);
-        exprArgs.emplace_back(resolvedName, getLanguageType(resolveNameFn, astType));
+        exprArgs.push_back({ resolvedName, getLanguageType(resolveNameFn, astType) });
     }
     Function::Body exprBody;
     for (auto &node : fnNode->body)
         exprBody.push_back(getExpression(resolveNameFn, node));
 
+    auto funcName = fnNode->name;
     auto langName = fnNode->name == "main" ? fnNode->name : resolveNameFn(fnNode->name);
-    auto funcName = fnNode->name == "main" ? fnNode->name : resolveNameFn(fnNode->name);
-
-    emplaceNamed<NamedFunctionValue>(langName,
+    emplaceNamed<NamedFunctionValue>(funcName,
                                      *this,
                                      module,
-                                     funcName,
+                                     langName,
                                      exprArgs,
                                      getLanguageType(resolveNameFn, fnNode->returnType),
                                      std::move(exprBody),
-                                     fnNode->isPublic);
+                                     fnNode->isPublic,
+                                     fnNode->isVariadic);
 }
 
 void CodegenContext::emplaceCFunction(NameResolver resolveNameFn,
@@ -229,14 +229,13 @@ void CodegenContext::emplaceCFunction(NameResolver resolveNameFn,
     Function::Args exprArgs;
     for (auto &[name, astType] : fnNode->arguments) {
         auto resolvedName = resolveNameFn(name);
-        exprArgs.emplace_back(resolvedName, getLanguageType(resolveNameFn, astType));
+        exprArgs.push_back({ resolvedName, getLanguageType(resolveNameFn, astType) });
     }
     fc_assert(fnNode->body.size() == 0);
     // Fixme: we should properly report this error
     fc_assert(fnNode->name != "main");
     auto langName = fnNode->name;
     auto funcName = resolveNameFn(fnNode->name);
-
     emplaceNamed<NamedFunctionValue>(langName,
                                      *this,
                                      module,
@@ -244,7 +243,8 @@ void CodegenContext::emplaceCFunction(NameResolver resolveNameFn,
                                      exprArgs,
                                      getLanguageType(resolveNameFn, fnNode->returnType),
                                      Function::Body {},
-                                     fnNode->isPublic);
+                                     fnNode->isPublic,
+                                     fnNode->isVariadic);
 }
 
 void CodegenContext::fillStructTypeFields(NameResolver resolveNameFn,
@@ -324,7 +324,6 @@ void CodegenContext::generate(std::unique_ptr<CModule> &&cModule) {
     }
 }
 
-
 LanguageType *CodegenContext::getLanguageType(NameResolver resolveNameFn,
                                               const std::unique_ptr<ASTType> &type) {
     if (auto t = dynamic_cast<const ASTBuiltinType *>(type.get()); t != nullptr) {
@@ -353,7 +352,7 @@ LanguageType *CodegenContext::getLanguageType(NameResolver resolveNameFn,
         auto retType = getLanguageType(resolveNameFn, t->returnType);
         return getOrEmplaceType<FunctionType>(
             FunctionType::signatureFrom(exprArgs, retType),
-            exprArgs, retType);
+            exprArgs, retType, false);
     } else {
         // new type, unsupported above?
         fc_unreachable();

@@ -99,8 +99,10 @@ struct FunctionNode : ASTNode {
 
     Body body;
 
+    bool isVariadic;
+
     FunctionNode() = default;
-    FunctionNode(std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic);
+    FunctionNode(std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&body, bool isPublic, bool isVariadic);
 };
 
 struct ConstantStringNode : ASTNode {

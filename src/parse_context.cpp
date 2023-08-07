@@ -35,12 +35,13 @@ AliasNode::AliasNode(std::string name, std::unique_ptr<ASTType> &&target)
       target(std::move(target)) {}
 
 FunctionNode::FunctionNode(
-    std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic
+    std::string name, ArgList &&arguments, std::unique_ptr<ASTType> &&returnType, Body &&, bool isPublic, bool isVariadic
 )
     : name(name),
       isPublic(isPublic),
       arguments(std::move(arguments)),
-      returnType(std::move(returnType)) {}
+      returnType(std::move(returnType)),
+      isVariadic(isVariadic) {}
 
 ConstantStringNode::ConstantStringNode(std::string value)
     : value(value) {}

@@ -26,22 +26,15 @@ class Function;
 class Module;
 } // namespace llvm
 
-class Function {
-public:
-    using Args = std::vector<std::pair<std::string, LanguageType *>>;
+struct Function {
+    struct Arg {
+        std::string name;
+        LanguageType *type;
+    };
+
+    using Args = std::vector<Arg>;
     using Body = std::vector<std::unique_ptr<Expression>>;
 
-private:
-    llvm::Function *function;
-
-    std::string name;
-
-    std::vector<std::string> argumentNames;
-    std::unique_ptr<FunctionType> type;
-
-    std::vector<std::unique_ptr<Expression>> body;
-
-public:
     bool isPublic;
 
     Function(CodegenContext &context,
@@ -50,7 +43,8 @@ public:
              const Args &arguments,
              LanguageType *returnType,
              Body &&body,
-             bool isPublic);
+             bool isPublic,
+             bool isVariadic);
 
     const std::string &getName() const;
     FunctionType *functionType();
@@ -64,6 +58,16 @@ public:
     void generateBody(ExpressionGenContext &builder);
 
     std::string dump();
+
+private:
+    llvm::Function *function;
+
+    std::string name;
+
+    std::vector<std::string> argumentNames;
+    std::unique_ptr<FunctionType> type;
+
+    std::vector<std::unique_ptr<Expression>> body;
 };
 
 class CodegenError : public std::exception {

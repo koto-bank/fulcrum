@@ -117,10 +117,11 @@ std::string VoidType::signature() { return "void"; }
 
 std::string BoolType::signature() { return "bool"; }
 
-FunctionType::FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType_)
+FunctionType::FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType, bool isVariadic)
     : LanguageType(context),
       arguments(args),
-      returnType(returnType_) {}
+      returnType(returnType),
+      isVariadic(isVariadic) {}
 
 llvm::Type *FunctionType::llvmType() {
     if (funcType == nullptr) {
@@ -130,7 +131,7 @@ llvm::Type *FunctionType::llvmType() {
         });
         llvm::Type *retType = returnType->llvmType();
 
-        funcType = llvm::FunctionType::get(retType, argTypes, false);
+        funcType = llvm::FunctionType::get(retType, argTypes, isVariadic);
     }
 
     return funcType;
@@ -158,7 +159,6 @@ llvm::Type *ArrayType::llvmType() { return llvm::ArrayType::get(targetType->llvm
 std::string ArrayType::signature() { return fmt::format("{}[{}]", targetType->signature(), size); }
 
 llvm::Type *VAType::llvmType() {
-    // TODO: handle va-list properly
     return llvm::PointerType::get(context.context, 0);
 }
 
