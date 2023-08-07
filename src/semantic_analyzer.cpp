@@ -103,7 +103,7 @@ bool SemanticAnalyzer::parseModuleDefinition(const Parser::Expression &moduleFor
         reportError(moduleForm.children[0].token, "module name expected");
         return false;
     }
-    auto name = getSymbol(moduleForm.children[0]);
+    auto name = getSymbol(moduleForm.children[1]);
     if (symbol == std::nullopt) {
         reportError(moduleForm.children[1].token, "module name expected");
         return false;
