@@ -29,6 +29,12 @@ struct ASTIntegerType : ASTBuiltinType {
     ASTIntegerType(bool isSigned, uint32_t bits);
 };
 
+struct ASTFloatType : ASTBuiltinType {
+    const uint32_t bits;
+
+    ASTFloatType(uint32_t bits);
+};
+
 struct ASTNamedType : ASTType {
     std::string name;
 
@@ -117,6 +123,13 @@ struct ConstantIntNode : ASTNode {
     bool isSigned;
 
     ConstantIntNode(std::unique_ptr<ASTType> &&intType, IsLongInteger auto constValue);
+};
+
+struct ConstantFloatNode : ASTNode {
+    std::unique_ptr<ASTType> floatType;
+    double value;
+
+    ConstantFloatNode(std::unique_ptr<ASTType> &&floatType,double constValue);
 };
 
 struct ConstantBoolNode : ASTNode {

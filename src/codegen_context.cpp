@@ -331,6 +331,8 @@ LanguageType *CodegenContext::getLanguageType(NameResolver resolveNameFn,
         return getNamed<NamedTypeValue>(t->builtinName);
     } else if (auto t = dynamic_cast<const ASTIntegerType *>(type.get()); t != nullptr) {
         return getNamed<NamedTypeValue>(t->builtinName);
+    } else if (auto t = dynamic_cast<const ASTFloatType *>(type.get()); t != nullptr) {
+        return getNamed<NamedTypeValue>(t->builtinName);
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type.get()); t != nullptr) {
         auto fullName = resolveNameFn(t->name);
         return getNamed<NamedTypeValue>(fullName);
@@ -378,6 +380,13 @@ std::unique_ptr<Expression> CodegenContext::getExpression(NameResolver resolveNa
         return t->isSigned
             ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(t->value))
             : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(t->value));
+    } else if (auto t = dynamic_cast<const ConstantFloatNode *>(node.get()); t != nullptr) {
+        auto tp = dynamic_cast<FloatType *>(getLanguageType(resolveNameFn, t->floatType));
+        if (tp->bits == FloatType::Bits::Float) {
+            return std::make_unique<FloatConstant>(tp, static_cast<float>(t->value));
+        } else {
+            return std::make_unique<FloatConstant>(tp, t->value);
+        }
     } else if (auto t = dynamic_cast<const ConstantBoolNode *>(node.get()); t != nullptr) {
         return std::make_unique<BoolConstant>(getNamed<NamedTypeValue>("bool"), t->value);
     } else if (auto t = dynamic_cast<const FunctionCallNode *>(node.get()); t != nullptr) {
