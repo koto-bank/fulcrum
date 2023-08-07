@@ -410,7 +410,7 @@ LanguageType *FunctionCall::voidProcessorType(const ExpressionGenContext &genCon
     return genContext.codegenContext.getNamed<NamedTypeValue>("void");
 }
 
-LanguageType *FunctionCall::notProcessorType(const ExpressionGenContext &genContext) const {
+LanguageType *FunctionCall::boolProcessorType(const ExpressionGenContext &genContext) const {
     return genContext.codegenContext.getNamed<NamedTypeValue>("bool");
 }
 
@@ -535,17 +535,42 @@ llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     return nullptr;
 }
 
-llvm::Value *FunctionCall::notProcessor(ExpressionGenContext &genContext) {
-    if (args.size() != 1
-        && args[0]->languageType(genContext)->actualLanguageType()
+llvm::Value *FunctionCall::boolProcessor(ExpressionGenContext &genContext) {
+    if (name == "not") {
+        if (args.size() != 1
+            || args[0]->languageType(genContext)->actualLanguageType()
             != genContext.codegenContext.getNamed<NamedTypeValue>("bool"))
-        throw CodegenError("'not' expects exactly one argument of type bool");
+            throw CodegenError(fmt::format("'not' expects exactly one argument of type bool", name));
+
+        assumeExpression(
+            genContext, args[0].get(), fmt::format("Expected argument to '{}' to to be an expression", name)
+            );
+        return genContext.builder.CreateNot(args[0]->llvmValue(genContext));
+    }
+
+    if (args.size() != 2
+        || args[0]->languageType(genContext)->actualLanguageType()
+            != genContext.codegenContext.getNamed<NamedTypeValue>("bool")
+        || args[1]->languageType(genContext)->actualLanguageType()
+            != genContext.codegenContext.getNamed<NamedTypeValue>("bool"))
+        throw CodegenError(fmt::format("'{}' expects exactly two arguments of type bool", name));
 
     assumeExpression(
-        genContext, args[0].get(), fmt::format("Expected argumen to 'not' to to be an expression, but it's a statement")
+        genContext, args[0].get(), fmt::format("Expected argument 1 to '{}' to to be an expression", name)
+    );
+    assumeExpression(
+        genContext, args[1].get(), fmt::format("Expected argument 2 to '{}' to to be an expression", name)
     );
 
-    return genContext.builder.CreateNot(args[0]->llvmValue(genContext));
+    if (name == "and") {
+        return genContext.builder.CreateAnd({ args[0]->llvmValue(genContext), args[1]->llvmValue(genContext) });
+    } else if (name == "or") {
+        return genContext.builder.CreateOr({ args[0]->llvmValue(genContext), args[1]->llvmValue(genContext) });
+    } else if (name == "xor") {
+        return genContext.builder.CreateXor(args[0]->llvmValue(genContext), args[1]->llvmValue(genContext));
+    }
+    fc_unreachable();
+    return nullptr;
 }
 
 LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext) {

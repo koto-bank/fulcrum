@@ -122,13 +122,13 @@ private:
     llvm::Value *ptrArithmeticsProcessor(ExpressionGenContext &genContext);
     llvm::Value *setProcessor(ExpressionGenContext &genContext);
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
-    llvm::Value *notProcessor(ExpressionGenContext &genContext);
+    llvm::Value *boolProcessor(ExpressionGenContext &genContext);
     llvm::Value *addrOfProcessor(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *notProcessorType(const ExpressionGenContext &genContext) const;
+    LanguageType *boolProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *addrOfProcessorType(const ExpressionGenContext &genContext) const;
 
 public:
@@ -148,8 +148,12 @@ public:
         { "do", { &FunctionCall::doProcessor, &FunctionCall::voidProcessorType } },
         { "set", { &FunctionCall::setProcessor, &FunctionCall::voidProcessorType } },
         { "while", { &FunctionCall::whileProcessor, &FunctionCall::voidProcessorType } },
-        { "not", { &FunctionCall::notProcessor, &FunctionCall::notProcessorType } },
         { "addr-of", { &FunctionCall::addrOfProcessor, &FunctionCall::addrOfProcessorType } },
+
+        { "not", { &FunctionCall::boolProcessor, &FunctionCall::boolProcessorType } },
+        { "and", { &FunctionCall::boolProcessor, &FunctionCall::boolProcessorType } },
+        { "or", { &FunctionCall::boolProcessor, &FunctionCall::boolProcessorType } },
+        { "xor", { &FunctionCall::boolProcessor, &FunctionCall::boolProcessorType } },
 
         { "ptr+", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
         { "ptr-", { &FunctionCall::ptrArithmeticsProcessor, &FunctionCall::ptrArithmeticsProcessorType } },
