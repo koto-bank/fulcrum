@@ -1,0 +1,14 @@
+(module varargs
+  (import :c "stdio.h"))
+
+(fn main i32 ()
+  (var int i32)
+  (var float f32)
+  (printf "Please enter integer: ")
+  (scanf "%d" (addr-of int))
+  (printf "Please enter float: ")
+  (scanf "%f" (addr-of float))
+  (printf "100 - %d = %d, 12.34 / %f = %f\n"
+          int (- 100 int)
+          float (/ 12.34f32 float))
+  (return 0))
