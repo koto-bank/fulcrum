@@ -7,6 +7,7 @@
 #include <llvm/IR/IRBuilder.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "assert.hpp"
 #include "codegen_context.hpp"

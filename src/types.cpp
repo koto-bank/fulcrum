@@ -1,11 +1,13 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/TypedPointerType.h>
 #include <llvm/IR/Type.h>
 
 #include "codegen_context.hpp"
 #include "types.hpp"
 
 using llvm::Type;
+using llvm::TypedPointerType;
 
 LanguageType::LanguageType(CodegenContext &context)
     : context(context) {}
@@ -36,7 +38,7 @@ StringType::StringType(CodegenContext &context)
 
 std::string StringType::signature() { return "str"; }
 
-Type *StringType::llvmType() { return Type::getIntNPtrTy(context.context, 8); }
+Type *StringType::llvmType() { return TypedPointerType::get(Type::getInt8Ty(context.context), 0); }
 
 AliasType::AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
     : LanguageType(codegenContext),
