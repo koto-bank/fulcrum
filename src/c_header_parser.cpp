@@ -1,6 +1,8 @@
 #include <iostream>
 #include <map>
+#include <optional>
 
+#include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/FileUtilities.h>
 #include <llvm/Support/Program.h>
@@ -283,16 +285,18 @@ std::unique_ptr<clang::Interpreter> HeaderParser::createClangInterpreter() const
     llvm::SmallString<64> OutputFile;
     llvm::sys::fs::createTemporaryFile("print-resource-dir-output", "", OutputFile);
     llvm::FileRemover OutputRemover(OutputFile.c_str());
-    llvm::Optional<llvm::StringRef> Redirects[] = { std::nullopt, llvm::StringRef(OutputFile), std::nullopt };
+    std::optional<llvm::StringRef> Redirects[] = { std::nullopt, llvm::StringRef(OutputFile), std::nullopt };
     llvm::sys::ExecuteAndWait(clangPath, PrintResourceDirArgs, {}, Redirects);
 
     auto OutputBuf = llvm::MemoryBuffer::getFile(OutputFile.c_str());
     llvm::StringRef Output = OutputBuf.get()->getBuffer().rtrim('\n');
-    auto clangInc = fmt::format("-I{}/include", Output);
+    auto clangInc = fmt::format("-I{}/include", Output.str());
 
     std::vector<const char *> clangArgs{ "-Xclang", "-emit-llvm-only", clangInc.data() };
 
-    auto instOrErr = clang::IncrementalCompilerBuilder::create(clangArgs);
+    auto compBuilder = clang::IncrementalCompilerBuilder();
+    compBuilder.SetCompilerArgs(clangArgs);
+    auto instOrErr = compBuilder.CreateCpp();
     auto inst = std::move(instOrErr.get());
 
     auto ignoring = std::make_unique<clang::IgnoringDiagConsumer>();

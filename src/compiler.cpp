@@ -1,5 +1,3 @@
-#include <llvm/ADT/Optional.h>
-
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
@@ -12,10 +10,10 @@
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FileUtilities.h>
-#include <llvm/Support/Host.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
+#include <llvm/TargetParser/Host.h>
 
 #include <fmt/color.h>
 
@@ -24,9 +22,12 @@
 #include <algorithm>
 #include <concepts>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -178,16 +179,12 @@ args::ArgumentParser argParser("fulcrum");
     llvm::LLVMContext context;
     llvm::IRBuilder<> builder(context);
 
-    context.setOpaquePointers(true);
-
     CodegenContext codegenCont("main", context);
 
     llvm::TargetMachine *targetMachine;
     {
-        llvm::InitializeAllTargetInfos();
-        llvm::InitializeAllTargets();
-        llvm::InitializeAllTargetMCs();
-        llvm::InitializeAllAsmPrinters();
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
 
         auto targetTriple = llvm::sys::getDefaultTargetTriple();
         std::string err;
@@ -198,7 +195,7 @@ args::ArgumentParser argParser("fulcrum");
         }
 
         llvm::TargetOptions options;
-        auto rm = llvm::Optional<llvm::Reloc::Model>();
+        auto rm = std::optional<llvm::Reloc::Model>();
         if (picArg) {
             rm = llvm::Reloc::Model::PIC_;
         }
@@ -304,7 +301,7 @@ args::ArgumentParser argParser("fulcrum");
     llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
 
     llvm::legacy::PassManager passManager;
-    targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CGFT_ObjectFile);
+    targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile);
     passManager.run(codegenCont.module);
     dest.flush();
 

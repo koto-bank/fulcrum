@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.5)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
@@ -6,9 +6,6 @@ project(fulcrum CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS FALSE)
-
-find_package(LLVM REQUIRED)
-find_package(Clang REQUIRED)
 
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
@@ -30,24 +27,35 @@ add_library(${FULCRUM_LIB} OBJECT
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
-target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC
-  ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
-separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND
-  ${LLVM_DEFINITIONS} ${CLANG_DEFINITIONS})
-target_compile_definitions(${FULCRUM_LIB} PUBLIC ${LLVM_DEFINITIONS_LIST})
 
-llvm_map_components_to_libnames(llvm_libs support)
+find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
+
+target_include_directories(${FULCRUM_LIB} SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS} ${CLANG_DEFINITIONS})
+
+target_compile_definitions(${FULCRUM_LIB} INTERFACE ${LLVM_DEFINITIONS_LIST})
+set(LLVM_COMPONENTS support core irreader native)
+execute_process(COMMAND llvm-config --libs ${LLVM_COMPONENTS} OUTPUT_VARIABLE llvm_libs)
+
+if("${llvm_libs}" STREQUAL "")
+    llvm_map_components_to_libnames(llvm_libs ${LLVM_COMPONENTS})
+else()
+    string(STRIP ${llvm_libs} llvm_libs)
+    execute_process(COMMAND llvm-config --libdir OUTPUT_VARIABLE llvm_libdir)
+    string(STRIP ${llvm_libdir} llvm_libdir)
+    target_link_directories(${FULCRUM_LIB} PUBLIC ${llvm_libdir})
+endif()
 
 add_subdirectory(deps/fmt)
 
 option(ARGS_BUILD_EXAMPLE "" OFF)
 option(ARGS_BUILD_UNITTESTS "" OFF)
 add_subdirectory(deps/args)
-
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
-target_link_libraries(${FULCRUM_LIB} fmt args LLVM libclang clang-cpp ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args libclang clang-cpp ${llvm_libs})
 
 ### Compiler
 

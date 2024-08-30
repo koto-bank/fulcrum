@@ -1,6 +1,7 @@
 #include <llvm/IR/Function.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "assert.hpp"
 #include "codegen_context.hpp"
