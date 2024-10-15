@@ -4,11 +4,11 @@
 #include <fmt/ranges.h>
 
 #include "assert.hpp"
+#include "ast_nodes.hpp"
+#include "c_module.hpp"
 #include "codegen_context.hpp"
 #include "expressions.hpp"
-#include "parse_context.hpp"
-
-using llvm::LLVMContext;
+#include "fulcrum_module.hpp"
 
 Function::Function(
     CodegenContext &context, llvm::Module &module, const std::string &name_, const Args &arguments,
@@ -47,7 +47,11 @@ void Function::generateExpressions(
 }
 
 void Function::generateBody(ExpressionGenContext &genContext) {
-    if (body.size() == 0) return;
+
+    if (body.size() == 0) {
+        llvm::outs() << "Body for function " << name << " is empty!\n";
+        return;
+    }
 
     auto &context = genContext.codegenContext;
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context.context, "enter", function);
@@ -56,8 +60,13 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     // Insert variables for arguments
     genContext.pushScope();
     for (auto i = 0u; i < argumentNames.size(); i++) {
-        auto varDef = genContext.insertVariable(argumentNames[i], functionType()->arguments[i]);
-        genContext.builder.CreateStore(function->getArg(i), varDef->value);
+        auto arg = functionType()->arguments[i];
+        auto varDef = genContext.insertFunctionArgument(argumentNames[i], arg);
+        if (dynamic_cast<ArrayType *>(arg->actualLanguageType()) != nullptr) {
+            genContext.builder.CreateConstGEP2_32(arg->actualLanguageType()->llvmType(), varDef->value, 0, 0);
+        } else {
+            genContext.builder.CreateStore(function->getArg(i), varDef->value);
+        }
     }
 
     generateExpressions(genContext, body);
@@ -140,6 +149,8 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<IntegerType>("u64", 64, false);
     emplaceType<CharType>("char");
     emplaceType<StringType>("str");
+
+    // Why do we need this?
     emplaceType<VAType>(VAType::Signature);
 }
 
@@ -147,212 +158,180 @@ bool CodegenContext::existsNamed(const std::string &name) const {
     return names.contains(name);
 }
 
-void CodegenContext::emplaceStructType(NameResolver resolveNameFn,
-                                       const std::unique_ptr<StructNode> &structNode) {
-    auto fullName = resolveNameFn(structNode->name);
-    if (auto u = dynamic_cast<UnionNode *>(structNode.get()); u != nullptr) {
+void CodegenContext::emplaceStructType(StructNode &&structNode) {
+    if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
-        emplaceType<UnionType>(fullName, fullName, u->biggestSize);
+        emplaceType<UnionType>(structNode.name, structNode.name, u->biggestSize);
     } else {
-        emplaceType<StructType>(fullName, fullName, structNode->isPublic);
+        emplaceType<StructType>(structNode.name, structNode.name, structNode.isPublic);
     }
 }
 
-void CodegenContext::emplaceCStructType(NameResolver resolveNameFn,
-                                        const std::unique_ptr<StructNode> &structNode) {
-    auto fullName = resolveNameFn(structNode->name);
-    if (auto u = dynamic_cast<UnionNode *>(structNode.get()); u != nullptr) {
+void CodegenContext::emplaceCStructType(StructNode &&structNode) {
+    if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
-        ensureType<UnionType>(structNode->name, fullName, u->biggestSize);
+        ensureType<UnionType>(structNode.name, structNode.name, u->biggestSize);
     } else {
-        ensureType<StructType>(structNode->name, fullName, structNode->isPublic);
+        ensureType<StructType>(structNode.name, structNode.name, structNode.isPublic);
     }
 }
 
-void CodegenContext::emplaceAliasType(NameResolver resolveNameFn,
-                                      const std::unique_ptr<AliasNode> &aliasNode) {
-    auto fullName = resolveNameFn(aliasNode->name);
-    emplaceType<AliasType>(fullName, fullName, getLanguageType(resolveNameFn, aliasNode->target));
+void CodegenContext::emplaceAliasType(TypeAliasNode &&aliasNode) {
+    emplaceType<AliasType>(aliasNode.name, aliasNode.name, getLanguageType(aliasNode.target));
 }
 
-void CodegenContext::emplaceCAliasType(NameResolver resolveNameFn, const std::unique_ptr<AliasNode> &aliasNode) {
-    auto fullName = resolveNameFn(aliasNode->name);
-    ensureType<AliasType>(aliasNode->name, fullName, getLanguageType(resolveNameFn, aliasNode->target));
+void CodegenContext::emplaceCAliasType(TypeAliasNode &&aliasNode) {
+    ensureType<AliasType>(aliasNode.name, aliasNode.name, getLanguageType(aliasNode.target));
 }
 
-void CodegenContext::emplaceGlobalVar(NameResolver resolveNameFn,
-                                      const std::unique_ptr<VarDeclarationNode> &varNode) {
-    auto fullName = resolveNameFn(varNode->name);
+void CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
+    if (names.contains(varNode.name)) return;
+    VariableDefinition varDef(varNode.name, getLanguageType(varNode.type));
 
-    VariableDefinition varDef(fullName, getLanguageType(resolveNameFn, varNode->type));
-
-    if (varNode->initialValue != nullptr) {
-        auto expr = getExpression(resolveNameFn, varNode->initialValue);
+    if (varNode.initialValue != nullptr) {
+        auto expr = getExpression(std::move(varNode.initialValue));
         auto constExpr = dynamic_cast<ConstantExpression *>(expr.get());
         if (constExpr == nullptr)
-            throw CodegenError(fmt::format("Global variable of non-constant type not supported: {}", fullName));
+            throw CodegenError(fmt::format("Global variable of non-constant type not supported: {}", varNode.name));
 
         auto constVal = constExpr->llvmConstant(*this);
         auto llvmGlobal = new llvm::GlobalVariable(
-            module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, fullName
+            module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, varNode.name
         );
         varDef.value = llvmGlobal;
-        emplaceNamed<NamedVariableValue>(fullName, varDef);
+        emplaceNamed<NamedVariableValue>(varNode.name, varDef);
     }
 }
 
-void CodegenContext::emplaceFulcrumFunction(NameResolver resolveNameFn,
-                                            const std::unique_ptr<FunctionNode> &fnNode) {
+void CodegenContext::emplaceFulcrumFunction(FunctionNode &&fnNode) {
     Function::Args exprArgs;
-    for (auto &[name, astType] : fnNode->arguments) {
-        auto resolvedName = resolveNameFn(name);
-        exprArgs.push_back({ resolvedName, getLanguageType(resolveNameFn, astType) });
+    for (auto &[name, astType] : fnNode.arguments) {
+        exprArgs.push_back({ name, getLanguageType(astType) });
     }
     Function::Body exprBody;
-    for (auto &node : fnNode->body)
-        exprBody.push_back(getExpression(resolveNameFn, node));
-
-    auto funcName = fnNode->name;
-    auto langName = fnNode->name == "main" ? fnNode->name : resolveNameFn(fnNode->name);
-    emplaceNamed<NamedFunctionValue>(funcName,
-                                     *this,
-                                     module,
-                                     langName,
-                                     exprArgs,
-                                     getLanguageType(resolveNameFn, fnNode->returnType),
-                                     std::move(exprBody),
-                                     fnNode->isPublic,
-                                     fnNode->isVariadic);
-}
-
-void CodegenContext::emplaceCFunction(NameResolver resolveNameFn,
-                                     const std::unique_ptr<FunctionNode> &fnNode) {
-    Function::Args exprArgs;
-    for (auto &[name, astType] : fnNode->arguments) {
-        auto resolvedName = resolveNameFn(name);
-        exprArgs.push_back({ resolvedName, getLanguageType(resolveNameFn, astType) });
+    for (auto &node : fnNode.body) {
+        exprBody.push_back(getExpression(std::move(node)));
     }
-    fc_assert(fnNode->body.size() == 0);
-    // Fixme: we should properly report this error
-    fc_assert(fnNode->name != "main");
-    auto langName = fnNode->name;
-    auto funcName = resolveNameFn(fnNode->name);
-    emplaceNamed<NamedFunctionValue>(langName,
+
+    auto funcName = fnNode.name;
+    emplaceNamed<NamedFunctionValue>(funcName,
                                      *this,
                                      module,
                                      funcName,
                                      exprArgs,
-                                     getLanguageType(resolveNameFn, fnNode->returnType),
-                                     Function::Body {},
-                                     fnNode->isPublic,
-                                     fnNode->isVariadic);
+                                     getLanguageType(fnNode.returnType),
+                                     std::move(exprBody),
+                                     fnNode.isPublic,
+                                     fnNode.isVariadic);
 }
 
-void CodegenContext::fillStructTypeFields(NameResolver resolveNameFn,
-                                          const std::unique_ptr<StructNode> &structNode) {
+void CodegenContext::emplaceCFunction(FunctionNode &&fnNode) {
+    Function::Args exprArgs;
+    for (auto &[name, astType] : fnNode.arguments) {
+        exprArgs.push_back({ name, getLanguageType(astType) });
+    }
+    fc_assert(fnNode.body.size() == 0);
+    // Fixme: we should properly report this error
+    fc_assert(fnNode.name != "main");
+    auto name = fnNode.name;
+    // hack... We probably should collect all imports and dedupe them
+    // before creating named values
+    if (names.contains(name)) {
+        return;
+    }
+    emplaceNamed<NamedFunctionValue>(name,
+                                     *this,
+                                     module,
+                                     name,
+                                     exprArgs,
+                                     getLanguageType(fnNode.returnType),
+                                     Function::Body {},
+                                     fnNode.isPublic,
+                                     fnNode.isVariadic);
+}
+
+void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
     StructType::Fields exprFields;
-    for (auto &[name, astType] : structNode->fields)
-        exprFields.emplace_back(name, getLanguageType(resolveNameFn, astType));
+    for (auto &[name, astType] : structNode.fields)
+        exprFields.emplace_back(name, getLanguageType(astType));
 
-    auto fullName = resolveNameFn(structNode->name);
-
-    auto structType = static_cast<StructType *>(getNamed<NamedTypeValue>(fullName));
+    auto structType = static_cast<StructType *>(getNamed<NamedTypeValue>(structNode.name));
     structType->fillFields(exprFields);
 }
 
-void CodegenContext::generate(std::unique_ptr<FulcrumModule> &&fulcrumModule) {
+void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
     // First insert all the structure types
-    auto nameResolver = [&fulcrumModule](const std::string &name) {
-        return fulcrumModule->resolveName(name);
-    };
-
-    for (const auto &structNode : fulcrumModule->structs)
-        emplaceStructType(nameResolver, structNode);
-
-    // Now insert all alias types
-    for (auto &aliasNode : fulcrumModule->aliases)
-        emplaceAliasType(nameResolver, aliasNode);
-
-    // Now fill structure type fields, which could possibly refer
-    // to other structures or aliases
-    for (auto &structNode : fulcrumModule->structs)
-        fillStructTypeFields(nameResolver, structNode);
-
-    for (auto &globalVar : fulcrumModule->globalVariables)
-        emplaceGlobalVar(nameResolver, globalVar);
-
-    for (auto &function : fulcrumModule->functions)
-        emplaceFulcrumFunction(nameResolver, function);
-}
-
-void CodegenContext::generate(std::unique_ptr<CModule> &&cModule) {
-    for (const auto &[header, structNode] : cModule->structs) {
-        auto nameResolver = [](const std::string &name) {
-            return name;
-        };
-        emplaceCStructType(nameResolver, structNode);
+    for (auto &structNode : fulcrumModule.structs) {
+        emplaceStructType(std::move(structNode));
     }
 
     // Now insert all alias types
-    for (const auto &[header, aliasNode] : cModule->aliases) {
-        auto nameResolver = [](const std::string &name) {
-            return name;
-        };
-        emplaceCAliasType(nameResolver, aliasNode);
+    for (auto &aliasNode : fulcrumModule.typeAliases)
+        emplaceAliasType(std::move(aliasNode));
+
+    // Now fill structure type fields, which could possibly refer
+    // to other structures or aliases
+    for (auto &structNode : fulcrumModule.structs)
+        fillStructTypeFields(std::move(structNode));
+
+    for (auto &globalVar : fulcrumModule.globalVariables)
+        emplaceGlobalVar(std::move(globalVar));
+
+    for (auto &function : fulcrumModule.functions)
+        emplaceFulcrumFunction(std::move(function));
+}
+
+void CodegenContext::generate(CModule &&cModule) {
+    for (auto &structNode : cModule.structs) {
+        emplaceCStructType(std::move(structNode));
+    }
+
+    // Now insert all alias types
+    for (auto &aliasNode : cModule.typeAliases) {
+        emplaceCAliasType(std::move(aliasNode));
     }
 
     // Now fill structure type fields, which could possibly refer
     // to other structures or aliases
-    for (const auto &[header, structNode] : cModule->structs) {
-        auto nameResolver = [](const std::string &name) {
-            return name;
-        };
-        fillStructTypeFields(nameResolver, structNode);
+    for (auto &structNode : cModule.structs) {
+        fillStructTypeFields(std::move(structNode));
     }
 
-    for (const auto &[header, globalVar] : cModule->globalVariables) {
-        auto nameResolver = [](const std::string &name) {
-            return name;
-        };
-        emplaceGlobalVar(nameResolver, globalVar);
+    for (auto &globalVar : cModule.globalVariables) {
+        emplaceGlobalVar(std::move(globalVar));
     }
 
-    for (const auto &[header, function] : cModule->functions) {
-        auto nameResolver = [](const std::string &name) {
-            return name;
-        };
-        emplaceCFunction(nameResolver, function);
+    for (auto &function : cModule.functions) {
+        emplaceCFunction(std::move(function));
     }
 }
 
-LanguageType *CodegenContext::getLanguageType(NameResolver resolveNameFn,
-                                              const std::unique_ptr<ASTType> &type) {
-    if (auto t = dynamic_cast<const ASTBuiltinType *>(type.get()); t != nullptr) {
+LanguageType *CodegenContext::getLanguageType(const ASTType *type) {
+    if (auto t = dynamic_cast<const ASTBuiltinType *>(type); t != nullptr) {
         fc_assert(existsNamed(t->builtinName));
         return getNamed<NamedTypeValue>(t->builtinName);
-    } else if (auto t = dynamic_cast<const ASTIntegerType *>(type.get()); t != nullptr) {
+    } else if (auto t = dynamic_cast<const ASTIntegerType *>(type); t != nullptr) {
         return getNamed<NamedTypeValue>(t->builtinName);
-    } else if (auto t = dynamic_cast<const ASTFloatType *>(type.get()); t != nullptr) {
+    } else if (auto t = dynamic_cast<const ASTFloatType *>(type); t != nullptr) {
         return getNamed<NamedTypeValue>(t->builtinName);
-    } else if (auto t = dynamic_cast<const ASTNamedType *>(type.get()); t != nullptr) {
-        auto fullName = resolveNameFn(t->name);
-        return getNamed<NamedTypeValue>(fullName);
-    } else if (auto t = dynamic_cast<const ASTPointerType *>(type.get()); t != nullptr) {
-        auto targetLangType = getLanguageType(resolveNameFn, t->targetType);
+    } else if (auto t = dynamic_cast<const ASTNamedType *>(type); t != nullptr) {
+        return getNamed<NamedTypeValue>(t->name);
+    } else if (auto t = dynamic_cast<const ASTPointerType *>(type); t != nullptr) {
+        auto targetLangType = getLanguageType(t->targetType);
         auto pointeeName = targetLangType->signature();
         auto ptrName = pointeeName + "*";
         return getOrEmplaceType<PointerType>(ptrName, targetLangType);
-    } else if (auto t = dynamic_cast<const ASTArrayType *>(type.get()); t != nullptr) {
-        auto targetLangType = getLanguageType(resolveNameFn, t->targetType);
+    } else if (auto t = dynamic_cast<const ASTArrayType *>(type); t != nullptr) {
+        auto targetLangType = getLanguageType(t->targetType);
         auto pointeeName = targetLangType->signature();
         auto arrName = fmt::format("{}[{}]", pointeeName, t->size);
         return getOrEmplaceType<ArrayType>(arrName, targetLangType, t->size);
-    } else if (auto t = dynamic_cast<const ASTFunctionType *>(type.get()); t != nullptr) {
+    } else if (auto t = dynamic_cast<const ASTFunctionType *>(type); t != nullptr) {
         std::vector<LanguageType *> exprArgs;
-        for (const auto &astType : t->arguments) {
-            exprArgs.emplace_back(getLanguageType(resolveNameFn, astType));
+        for (const auto &astType : t->argumentTypes) {
+            exprArgs.emplace_back(getLanguageType(astType));
         }
-        auto retType = getLanguageType(resolveNameFn, t->returnType);
+        auto retType = getLanguageType(t->returnType);
         return getOrEmplaceType<FunctionType>(
             FunctionType::signatureFrom(exprArgs, retType),
             exprArgs, retType, false);
@@ -363,26 +342,25 @@ LanguageType *CodegenContext::getLanguageType(NameResolver resolveNameFn,
     }
 }
 
-std::unique_ptr<Expression> CodegenContext::getExpression(NameResolver resolveNameFn,
-                                                          const std::unique_ptr<ASTNode> &node) {
+std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNode> &&node) {
     if (auto t = dynamic_cast<const StructNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const UnionNode *>(node.get()); t != nullptr) {
         return nullptr;
-    } else if (auto t = dynamic_cast<const AliasNode *>(node.get()); t != nullptr) {
+    } else if (auto t = dynamic_cast<const TypeAliasNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const FunctionNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const ConstantStringNode *>(node.get()); t != nullptr) {
         return std::make_unique<StringConstant>(getNamed<NamedTypeValue>("str"), t->value);
     } else if (auto t = dynamic_cast<const ConstantIntNode *>(node.get()); t != nullptr) {
-        auto tp = dynamic_cast<IntegerType *>(getLanguageType(resolveNameFn, t->intType));
+        auto tp = dynamic_cast<IntegerType *>(getLanguageType(t->intType));
         fc_assert(tp != nullptr);
         return t->isSigned
             ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(t->value))
             : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(t->value));
     } else if (auto t = dynamic_cast<const ConstantFloatNode *>(node.get()); t != nullptr) {
-        auto tp = dynamic_cast<FloatType *>(getLanguageType(resolveNameFn, t->floatType));
+        auto tp = dynamic_cast<FloatType *>(getLanguageType(t->floatType));
         if (tp->bits == FloatType::Bits::Float) {
             return std::make_unique<FloatConstant>(tp, static_cast<float>(t->value));
         } else {
@@ -390,34 +368,37 @@ std::unique_ptr<Expression> CodegenContext::getExpression(NameResolver resolveNa
         }
     } else if (auto t = dynamic_cast<const ConstantBoolNode *>(node.get()); t != nullptr) {
         return std::make_unique<BoolConstant>(getNamed<NamedTypeValue>("bool"), t->value);
-    } else if (auto t = dynamic_cast<const FunctionCallNode *>(node.get()); t != nullptr) {
+    } else if (auto t = dynamic_cast<FunctionCallNode *>(node.get()); t != nullptr) {
         FunctionCall::Args argsExprs;
-        for (const auto &arg : t->args) {
-            argsExprs.push_back(getExpression(resolveNameFn, arg));
+        for (auto &arg : t->args) {
+            argsExprs.push_back(getExpression(std::move(arg)));
+        }
+        for (const auto &a : argsExprs) {
+            a->dump();
         }
         std::string fullName = t->name == "main" ? t->name : (t->name);
         return std::make_unique<FunctionCall>(fullName, std::move(argsExprs));
     } else if (auto t = dynamic_cast<const VariableAccessNode *>(node.get()); t != nullptr) {
-        return std::make_unique<VariableAccess>(resolveNameFn(t->name));
-    } else if (auto t = dynamic_cast<const DereferenceNode *>(node.get()); t != nullptr) {
-        return std::make_unique<Dereference>(getExpression(resolveNameFn, t->target));
-    } else if (auto t = dynamic_cast<const ArrayNthNode *>(node.get()); t != nullptr) {
-        return std::make_unique<ArraySubscription>(getExpression(resolveNameFn, t->array),
-                                                   getExpression(resolveNameFn, t->subscript));
-    } else if (auto t = dynamic_cast<const VarDeclarationNode *>(node.get()); t != nullptr) {
+        return std::make_unique<VariableAccess>(t->name);
+    } else if (auto t = dynamic_cast<DereferenceNode *>(node.get()); t != nullptr) {
+        return std::make_unique<Dereference>(getExpression(std::move(t->target)));
+    } else if (auto t = dynamic_cast<ArrayNthNode *>(node.get()); t != nullptr) {
+        return std::make_unique<ArraySubscription>(getExpression(std::move(t->array)),
+                                                   getExpression(std::move(t->subscript)));
+    } else if (auto t = dynamic_cast<VariableDeclarationNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableDeclaration>(
-            resolveNameFn(t->name),
-            getLanguageType(resolveNameFn, t->type),
+            t->name,
+            getLanguageType(t->type),
             t->initialValue != nullptr
-            ? getExpression(resolveNameFn, t->initialValue)
+            ? getExpression(std::move(t->initialValue))
             : nullptr);
     } else if (auto t = dynamic_cast<const SizeofNode *>(node.get()); t != nullptr) {
-        return std::make_unique<Sizeof>(*this, getLanguageType(resolveNameFn, t->targetType));
-    } else if (auto t = dynamic_cast<const CastNode *>(node.get()); t != nullptr) {
+        return std::make_unique<Sizeof>(*this, getLanguageType(t->targetType));
+    } else if (auto t = dynamic_cast<CastNode *>(node.get()); t != nullptr) {
         return std::make_unique<Cast>(
             *this,
-            getLanguageType(resolveNameFn, t->targetType),
-            getExpression(resolveNameFn, t->targetExpression));
+            getLanguageType(t->targetType),
+            getExpression(std::move(t->targetExpression)));
     } else {
         // new node, unsupported above?
         fc_unreachable();

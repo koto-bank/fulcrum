@@ -19,7 +19,12 @@ protected:
     CodegenContext &context;
 
 public:
+    // Used for allocating variables of the type
     virtual llvm::Type *llvmType() = 0;
+
+    // Used for accessing variables of the type
+    // For most types, same as llvmType, for arrays it returns ptr
+    virtual llvm::Type* llvmTypeAccess();
     virtual std::string signature() = 0;
     virtual LanguageType *actualLanguageType();
 
@@ -151,6 +156,7 @@ struct ArrayType : LanguageType {
     ArrayType(CodegenContext &context, LanguageType *targetType, size_t size);
 
     llvm::Type *llvmType() override;
+    llvm::Type *llvmTypeAccess() override;
     std::string signature() override;
 };
 

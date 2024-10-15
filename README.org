@@ -9,3 +9,30 @@ Build:
 Don't forget to export paths to LLVM and Clang:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
 ~export Clang_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/clang~
+
+* Debug
+** Parser
+There's ~Parser::Expression::dump()~ method, which is intended to be
+used in situations where there's a need to inspect AST more closely.
+Use it like this:
+#+begin_src
+bool SemanticAnalyzer::run(Parser &_parser) {
+    parser = &_parser;
+
+    auto tree = parser->releaseSyntaxTree();
++    tree->dump();
+#+end_src
+
+* Language
+** Module declaration
+*** Syntax
+#+begin_src
+(module module-name
+   (import some-module)
+   (import :c "stdio.h")
+   (import other-module :as nickname)
+   (import :c "SDL2/SDL.h" :as sdl))
+#+end_src
+
+Imports without nicknames are imported into the current module.
+Imports with nicknames are imported as ~nickname.symbol_name~.

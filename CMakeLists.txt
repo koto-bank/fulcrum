@@ -4,7 +4,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 project(fulcrum CXX C)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS FALSE)
 
 set(FULCRUM_LIB libfulcrum)
@@ -19,7 +19,7 @@ add_library(${FULCRUM_LIB} OBJECT
   "src/parser.cpp"
   "src/token.cpp"
   "src/lexer.cpp"
-  "src/parse_context.cpp"
+  "src/ast_nodes.cpp"
   "src/semantic_analyzer.cpp"
   "src/tree_matcher.cpp"
   "src/types.cpp"
@@ -55,7 +55,7 @@ add_subdirectory(deps/args)
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
-target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args libclang clang-cpp ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args clang-cpp ${llvm_libs})
 
 ### Compiler
 

@@ -1,12 +1,29 @@
-(module hello-sdl2
+(module hello-sdl
+  (import :c "some_inc.h")
   (import :c "SDL2/SDL.h")
+  (import :c "SDL2/SDL_video.h")
   (import :c "stdio.h"))
 
+(struct Mouse
+  (enum Buttons
+    (left 1u)
+    (right (ash 1u 1u))
+    (middle (ash 1u 2u)))
+  (x u32 0u)
+  (y u32 0u)
+  (buttons u32 0u))
+
+(if (SDL.leftMouseButtonPressed())
+   (set (m.buttons (bit-or m.buttons Mouse.Buttons.left))))
+
 (fn main i32 ()
-  (var window (ptr SDL_Window))
-  (var surface (ptr SDL_Surface))
-  (if (< 0 (SDL_Init SDL_INIT_VIDEO))
-      (do
-       (puts "Failed to initialize")
-       (return 1)))
-  (return 0))
+;  (printf "INIT_TIMER %d\n" SDL_INIT_TIMER)
+;  (printf "INIT_AUTDIO %d\n" SDL_INIT_AUDIO)
+;  (printf "INIT_EVERYTHING %d\n" SDL_INIT_EVERYTHING)
+;  (var window (ptr SDL_Window))
+;  (var surface (ptr SDL_Surface))
+;  (if (< 0 (SDL_Init SDL_INIT_VIDEO))
+;      (do
+;       (puts "Failed to initialize")
+;       (return 1)))
+ (return some_inc.С))

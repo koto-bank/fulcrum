@@ -3,7 +3,8 @@
 #include <memory>
 #include <optional>
 
-#include "parse_context.hpp"
+#include "ast_nodes.hpp"
+#include "fulcrum_module.hpp"
 #include "parser.hpp"
 
 /*
@@ -14,12 +15,12 @@
 struct SemanticAnalyzer {
     bool run(Parser &parser);
 
-    std::unique_ptr<FulcrumModule> releaseModule();
+    FulcrumModule takeModule();
 
     bool parseModuleDefinition(const Parser::Expression &moduleForm);
     bool parseImport(const Parser::Expression &form);
     bool parseToplevelForm(const Parser::Expression &form);
-    std::optional<std::unique_ptr<ASTType>> parseType(const Parser::Expression &form);
+    std::optional<ASTType *> parseType(const Parser::Expression &form);
     bool parseFunctionDefinition(const Parser::Expression &form);
     bool parseStructureDefinition(const Parser::Expression &form);
 
@@ -27,7 +28,7 @@ struct SemanticAnalyzer {
     std::optional<ArgList> parseArgList(const Parser::Expression &form);
     std::optional<std::unique_ptr<ASTNode>> parseBodyForm(const Parser::Expression &form);
 
-    std::optional<std::unique_ptr<VarDeclarationNode>> parseVariableDeclaraion(const Parser::Expression &form);
+    std::optional<std::unique_ptr<VariableDeclarationNode>> parseVariableDeclaraion(const Parser::Expression &form);
     std::optional<std::unique_ptr<FunctionCallNode>> parseFunctionCall(const Parser::Expression &form);
     std::optional<std::unique_ptr<ASTNode>> parseArgExpression(const Parser::Expression &form);
 
@@ -43,6 +44,6 @@ struct SemanticAnalyzer {
     void dumpErrors() const;
 
     Parser *parser {};
-    std::unique_ptr<FulcrumModule> module;
+    FulcrumModule module;
     std::vector<Error> errors;
 };

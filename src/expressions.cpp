@@ -1,4 +1,3 @@
-#include <iostream>
 #include <map>
 #include <variant>
 
@@ -31,6 +30,18 @@ VariableDefinition *ExpressionGenContext::insertVariable(const std::string &name
     if (lookupVariable(name) != nullptr) throw CodegenError(fmt::format("Variable {} already defined", name));
 
     auto allocated = builder.CreateAlloca(type->llvmType(), 0, name);
+    auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
+
+    auto varDef = &emplaced.first->second;
+    varDef->value = allocated;
+
+    return varDef;
+}
+
+VariableDefinition *ExpressionGenContext::insertFunctionArgument(const std::string &name, LanguageType *type) {
+    if (lookupVariable(name) != nullptr) throw CodegenError(fmt::format("Argument {} already defined", name));
+
+    auto allocated = builder.CreateAlloca(type->llvmTypeAccess(), 0, name);
     auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
 
     auto varDef = &emplaced.first->second;
@@ -114,17 +125,18 @@ llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
     llvmConstant(genContext.codegenContext);
 
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
-    llvm::Constant *Indices[] = { Zero, Zero };
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        llvmConst->getValueType(), llvmConstant(genContext.codegenContext), Indices
+    llvm::Constant *indices[] = { Zero, Zero };
+    auto ret = llvm::ConstantExpr::getInBoundsGetElementPtr(
+        llvmConst->getValueType(), llvmConstant(genContext.codegenContext), indices
     );
+    return ret;
 }
 
 llvm::Constant *StringConstant::llvmConstant(CodegenContext &codegenContext) {
     if (llvmConst == nullptr) {
-        llvm::Constant *StrConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
+        llvm::Constant *strConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
         llvmConst = new llvm::GlobalVariable(
-            codegenContext.module, StrConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, StrConstant
+            codegenContext.module, strConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, strConstant
         );
     }
 
@@ -460,6 +472,11 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
                 throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", ptrType->signature()));
             varAddress = derefTarget->llvmValue(genContext);
         }
+        auto maybeArraySubscription = dynamic_cast<ArraySubscription *>(args[i].get());
+        if (maybeArraySubscription != nullptr) {
+            variableType = maybeArraySubscription->languageType(genContext);
+            varAddress = maybeArraySubscription->getElementPtr(genContext);
+        }
         if (variableType == nullptr) {
             auto maybeVarExpr = dynamic_cast<VariableAccess *>(args[i].get());
             if (maybeVarExpr != nullptr) {
@@ -622,7 +639,21 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
         argValues.push_back(args[i]->llvmValue(genContext));
     }
 
-    return genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
+//    llvm::outs() << "Compiling a function call!\n";
+//    llvm::outs() << "Name: " << name << "\n";
+//    llvm::outs() << "Args with types: >>>>>\n";
+//    for (uint32_t i = 0u; i < args.size(); i++) {
+//        args[i]->languageType(genContext)->llvmType()->print(llvm::outs());
+//        args[i]->llvmValue(genContext)->print(llvm::outs() << " -- ");
+//        args[i]->llvmValue(genContext)->getType()->print(llvm::outs() << " -- Actual value type: ");
+//        llvm::outs() << "\n<<<<<\n";
+//    }
+//
+    auto ret = genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
+//    llvm::outs() << "Resulting call: ";
+//    ret->print(llvm::outs());
+//    llvm::outs() << "\n";
+    return ret;
 }
 
 bool FunctionCall::isTerminator() {
@@ -740,17 +771,25 @@ llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
     } else {
         auto var = genCont.lookupVariable(name);
         if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
-
         return var->value;
     }
 }
 
 llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
     if (path().size() > 1) { // TODO?
-            return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
+        llvm::outs() << "Multi-path variable: ";
+        for (auto &s : path()) { llvm::outs() << s; }
+        llvm::outs() << '\n';
+        return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
     }
-    auto maybeArray = languageType(genContext);
-    if (dynamic_cast<ArrayType *>(maybeArray) != nullptr) {
+    auto maybeArray = dynamic_cast<ArrayType *>(languageType(genContext));
+    if (maybeArray != nullptr) {
+//        llvm::outs() << "Got variable access to array type\n";
+//        llvmType(genContext)->print(llvm::outs());
+//        llvm::outs() << "\nAccess value:\n";
+//        varAddress(genContext)->print(llvm::outs());
+//        llvm::outs() << '\n';
+        //llvm::outs() << "Array name: " << name << "\n";
         return varAddress(genContext);
     }
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
@@ -797,13 +836,24 @@ LanguageType *ArraySubscription::languageType(const ExpressionGenContext &genCon
     return arrayType->targetType;
 }
 
-llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
-    // TODO: this doesn't work at all
+llvm::Value *ArraySubscription::getElementPtr(ExpressionGenContext &genContext) {
+    auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(genContext.codegenContext.context), 0);
     auto idx = subscript->llvmValue(genContext);
-    auto gep = genContext.builder.CreateGEP(
+    return genContext.builder.CreateGEP(
         array->llvmType(genContext),
         array->llvmValue(genContext),
-        { idx });
+        { zero, idx });
+}
+
+llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
+    // TODO: this doesn't work at all
+//    array->llvmType(genContext)->print(llvm::outs());
+//    llvm::outs() << '\n';
+//    array->llvmValue(genContext)->print(llvm::outs());
+//    llvm::outs() << '\n';
+//    array->llvmValue(genContext)->getType()->print(llvm::outs());
+//    llvm::outs() << '\n';
+    auto gep = getElementPtr(genContext);
     return genContext.builder.CreateLoad(llvmType(genContext), gep);
 }
 

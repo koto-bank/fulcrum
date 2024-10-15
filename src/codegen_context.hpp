@@ -8,7 +8,6 @@
 #include "expressions.hpp"
 #include "types.hpp"
 
-struct AliasNode;
 struct ASTModuleNode;
 struct ASTType;
 struct ASTNode;
@@ -18,8 +17,8 @@ struct ExpressionGenContext;
 struct FulcrumModule;
 struct FunctionNode;
 struct StructNode;
-struct VarDeclarationNode;
-struct VariableDefinition;
+struct TypeAliasNode;
+struct VariableDeclarationNode;
 
 namespace llvm {
 class Function;
@@ -142,29 +141,25 @@ struct CodegenContext {
 
     std::map<std::string, std::unique_ptr<NamedValue>> names;
 
-    std::vector<std::filesystem::path> includeDirectories;
-
     CodegenContext(std::string moduleName, llvm::LLVMContext &context);
 
     bool existsNamed(const std::string &name) const;
 
-    void generate(std::unique_ptr<FulcrumModule> &&fulcrumModule);
-    void generate(std::unique_ptr<CModule> &&cModule);
+    void generate(FulcrumModule &&fulcrumModule);
+    void generate(CModule &&cModule);
 
-    using NameResolver = std::function<std::string(const std::string &)>;
-    LanguageType *getLanguageType(NameResolver resolveNameFn, const std::unique_ptr<ASTType> &type);
-    std::unique_ptr<Expression> getExpression(NameResolver resolveNameFn, const std::unique_ptr<ASTNode> &node);
+    LanguageType *getLanguageType(const ASTType *type);
+    std::unique_ptr<Expression> getExpression(std::unique_ptr<ASTNode> &&node);
 
-    void emplaceStructType(NameResolver, const std::unique_ptr<StructNode> &);
-    void emplaceAliasType(NameResolver, const std::unique_ptr<AliasNode> &);
-    void emplaceGlobalVar(NameResolver, const std::unique_ptr<VarDeclarationNode> &);
-    void emplaceFulcrumFunction(NameResolver, const std::unique_ptr<FunctionNode> &);
-    void fillStructTypeFields(NameResolver, const std::unique_ptr<StructNode> &);
+    void emplaceStructType(StructNode &&);
+    void emplaceAliasType(TypeAliasNode &&);
+    void emplaceGlobalVar(VariableDeclarationNode &&);
+    void emplaceFulcrumFunction(FunctionNode &&);
+    void fillStructTypeFields(StructNode &&);
 
-    void emplaceCStructType(NameResolver, const std::unique_ptr<StructNode> &);
-    void emplaceCAliasType(NameResolver, const std::unique_ptr<AliasNode> &);
-    void emplaceCFunction(NameResolver, const std::unique_ptr<FunctionNode> &);
-
+    void emplaceCStructType(StructNode &&);
+    void emplaceCAliasType(TypeAliasNode &&);
+    void emplaceCFunction(FunctionNode &&);
 
     template<typename T> typename T::ValueType *getNamed(const std::string &name) const {
         if (!names.contains(name)) throw CodegenError(fmt::format("Undefined {}: {}", T::namedType(), name));
@@ -184,11 +179,14 @@ struct CodegenContext {
         auto namedValue = names[name].get();
         auto maybeResultValue = dynamic_cast<T *>(namedValue);
         if (maybeResultValue == nullptr)
-            throw CodegenError(fmt::format("A {} named {} is already defined", T::namedType(), name));
-        else
             throw CodegenError(
-                fmt::format("Name {} is already defined as a {}", name, maybeResultValue->valueNamedType())
+                fmt::format("Name {} is already defined as a {}, trying to define it as {}",
+                            name,
+                            namedValue->valueNamedType(),
+                            T::namedType())
             );
+        else
+            throw CodegenError(fmt::format("A {} named {} is already defined", T::namedType(), name));
     }
 
     template<typename T, typename... Args> void emplaceNamed(const std::string &name, Args &&...args) {

@@ -6,18 +6,19 @@
 #include "codegen_context.hpp"
 #include "types.hpp"
 
-using llvm::Type;
-using llvm::TypedPointerType;
-
 LanguageType::LanguageType(CodegenContext &context)
     : context(context) {}
+
+llvm::Type* LanguageType::llvmTypeAccess() {
+    return llvmType();
+}
 
 IntegerType::IntegerType(CodegenContext &context, unsigned int bits, bool isSigned)
     : LanguageType(context),
       bits(bits),
       isSigned(isSigned) {}
 
-Type *IntegerType::llvmType() { return Type::getIntNTy(context.context, bits); }
+llvm::Type *IntegerType::llvmType() { return llvm::Type::getIntNTy(context.context, bits); }
 
 std::string IntegerType::signature() { return std::string(isSigned ? "i" : "u") + std::to_string(bits); }
 
@@ -29,8 +30,8 @@ FloatType::FloatType(CodegenContext &context, Bits bits)
 
 std::string FloatType::signature() { return bits == Bits::Float ? "f32" : "f64"; }
 
-Type *FloatType::llvmType() {
-    return bits == Bits::Float ? Type::getFloatTy(context.context) : Type::getDoubleTy(context.context);
+llvm::Type *FloatType::llvmType() {
+    return bits == Bits::Float ? llvm::Type::getFloatTy(context.context) : llvm::Type::getDoubleTy(context.context);
 }
 
 StringType::StringType(CodegenContext &context)
@@ -38,7 +39,8 @@ StringType::StringType(CodegenContext &context)
 
 std::string StringType::signature() { return "str"; }
 
-Type *StringType::llvmType() { return TypedPointerType::get(Type::getInt8Ty(context.context), 0); }
+//llvm::Type *StringType::llvmType() { return llvm::TypedPointerType::get(llvm::Type::getInt8Ty(context.context), 0); }
+llvm::Type *StringType::llvmType() { return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0); }
 
 AliasType::AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
     : LanguageType(codegenContext),
@@ -70,9 +72,9 @@ int StructType::fieldIndex(const std::string &fieldName) {
 
 std::string StructType::signature() { return name; }
 
-Type *StructType::llvmType() {
+llvm::Type *StructType::llvmType() {
     if (structType == nullptr) {
-        std::vector<Type *> fieldTypes;
+        std::vector<llvm::Type *> fieldTypes;
         std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &type) {
             auto &[_, tp] = type;
             return tp->llvmType();
@@ -90,21 +92,21 @@ UnionType::UnionType(CodegenContext &codegenContext, std::string name, long long
     structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
 }
 
-Type *UnionType::llvmType() { return structType; }
+llvm::Type *UnionType::llvmType() { return structType; }
 
 std::string CharType::signature() { return "char"; }
 
-Type *CharType::llvmType() { return Type::getInt8Ty(context.context); }
+llvm::Type *CharType::llvmType() { return llvm::Type::getInt8Ty(context.context); }
 
-Type *VoidType::llvmType() { return Type::getVoidTy(context.context); }
+llvm::Type *VoidType::llvmType() { return llvm::Type::getVoidTy(context.context); }
 
-Type *BoolType::llvmType() { return Type::getInt1Ty(context.context); }
+llvm::Type *BoolType::llvmType() { return llvm::Type::getInt1Ty(context.context); }
 
 PointerType::PointerType(CodegenContext &context, LanguageType *pointerTo_)
     : LanguageType(context),
       pointerTo(pointerTo_) {}
 
-llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(pointerTo->llvmType(), 0); }
+llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0); }
 
 std::string PointerType::signature() { return pointerTo->signature() + "*"; }
 
@@ -129,9 +131,9 @@ llvm::Type *FunctionType::llvmType() {
     if (funcType == nullptr) {
         std::vector<llvm::Type *> argTypes;
         std::transform(arguments.begin(), arguments.end(), std::back_inserter(argTypes), [](auto &type) {
-            return type->llvmType();
+            return type->llvmTypeAccess();
         });
-        llvm::Type *retType = returnType->llvmType();
+        llvm::Type *retType = returnType->llvmTypeAccess();
 
         funcType = llvm::FunctionType::get(retType, argTypes, isVariadic);
     }
@@ -157,11 +159,12 @@ ArrayType::ArrayType(CodegenContext &context, LanguageType *targetType, size_t s
       size(size) {}
 
 llvm::Type *ArrayType::llvmType() { return llvm::ArrayType::get(targetType->llvmType(), size); }
+llvm::Type *ArrayType::llvmTypeAccess() { return llvm::PointerType::get(targetType->llvmType(), 0); }
 
 std::string ArrayType::signature() { return fmt::format("{}[{}]", targetType->signature(), size); }
 
 llvm::Type *VAType::llvmType() {
-    return llvm::PointerType::get(context.context, 0);
+    return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0);
 }
 
 std::string VAType::signature() {

@@ -234,7 +234,7 @@ FnCall = LP id:Id {
 } -)* RP
 
 IdExpr = id:Id {
-    yy->ctx->exprStack.push_back(std::make_unique<VarAccessNode>(id.str));
+    yy->ctx->exprStack.push_back(std::make_unique<VariableAccessNode>(id.str));
 }
 
 AddrOfVar = '&'- IdExpr {

@@ -9,7 +9,7 @@
 #include "parser.hpp"
 #include "utils.hpp"
 
-// The grammar (just for reference):
+// The grammar (for reference):
 // program -> expr * end
 // expr -> atom
 //      |  list
