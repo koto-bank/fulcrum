@@ -648,34 +648,15 @@ std::string FunctionCall::dump(int indent) {
     return fmt::format("{}($call {} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
 
-VariableAccess::VariableAccess(const std::string &name)
+VariableAccess::VariableAccess(const NamePath &path)
     : Expression(nullptr),
-      name(name) {
-    if (varPath.size() == 0) {
-        if (std::find(name.begin(), name.end(), '.') != name.end()) {
-            std::string currentName;
-
-            for (auto i = 0u; i < name.size(); i++) {
-                if (name[i] == '.') {
-                    varPath.push_back(currentName);
-                    currentName = "";
-                } else {
-                    currentName += name[i];
-                }
-            }
-            varPath.push_back(currentName);
-        } else {
-            varPath.push_back(name);
-        }
-    }
-}
+      name(path) {}
 
 LanguageType *VariableAccess::languageType(const ExpressionGenContext &genCont) {
-    auto pathName = path();
-
-    if (pathName.size() > 1) {
+    // TODO
+    /* if (name.size() > 1) {
         LanguageType *currentType = nullptr;
-        for (auto &currentName : pathName) {
+        for (auto &currentName : name.getPath()) {
             if (currentType == nullptr) {
                 auto foundVar = genCont.lookupVariable(currentName);
                 if (foundVar == nullptr) throw CodegenError(fmt::format("Variable {} not defined", currentName));
@@ -692,24 +673,18 @@ LanguageType *VariableAccess::languageType(const ExpressionGenContext &genCont) 
         }
 
         return currentType;
-    } else {
-        auto var = genCont.lookupVariable(name);
-        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
+    } else { */
+        auto var = genCont.lookupVariable(name.join());
+        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name.join()));
         return var->type;
-    }
-}
-
-const std::vector<std::string> &VariableAccess::path() const {
-    return varPath;
+//    }
 }
 
 llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
-    auto pathName = this->path();
-
     llvm::Value *currentValue = nullptr;
     LanguageType *currentType = nullptr;
 
-    auto loadStructField = [&](const std::string &currentName) {
+    [[maybe_unused]] auto loadStructField = [&](const std::string &currentName) {
         if (currentValue == nullptr) {
             auto var = genCont.lookupVariable(currentName);
             currentValue = var->value;

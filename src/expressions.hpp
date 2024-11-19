@@ -178,18 +178,14 @@ public:
 };
 
 struct VariableAccess : Expression {
-private:
-    std::vector<std::string> varPath;
-
 public:
-    std::string name;
+    NamePath name;
 
-    VariableAccess(const std::string &name);
+    VariableAccess(const NamePath &name);
     LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 
-    const std::vector<std::string> &path() const;
     llvm::Value *varAddress(ExpressionGenContext &genContext);
 };
 
