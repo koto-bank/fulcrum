@@ -14,13 +14,13 @@ set(FULCRUM_COMPILER fulcrum)
 
 add_library(${FULCRUM_LIB} OBJECT
   "src/ast_name_path.cpp"
+  "src/ast_nodes.cpp"
   "src/compiler.cpp"
   "src/codegen_context.cpp"
   "src/expressions.cpp"
   "src/parser.cpp"
   "src/token.cpp"
   "src/lexer.cpp"
-  "src/parse_context.cpp"
   "src/semantic_analyzer.cpp"
   "src/tree_matcher.cpp"
   "src/types.cpp"
