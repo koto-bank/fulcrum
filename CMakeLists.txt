@@ -13,6 +13,7 @@ set(FULCRUM_COMPILER fulcrum)
 ### Library
 
 add_library(${FULCRUM_LIB} OBJECT
+  "src/ast_name_path.cpp"
   "src/compiler.cpp"
   "src/codegen_context.cpp"
   "src/expressions.cpp"
