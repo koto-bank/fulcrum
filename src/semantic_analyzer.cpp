@@ -23,7 +23,7 @@ std::optional<std::string> getSymbol(const Parser::Expression &expr) {
     return expr.token->as<token::Symbol>()->symbol;
 }
 
-std::optional<std::unique_ptr<ASTBuiltinType>> parseIntType(const std::string &type) {
+std::optional<ASTType *> parseIntType(SemanticAnalyzer &sem, const std::string &type) {
     fc_assert(type[0] == 'u' || type[0] == 'i');
 
     if (type.size() == 1) {
@@ -51,7 +51,7 @@ std::optional<std::unique_ptr<ASTBuiltinType>> parseIntType(const std::string &t
     if (bits > 999) {
         return std::nullopt;
     }
-    return std::make_unique<ASTIntegerType>(isSigned, bits);
+    return sem.module.types.getType<ASTIntegerType>(isSigned, bits);
 }
 
 template <typename T>
@@ -108,7 +108,7 @@ bool SemanticAnalyzer::parseModuleDefinition(const Parser::Expression &moduleFor
         reportError(moduleForm.children[1].token, "module name expected");
         return false;
     }
-    module = std::make_unique<FulcrumModule>(name.value());
+    module.name = name.value();
 
     // get imports
     auto res = true;
@@ -133,14 +133,21 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
 
     FulcrumModule::Import import;
     bool targetSet = false;
-    bool isCImport = false;
+    bool expectNickname = false;
+    bool nicknameSet = false;
     for(auto next = form.children.begin() + 1; next != form.children.end(); next++) {
         if (next->token == nullptr) {
-            reportError(next->token, "expected keyword, Fulcrum module name or C header filename");
+            reportError(next->token, "expected keyword, nickname, Fulcrum module namem, C header filename");
             return false;
         }
         switch (next->token->type) {
         case token::Type::Symbol: {
+            if (expectNickname) {
+                auto symbol = getSymbol(*next);
+                import.nickname = symbol.value();
+                nicknameSet = true;
+                break;
+            }
             if (targetSet) {
                 reportError(next->token, "multiple import targets not allowed");
                 return false;
@@ -160,11 +167,15 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
         }
         case token::Type::Keyword: {
             auto kw = next->token->as<token::Keyword>();
-            import.keywords.push_back(kw->name);
             if (kw->name == "c") {
-                isCImport = true;
+                import.isCImport = true;
             } else if (kw->name == "as") {
-                // TODO: nicknames
+                if (expectNickname) {
+                    reportError(next->token, "multiple nicknaming is not allowed");
+                    return false;
+                }
+                expectNickname = true;
+                continue;
             }
             break;
         }
@@ -173,11 +184,11 @@ bool SemanticAnalyzer::parseImport(const Parser::Expression &form) {
             return false;
         }
     }
-    if (isCImport) {
-        module->CImports.push_back(std::move(import));
-    } else {
-        module->fulcrumImports.push_back(std::move(import));
+    if (expectNickname && !nicknameSet) {
+        reportError(form.children.back().token, "expected import nickname, got nothing");
+        return false;
     }
+    module.imports.push_back(std::move(import));
     return true;
 }
 
@@ -206,7 +217,6 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
         return false;
     }
 
-    auto fn = std::make_unique<FunctionNode>();
     auto type = getSymbol(form.children[0]);
     if (type == std::nullopt
         || !(type.value() == "fn"
@@ -214,18 +224,20 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
         reportError(form.children[0].token, "expected fn or fn-");
         return false;
     }
+
+    bool isPublic;
     if (type == "fn") {
-        fn->isPublic = true;
+        isPublic = true;
     } else if (type == "fn-") {
-        fn->isPublic = false;
+        isPublic = false;
     }
 
-    auto name = getSymbol(form.children[1]);
-    if (name == std::nullopt) {
+    auto maybeName = getSymbol(form.children[1]);
+    if (maybeName == std::nullopt) {
         reportError(form.children[1].token, "function name must be a symbol");
         return false;
     }
-    fn->name = name.value();
+    auto name = maybeName.value();
 
     if (form.children.size() == 2) {
         reportError(form.children[1].token, "expected return type, argument list and body");
@@ -235,7 +247,7 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
     if (retType == std::nullopt) {
         return false;
     }
-    fn->returnType = std::move(retType.value());
+    auto returnType = std::move(retType.value());
 
     if (form.children.size() == 3) {
         reportError(form.children[2].token, "expected argument list and body");
@@ -374,7 +386,7 @@ std::optional<std::unique_ptr<FunctionCallNode>> SemanticAnalyzer::parseFunction
     return fnCall;
 }
 
-std::optional<std::unique_ptr<VarDeclarationNode>>
+std::optional<std::unique_ptr<VariableDeclarationNode>>
 SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
     if (form.token != nullptr) {
         reportError(form.token, "variable declaration must be a list");
@@ -423,11 +435,11 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         }
         case token::Type::IntegerLiteral: {
             auto t = form.token->as<token::IntegerLiteral>();
-            auto type = std::make_unique<ASTIntegerType>(t->isSigned, t->bits);
+            auto type = module.types.getType<ASTIntegerType>(t->isSigned, t->bits);
             if (t->isSigned) {
-                return std::make_unique<ConstantIntNode>(std::move(type), std::get<int64_t>(t->value));
+                return std::make_unique<ConstantIntNode>(type, std::get<int64_t>(t->value));
             } else {
-                return std::make_unique<ConstantIntNode>(std::move(type), std::get<uint64_t>(t->value));
+                return std::make_unique<ConstantIntNode>(type, std::get<uint64_t>(t->value));
             }
         }
         case token::Type::CharLiteral: {
@@ -435,7 +447,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         }
         case token::Type::FloatLiteral: {
             auto t = form.token->as<token::FloatLiteral>();
-            auto type = std::make_unique<ASTFloatType>(t->bits);
+            auto type = module.types.getType<ASTFloatType>(t->bits);
             return std::make_unique<ConstantFloatNode>(std::move(type), t->value);
         }
         case token::Type::StringLiteral: {
@@ -548,7 +560,13 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
     }
 }
 
-std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser::Expression &form) {
+
+template<typename T, typename U, typename... Args>
+bool matches(const T& match, const U& first, const Args&... args) {
+    return match == first || (... || (match == args));
+}
+
+std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &form) {
 // can be ptr, array, basic or custom:
 // ptr: (ptr Type)
 // array: (array Type 10)
@@ -564,25 +582,25 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
 
         fc_assert(!sym.value().empty());
         if (sym == "f32") {
-            return std::make_unique<ASTFloatType>(32);
+            return module.types.getType<ASTFloatType>(32);
         } else if (sym == "f64") {
-            return std::make_unique<ASTFloatType>(64);
-        } else if (sym == "void") {
-            return std::make_unique<ASTBuiltinType>("void");
-        } else if (sym == "bool") {
-            return std::make_unique<ASTBuiltinType>("bool");
-        } else if (sym == "char") {
-            return std::make_unique<ASTBuiltinType>("char");
-        } else if (sym == "str") {
-            return std::make_unique<ASTBuiltinType>("str");
-        } else if (sym.value()[0] == 'i' || sym.value()[0] == 'u') {
-            auto intType = parseIntType(sym.value());
+            return module.types.getType<ASTFloatType>(64);
+        } else if (matches(sym
+                           , "void"
+                           , "bool"
+                           , "char"
+                           , "str")) {
+            return module.types.getType<ASTBuiltinType>(std::move(sym.value()));
+        } else if (matches(sym.value()[0]
+                           , 'i'
+                           , 'u')) {
+            auto intType = parseIntType(*this, sym.value());
             if (intType != std::nullopt) {
                 return intType;
             }
             // Then it's smth like u666-MyType, that is, a custom type
         }
-        return std::make_unique<ASTNamedType>(sym.value());
+        return module.types.getType<ASTNamedType>(std::move(sym.value()));
     } else {
         // ptr or array
         if (form.children.empty()) {
@@ -615,7 +633,7 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
                 return std::nullopt;
             }
 
-            return std::make_unique<ASTPointerType>(std::move(pointeeType.value()));
+            return module.types.getType<ASTPointerType>(std::move(pointeeType.value()));
         } else if (sym == "array") {
             // (array Type IntLiteral)
             if (form.children.size() != 3) {
@@ -635,7 +653,7 @@ std::optional<std::unique_ptr<ASTType>> SemanticAnalyzer::parseType(const Parser
                 return std::nullopt;
             }
 
-            return std::make_unique<ASTArrayType>(std::move(targetType.value()), size.value());
+            return module.types.getType<ASTArrayType>(std::move(targetType.value()), size.value());
         } else {
             reportError(kind.token, "unknown compound type");
             return std::nullopt;
@@ -668,6 +686,6 @@ void SemanticAnalyzer::dumpErrors() const {
     }
 }
 
-std::unique_ptr<FulcrumModule> SemanticAnalyzer::releaseModule() {
+FulcrumModule SemanticAnalyzer::takeModule() {
     return std::move(module);
 }
