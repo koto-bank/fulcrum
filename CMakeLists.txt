@@ -15,16 +15,17 @@ set(FULCRUM_COMPILER fulcrum)
 add_library(${FULCRUM_LIB} OBJECT
   "src/ast_name_path.cpp"
   "src/ast_nodes.cpp"
+  "src/c_header_parser.cpp"
   "src/compiler.cpp"
   "src/codegen_context.cpp"
   "src/expressions.cpp"
-  "src/parser.cpp"
   "src/token.cpp"
   "src/lexer.cpp"
+  "src/parser.cpp"
   "src/semantic_analyzer.cpp"
   "src/tree_matcher.cpp"
   "src/types.cpp"
-  "src/c_header_parser.cpp")
+  )
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
@@ -56,7 +57,7 @@ add_subdirectory(deps/args)
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
-target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args libclang clang-cpp ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args clang-cpp ${llvm_libs})
 
 ### Compiler
 
