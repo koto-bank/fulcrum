@@ -7,6 +7,7 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+#include "ast_name_path.hpp"
 #include "is_long_integer.hpp"
 
 namespace llvm {
@@ -38,6 +39,7 @@ struct ExpressionGenContext {
 
     const VariableDefinition *lookupVariable(const std::string &name) const;
     VariableDefinition *insertVariable(const std::string &name, LanguageType *type);
+    VariableDefinition *insertFunctionArgument(const std::string &name, LanguageType *type);
 
     void pushScope();
     void popScope();
@@ -204,6 +206,8 @@ struct ArraySubscription : Expression {
     LanguageType *ptrType;
 
     ArraySubscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript);
+
+    llvm::Value *getElementPtr(ExpressionGenContext &genContext);
 
     LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
