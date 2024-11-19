@@ -246,22 +246,24 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
     if (argList == std::nullopt) {
         return false;
     }
-    fn->arguments = std::move(argList.value());
+    auto args = std::move(argList.value());
 
     if (form.children.size() == 4) {
         reportError(form.children[3].token, "expected function body");
         return false;
     }
 
+    std::vector<std::unique_ptr<ASTNode>> body;
     for (auto i = 4u; i < form.children.size(); i++) {
         auto bodyForm = parseBodyForm(form.children[i]);
         if (bodyForm == std::nullopt) {
             return false;
         }
-        fn->body.push_back(std::move(bodyForm.value()));
+        body.push_back(std::move(bodyForm.value()));
     }
 
-    module->functions.push_back(std::move(fn));
+    module.functions.push_back(FunctionNode(NamePath::create(name).value(), std::move(args), std::move(returnType),
+                                            std::move(body), isPublic, false));
     return true;
 }
 
@@ -361,7 +363,7 @@ std::optional<std::unique_ptr<FunctionCallNode>> SemanticAnalyzer::parseFunction
         return std::nullopt;
     }
 
-    auto fnCall = std::make_unique<FunctionCallNode>(name.value());
+    auto fnCall = std::make_unique<FunctionCallNode>(NamePath::create(name.value()).value());
     for (auto i = 1u; i < form.children.size(); i++) {
         auto arg = parseArgExpression(form.children[i]);
         if (arg == std::nullopt) {
@@ -399,14 +401,14 @@ SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
     if (form.children.size() == 4) {
         auto initialValue = parseArgExpression(form.children[3]);
         if (initialValue != std::nullopt) {
-            auto res = std::make_unique<VarDeclarationNode>(varName.value(), std::move(type.value()));
+            auto res = std::make_unique<VariableDeclarationNode>(NamePath::create(std::move(varName.value())).value(), type.value());
             res->initialValue = std::move(initialValue.value());
             return res;
         } else {
             return std::nullopt;
         }
     } else {
-        return std::make_unique<VarDeclarationNode>(varName.value(), std::move(type.value()));
+        return std::make_unique<VariableDeclarationNode>(NamePath::create(std::move(varName.value())).value(), type.value());
     }
 }
 
@@ -443,7 +445,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         case token::Type::Symbol: {
             // variable access
             auto sym = form.token->as<token::Symbol>();
-            return std::make_unique<VariableAccessNode>(sym->symbol);
+            return std::make_unique<VariableAccessNode>(NamePath::create(sym->symbol).value());
         }
         default:
             reportError(form.token, "unexpected token");
@@ -533,7 +535,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
 
             return std::make_unique<SizeofNode>(std::move(type.value()));
         } else {
-            auto fnCall = std::make_unique<FunctionCallNode>(sym.value());
+            auto fnCall = std::make_unique<FunctionCallNode>(NamePath::create(std::move(sym.value())).value());
             for (auto i = 1u; i < form.children.size(); i++) {
                 auto arg = parseArgExpression(form.children[i]);
                 if (arg == std::nullopt) {

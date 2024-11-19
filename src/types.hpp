@@ -56,10 +56,10 @@ struct StringType : LanguageType {
 };
 
 struct AliasType : LanguageType {
-    std::string name;
+    NamePath name;
     LanguageType *aliasTo;
 
-    AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo);
+    AliasType(CodegenContext &codegenContext, const NamePath &name, LanguageType *aliasTo);
 
     llvm::Type *llvmType() override;
     LanguageType *actualLanguageType() override;
@@ -72,13 +72,13 @@ protected:
     llvm::StructType *structType = nullptr;
 
 public:
-    std::string name;
+    NamePath name;
 
     using Fields = std::vector<std::tuple<std::string, LanguageType *>>;
     Fields fields;
     bool isPublic;
 
-    StructType(CodegenContext &codegenContext, std::string name, bool isPublic);
+    StructType(CodegenContext &codegenContext, const NamePath &name, bool isPublic);
 
     virtual void fillFields(const Fields &fields_);
 
@@ -89,7 +89,7 @@ public:
 };
 
 struct UnionType : StructType {
-    UnionType(CodegenContext &codegenContext, std::string name, long long biggestSize);
+    UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize);
 
     llvm::Type *llvmType() override;
 };

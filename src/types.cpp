@@ -40,18 +40,18 @@ std::string StringType::signature() { return "str"; }
 
 Type *StringType::llvmType() { return TypedPointerType::get(Type::getInt8Ty(context.context), 0); }
 
-AliasType::AliasType(CodegenContext &codegenContext, std::string name, LanguageType *aliasTo_)
+AliasType::AliasType(CodegenContext &codegenContext, const NamePath &name, LanguageType *aliasTo_)
     : LanguageType(codegenContext),
       name(name),
       aliasTo(aliasTo_) {}
 
 llvm::Type *AliasType::llvmType() { return aliasTo->llvmType(); }
 
-std::string AliasType::signature() { return fmt::format("{} ({})", name, actualLanguageType()->signature()); }
+std::string AliasType::signature() { return fmt::format("{} ({})", name.join(), actualLanguageType()->signature()); }
 
 LanguageType *AliasType::actualLanguageType() { return aliasTo->actualLanguageType(); }
 
-StructType::StructType(CodegenContext &codegenContext, std::string name, bool isPublic)
+StructType::StructType(CodegenContext &codegenContext, const NamePath &name, bool isPublic)
     : LanguageType(codegenContext),
       name(name),
       isPublic(isPublic) {}
@@ -68,7 +68,7 @@ int StructType::fieldIndex(const std::string &fieldName) {
     return std::distance(fields.begin(), fieldIter);
 }
 
-std::string StructType::signature() { return name; }
+std::string StructType::signature() { return name.join(); }
 
 Type *StructType::llvmType() {
     if (structType == nullptr) {
@@ -78,13 +78,13 @@ Type *StructType::llvmType() {
             return tp->llvmType();
         });
 
-        structType = llvm::StructType::create(context.context, fieldTypes, name);
+        structType = llvm::StructType::create(context.context, fieldTypes, name.join());
     }
 
     return structType;
 }
 
-UnionType::UnionType(CodegenContext &codegenContext, std::string name, long long biggestSize)
+UnionType::UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize)
     : StructType(codegenContext, name, true) {
     auto unionArrayType = ArrayType(context, context.getNamed<NamedTypeValue>("i8"), biggestSize);
     structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
