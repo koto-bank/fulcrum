@@ -1,4 +1,3 @@
-#include <iostream>
 #include <map>
 #include <variant>
 
@@ -22,7 +21,7 @@ const VariableDefinition *ExpressionGenContext::lookupVariable(const std::string
     for (auto scope = variableScopes.rbegin(); scope != variableScopes.rend(); ++scope) {
         if (scope->contains(name)) return &scope->at(name);
     }
-    if (codegenContext.existsNamed(name)) return codegenContext.getNamed<NamedVariableValue>(name);
+    if (codegenContext.globalVars.contains(name)) return codegenContext.globalVars.at(name).get();
 
     return nullptr;
 }
@@ -39,13 +38,25 @@ VariableDefinition *ExpressionGenContext::insertVariable(const std::string &name
     return varDef;
 }
 
+VariableDefinition *ExpressionGenContext::insertFunctionArgument(const std::string &name, LanguageType *type) {
+    if (lookupVariable(name) != nullptr) throw CodegenError(fmt::format("Argument {} already defined", name));
+
+    auto allocated = builder.CreateAlloca(type->llvmTypeAccess(), 0, name);
+    auto emplaced = variableScopes.back().emplace(name, VariableDefinition(name, type));
+
+    auto varDef = &emplaced.first->second;
+    varDef->value = allocated;
+
+    return varDef;
+}
+
 void ExpressionGenContext::pushScope() { variableScopes.push_back({}); }
 
 void ExpressionGenContext::popScope() { variableScopes.pop_back(); }
 
 void Expression::assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage) {
     if (expr->languageType(genContext)->actualLanguageType()
-        == genContext.codegenContext.getNamed<NamedTypeValue>("void"))
+        == genContext.codegenContext.namedTypes.at("void").get())
         throw CodegenError(errorMessage);
 }
 
@@ -114,17 +125,18 @@ llvm::Value *StringConstant::llvmValue(ExpressionGenContext &genContext) {
     llvmConstant(genContext.codegenContext);
 
     auto Zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(type->llvmType()->getContext()), 0);
-    llvm::Constant *Indices[] = { Zero, Zero };
-    return llvm::ConstantExpr::getInBoundsGetElementPtr(
-        llvmConst->getValueType(), llvmConstant(genContext.codegenContext), Indices
+    llvm::Constant *indices[] = { Zero, Zero };
+    auto ret = llvm::ConstantExpr::getInBoundsGetElementPtr(
+        llvmConst->getValueType(), llvmConstant(genContext.codegenContext), indices
     );
+    return ret;
 }
 
 llvm::Constant *StringConstant::llvmConstant(CodegenContext &codegenContext) {
     if (llvmConst == nullptr) {
-        llvm::Constant *StrConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
+        llvm::Constant *strConstant = llvm::ConstantDataArray::getString(codegenContext.context, constValue);
         llvmConst = new llvm::GlobalVariable(
-            codegenContext.module, StrConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, StrConstant
+            codegenContext.module, strConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, strConstant
         );
     }
 
@@ -157,11 +169,12 @@ llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
 
     auto returnType = genContext.function->functionType()->returnType;
     if (args.size() == 0
-        && returnType->actualLanguageType() != genContext.codegenContext.getNamed<NamedTypeValue>("void")) {
+        && returnType->actualLanguageType() != genContext.codegenContext.namedTypes.at("void").get()) {
         throw CodegenError("Only void function can return nothing");
-    } else if (args.size() == 1 && returnType->actualLanguageType() != args[0]->languageType(genContext)->actualLanguageType()) {
+    } else if (args.size() == 1
+               && returnType->actualLanguageType() != args[0]->languageType(genContext)->actualLanguageType()) {
         throw CodegenError(fmt::format(
-            "Function expected to return {}, but returns {}", returnType->signature(),
+            "Function {} expected to return {}, but returns {}", name, returnType->signature(),
             args[0]->languageType(genContext)->signature()
         ));
     }
@@ -186,7 +199,7 @@ llvm::Value *FunctionCall::ifProcessor(ExpressionGenContext &genContext) {
     auto &context = genContext.codegenContext;
 
     if (args.size() < 2 || args.size() > 3) { throw CodegenError("If must have from 2 to 3 arguments"); }
-    if (args[0]->languageType(genContext)->actualLanguageType() != context.getNamed<NamedTypeValue>("bool")) {
+    if (args[0]->languageType(genContext)->actualLanguageType() != context.namedTypes.at("bool").get()) {
         throw CodegenError("First argument to if must be boolean");
     }
 
@@ -408,11 +421,11 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 }
 
 LanguageType *FunctionCall::voidProcessorType(const ExpressionGenContext &genContext) const {
-    return genContext.codegenContext.getNamed<NamedTypeValue>("void");
+    return genContext.codegenContext.namedTypes.at("void").get();
 }
 
 LanguageType *FunctionCall::boolProcessorType(const ExpressionGenContext &genContext) const {
-    return genContext.codegenContext.getNamed<NamedTypeValue>("bool");
+    return genContext.codegenContext.namedTypes.at("bool").get();
 }
 
 LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genContext) const {
@@ -424,14 +437,14 @@ LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genC
     }
     auto varType = maybeVar->languageType(genContext);
     auto ptrTypeName = varType->signature() + "*";
-    auto ret = genContext.codegenContext.getOrEmplaceType<PointerType>(ptrTypeName, varType);
+    auto ret = genContext.codegenContext.emplaceType<PointerType>(ptrTypeName, varType).value();
     return ret;
 }
 
 LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext &genCont) const {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
-        return genCont.codegenContext.getNamed<NamedTypeValue>("bool");
+        return genCont.codegenContext.namedTypes.at("bool").get();
     // TODO: move type processing to separate step
     return args[0]->languageType(genCont);
 }
@@ -459,6 +472,11 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
             if (ptrType == nullptr)
                 throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", ptrType->signature()));
             varAddress = derefTarget->llvmValue(genContext);
+        }
+        auto maybeArraySubscription = dynamic_cast<ArraySubscription *>(args[i].get());
+        if (maybeArraySubscription != nullptr) {
+            variableType = maybeArraySubscription->languageType(genContext);
+            varAddress = maybeArraySubscription->getElementPtr(genContext);
         }
         if (variableType == nullptr) {
             auto maybeVarExpr = dynamic_cast<VariableAccess *>(args[i].get());
@@ -498,7 +516,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
 llvm::Value *FunctionCall::whileProcessor(ExpressionGenContext &genContext) {
     if (args.size() < 1) { throw CodegenError(fmt::format("Expected at least 1 argument to while")); }
     if (args[0]->languageType(genContext)->actualLanguageType()
-        != genContext.codegenContext.getNamed<NamedTypeValue>("bool")) {
+        != genContext.codegenContext.namedTypes.at("bool").get()) {
         throw CodegenError("First argument to while must be boolean");
     }
 
@@ -541,7 +559,7 @@ llvm::Value *FunctionCall::boolProcessor(ExpressionGenContext &genContext) {
     if (name == "not") {
         if (args.size() != 1
             || args[0]->languageType(genContext)->actualLanguageType()
-            != genContext.codegenContext.getNamed<NamedTypeValue>("bool"))
+            != genContext.codegenContext.namedTypes.at("bool").get())
             throw CodegenError(fmt::format("'not' expects exactly one argument of type bool", name));
 
         assumeExpression(
@@ -552,10 +570,11 @@ llvm::Value *FunctionCall::boolProcessor(ExpressionGenContext &genContext) {
 
     if (args.size() != 2
         || args[0]->languageType(genContext)->actualLanguageType()
-            != genContext.codegenContext.getNamed<NamedTypeValue>("bool")
+            != genContext.codegenContext.namedTypes.at("bool").get()
         || args[1]->languageType(genContext)->actualLanguageType()
-            != genContext.codegenContext.getNamed<NamedTypeValue>("bool"))
+            != genContext.codegenContext.namedTypes.at("bool").get()) {
         throw CodegenError(fmt::format("'{}' expects exactly two arguments of type bool", name));
+    }
 
     assumeExpression(
         genContext, args[0].get(), fmt::format("Expected argument 1 to '{}' to to be an expression", name)
@@ -580,7 +599,7 @@ LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext)
         if (specialFunctions.contains(name)) {
             type = specialFunctions.at(name).second(this, genContext);
         } else {
-            type = genContext.codegenContext.getNamed<NamedFunctionValue>(name)->functionType()->returnType;
+            type = genContext.codegenContext.namedFunctions.at(name)->functionType()->returnType;
         }
     }
 
@@ -602,7 +621,7 @@ llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     if (specialFunctions.contains(name)) return specialFunctions.at(name).first(this, genContext);
 
-    auto calledFunction = genContext.codegenContext.getNamed<NamedFunctionValue>(name);
+    auto calledFunction = genContext.codegenContext.namedFunctions.at(name).get();
 
     std::vector<llvm::Value *> argValues;
     auto fnType = calledFunction->functionType();
@@ -622,7 +641,21 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
         argValues.push_back(args[i]->llvmValue(genContext));
     }
 
-    return genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
+//    llvm::outs() << "Compiling a function call!\n";
+//    llvm::outs() << "Name: " << name << "\n";
+//    llvm::outs() << "Args with types: >>>>>\n";
+//    for (uint32_t i = 0u; i < args.size(); i++) {
+//        args[i]->languageType(genContext)->llvmType()->print(llvm::outs());
+//        args[i]->llvmValue(genContext)->print(llvm::outs() << " -- ");
+//        args[i]->llvmValue(genContext)->getType()->print(llvm::outs() << " -- Actual value type: ");
+//        llvm::outs() << "\n<<<<<\n";
+//    }
+//
+    auto ret = genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
+//    llvm::outs() << "Resulting call: ";
+//    ret->print(llvm::outs());
+//    llvm::outs() << "\n";
+    return ret;
 }
 
 bool FunctionCall::isTerminator() {
@@ -707,31 +740,41 @@ llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
         }
     };
 
-    if (pathName.size() > 1) {
-        for (auto &currentName : pathName) {
+    // TODO
+    /*
+    if (name.size() > 1) {
+        for (auto &currentName : name.getPath()) {
             loadStructField(currentName);
         }
         return currentValue;
-    } else {
-        auto var = genCont.lookupVariable(name);
-        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
-
+    } else { */
+        auto var = genCont.lookupVariable(name.join());
+        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name.join()));
         return var->value;
-    }
+//    }
 }
 
 llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
-    if (path().size() > 1) { // TODO?
-            return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
-    }
-    auto maybeArray = languageType(genContext);
-    if (dynamic_cast<ArrayType *>(maybeArray) != nullptr) {
+    /* if (name.size() > 1) { // TODO?
+        llvm::outs() << "Multi-path variable: ";
+        for (auto &s : name.getPath()) { llvm::outs() << s; }
+        llvm::outs() << '\n';
+        return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
+    } */
+    auto maybeArray = dynamic_cast<ArrayType *>(languageType(genContext));
+    if (maybeArray != nullptr) {
+//        llvm::outs() << "Got variable access to array type\n";
+//        llvmType(genContext)->print(llvm::outs());
+//        llvm::outs() << "\nAccess value:\n";
+//        varAddress(genContext)->print(llvm::outs());
+//        llvm::outs() << '\n';
+        //llvm::outs() << "Array name: " << name << "\n";
         return varAddress(genContext);
     }
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
-std::string VariableAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name); }
+std::string VariableAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name.join()); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
@@ -772,13 +815,24 @@ LanguageType *ArraySubscription::languageType(const ExpressionGenContext &genCon
     return arrayType->targetType;
 }
 
-llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
-    // TODO: this doesn't work at all
+llvm::Value *ArraySubscription::getElementPtr(ExpressionGenContext &genContext) {
+    auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(genContext.codegenContext.context), 0);
     auto idx = subscript->llvmValue(genContext);
-    auto gep = genContext.builder.CreateGEP(
+    return genContext.builder.CreateGEP(
         array->llvmType(genContext),
         array->llvmValue(genContext),
-        { idx });
+        { zero, idx });
+}
+
+llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
+    // TODO: this doesn't work at all
+//    array->llvmType(genContext)->print(llvm::outs());
+//    llvm::outs() << '\n';
+//    array->llvmValue(genContext)->print(llvm::outs());
+//    llvm::outs() << '\n';
+//    array->llvmValue(genContext)->getType()->print(llvm::outs());
+//    llvm::outs() << '\n';
+    auto gep = getElementPtr(genContext);
     return genContext.builder.CreateLoad(llvmType(genContext), gep);
 }
 
@@ -822,7 +876,7 @@ std::string VariableDeclaration::dump(int indent) {
 }
 
 Sizeof::Sizeof(CodegenContext &context, LanguageType *targetType)
-    : Expression(context.getNamed<NamedTypeValue>("u32")),
+    : Expression(context.namedTypes.at("u32").get()),
       targetType(targetType) {
     value = llvm::ConstantInt::get(
         type->llvmType(), context.module.getDataLayout().getTypeAllocSize(targetType->llvmType())
