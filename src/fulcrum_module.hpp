@@ -4,6 +4,7 @@
 #include <string>
 
 #include "ast_nodes.hpp"
+#include "ast_type_storage.hpp"
 
 struct FulcrumModule {
     std::string name;

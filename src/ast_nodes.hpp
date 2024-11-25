@@ -62,22 +62,7 @@ struct ASTFunctionType : ASTType {
     ASTType *returnType;
 
     ASTFunctionType(ArgTypes &&arguments, ASTType *returnType);
-};
 
-// TODO: move to separate header
-struct ASTTypeStorage {
-    template <typename T, typename ...Args>
-    ASTType *getType(Args  &&...args) {
-        return allTypes.emplace(std::make_unique<T>(std::forward<Args>(args)...))
-            .first->get();
-    }
-
-    void merge(ASTTypeStorage &&other) {
-        allTypes.merge(std::move(other.allTypes));
-    }
-
-private:
-    std::unordered_set<std::unique_ptr<ASTType>> allTypes;
 };
 
 // Nodes
