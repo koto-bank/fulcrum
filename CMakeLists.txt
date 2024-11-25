@@ -56,12 +56,14 @@ option(ARGS_BUILD_UNITTESTS "" OFF)
 add_subdirectory(deps/args)
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
+add_subdirectory(deps/spdlog)
+
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
-target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args clang-cpp ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args clang-cpp spdlog::spdlog ${llvm_libs})
 
 ### Compiler
 
 add_executable(${FULCRUM_COMPILER} "src/main.cpp" $<TARGET_OBJECTS:${FULCRUM_LIB}>)
 target_compile_definitions(${FULCRUM_COMPILER} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
-target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB})
+target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB} spdlog::spdlog)
 target_compile_options(${FULCRUM_COMPILER} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
