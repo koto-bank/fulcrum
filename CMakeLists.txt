@@ -15,6 +15,7 @@ set(FULCRUM_COMPILER fulcrum)
 add_library(${FULCRUM_LIB} OBJECT
   "src/ast_name_path.cpp"
   "src/ast_nodes.cpp"
+  "src/ast_type_storage.cpp"
   "src/c_header_parser.cpp"
   "src/compiler.cpp"
   "src/codegen_context.cpp"

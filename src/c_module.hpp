@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ast_nodes.hpp"
+#include "ast_type_storage.hpp"
 
 struct CModule {
     std::string name; // file name without extension, e.g. 'stdio.h' -> 'stdio'

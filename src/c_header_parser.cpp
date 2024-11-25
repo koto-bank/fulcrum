@@ -24,6 +24,7 @@
 
 #include "assert.hpp"
 #include "ast_nodes.hpp"
+#include "ast_type_storage.hpp"
 #include "c_header_parser.hpp"
 #include "codegen_context.hpp"
 #include "compiler.hpp"

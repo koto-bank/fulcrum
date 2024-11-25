@@ -33,6 +33,7 @@
 #include <tuple>
 #include <vector>
 
+#include "ast_type_storage.hpp"
 #include "c_header_parser.hpp"
 #include "c_module.hpp"
 #include "codegen_context.hpp"
