@@ -23,7 +23,6 @@ add_library(${FULCRUM_LIB} OBJECT
   "src/lexer.cpp"
   "src/parser.cpp"
   "src/semantic_analyzer.cpp"
-  "src/tree_matcher.cpp"
   "src/types.cpp"
   )
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
