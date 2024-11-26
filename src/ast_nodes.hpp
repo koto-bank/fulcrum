@@ -13,11 +13,14 @@
 // Fulcrum types and expressions.
 
 struct ASTType {
-    virtual ~ASTType() = default;
+    virtual std::string signature() const = 0;
+    virtual ~ASTType();
 };
 
 struct ASTBuiltinType : ASTType {
     const std::string builtinName;
+
+    std::string signature() const override;
 
     ASTBuiltinType(std::string &&name);
 };
@@ -26,25 +29,35 @@ struct ASTIntegerType : ASTBuiltinType {
     const uint32_t bits;
     const bool isSigned;
 
+    std::string signature() const override;
+
     ASTIntegerType(bool isSigned, uint32_t bits);
 };
 
 struct ASTFloatType : ASTBuiltinType {
     const uint32_t bits;
 
+    std::string signature() const override;
+
     ASTFloatType(uint32_t bits);
 };
 
 struct ASTBoolType : ASTBuiltinType {
+    std::string signature() const override;
+
     ASTBoolType();
 };
 
 struct ASTVoidType : ASTBuiltinType {
+    std::string signature() const override;
+
     ASTVoidType();
 };
 
 struct ASTNamedType : ASTType {
     NamePath name;
+
+    std::string signature() const override;
 
     ASTNamedType(NamePath &&name);
     ASTNamedType(const std::string &name);
@@ -53,12 +66,16 @@ struct ASTNamedType : ASTType {
 struct ASTPointerType : ASTType {
     ASTType *targetType;
 
+    std::string signature() const override;
+
     ASTPointerType(ASTType *targetType);
 };
 
 struct ASTArrayType : ASTType {
     ASTType *targetType;
     size_t size;
+
+    std::string signature() const override;
 
     ASTArrayType(ASTType *targetType, size_t size);
 };
@@ -69,8 +86,9 @@ struct ASTFunctionType : ASTType {
 
     ASTType *returnType;
 
-    ASTFunctionType(ArgTypes &&arguments, ASTType *returnType);
+    std::string signature() const override;
 
+    ASTFunctionType(ArgTypes &&arguments, ASTType *returnType);
 };
 
 // Nodes
@@ -119,6 +137,8 @@ struct FunctionNode : ASTNode {
 
     FunctionNode(NamePath &&name, ArgList &&arguments, ASTType *returnType,
                  Body &&body, bool isPublic, bool isVariadic);
+
+    std::string signature() const;
 };
 
 struct ConstantStringNode : ASTNode {
