@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "assert.hpp"
 #include "ast_name_path.hpp"
 

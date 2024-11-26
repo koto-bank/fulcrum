@@ -3,6 +3,8 @@
 #include <expected>
 #include <map>
 
+#include <llvm/IR/Module.h>
+
 #include <fmt/format.h>
 
 #include "ast_name_path.hpp"
@@ -24,7 +26,6 @@ struct VariableDeclarationNode;
 
 namespace llvm {
 class Function;
-class Module;
 } // namespace llvm
 
 struct Function {
