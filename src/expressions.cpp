@@ -840,12 +840,12 @@ LanguageType *Subscription::languageType(const ExpressionGenContext &genContext)
 }
 
 llvm::Value *Subscription::getElementPtr(ExpressionGenContext &genContext) {
-    auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(genContext.codegenContext.context), 0);
     auto idx = subscript->llvmValue(genContext);
-    return genContext.builder.CreateGEP(
+    fc_assert(targetType != nullptr);
+    return genContext.builder.CreateInBoundsGEP(
         array->llvmType(genContext),
         array->llvmValue(genContext),
-        { zero, idx });
+        idx);
 }
 
 llvm::Value *Subscription::llvmValue(ExpressionGenContext &genContext) {
