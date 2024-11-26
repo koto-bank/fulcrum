@@ -167,6 +167,11 @@ llvm::Type *ArrayType::llvmTypeAccess() { return llvm::PointerType::get(targetTy
 
 std::string ArrayType::signature() { return fmt::format("{}[{}]", targetType->signature(), size); }
 
+PointerType *ArrayType::decay(CodegenContext &context) const {
+    auto ptrName = targetType->signature() + "*";
+    return context.emplaceType<PointerType>(ptrName, targetType);
+}
+
 llvm::Type *VAType::llvmType() {
     return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0);
 }

@@ -147,6 +147,8 @@ struct ArrayType : LanguageType {
 
     ArrayType(CodegenContext &context, LanguageType *targetType, size_t size);
 
+    PointerType *decay(CodegenContext &context) const;
+
     llvm::Type *llvmType() override;
     llvm::Type *llvmTypeAccess() override;
     std::string signature() override;
