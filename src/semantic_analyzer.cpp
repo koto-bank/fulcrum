@@ -513,8 +513,8 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
                 return std::nullopt;
             }
 
-            return std::make_unique<ArrayNthNode>(std::move(target.value()),
-                                                  std::move(subscript.value()));
+            return std::make_unique<NthNode>(std::move(target.value()),
+                                             std::move(subscript.value()));
         } else if (sym == "cast") {
             if (form.children.size() < 3) {
                 reportError(symForm.token, "cast must have target and type");

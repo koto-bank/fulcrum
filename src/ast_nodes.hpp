@@ -190,11 +190,11 @@ struct DereferenceNode : ASTNode {
     DereferenceNode(std::unique_ptr<ASTNode> &&target);
 };
 
-struct ArrayNthNode : ASTNode {
+struct NthNode : ASTNode {
     std::unique_ptr<ASTNode> array;
     std::unique_ptr<ASTNode> subscript;
 
-    ArrayNthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript);
+    NthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript);
 };
 
 struct VariableDeclarationNode : ASTNode {
