@@ -17,7 +17,7 @@ Function::Function(
     CodegenContext &context,
     llvm::Module &module,
     const std::string &name_,
-    const Args &arguments,
+    Args &&arguments,
     LanguageType *returnType,
     Body &&body,
     bool isPublic,
@@ -26,7 +26,7 @@ Function::Function(
     , name(name_)
     , body(std::move(body)) {
     std::vector<LanguageType *> argumentTypes;
-    for (const auto &arg : arguments) {
+    for (auto &&arg : arguments) {
         argumentNames.push_back(arg.name);
         if (auto at = dynamic_cast<ArrayType *>(arg.type); at != nullptr) {
             // decay to pointer right away
@@ -51,14 +51,18 @@ Function::Function(
 FunctionType *Function::functionType() { return type.get(); }
 llvm::Function *Function::llvmFunction() { return function; }
 
-void Function::generateExpressions(
-    ExpressionGenContext &genContext,
-    const std::vector<std::unique_ptr<Expression>> &expressions) {
-    std::vector<Expression *> args;
-    for (auto &expr : expressions) {
-        args.push_back(expr.get());
+void Function::generateExpressions(ExpressionGenContext &genContext,
+                                   const std::vector<std::unique_ptr<Expression>> &expressions) {
+    for (auto i = 0u; i < expressions.size(); i++) {
+        expressions[i]->llvmValue(genContext);
+        if (expressions[i]->isTerminator()) {
+            if (i != expressions.size() - 1) {
+                // TODO: more detailed message
+                spdlog::warn("Unreachable code");
+            }
+            return;
+        }
     }
-    generateExpressions(genContext, args);
 }
 
 void Function::generateBody(ExpressionGenContext &genContext) {
@@ -92,13 +96,6 @@ void Function::generateBody(ExpressionGenContext &genContext) {
             // Otherwise, return void automatically
             genContext.builder.CreateRetVoid();
         }
-    }
-}
-
-void Function::generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions) {
-    for (auto &expr : expressions) {
-        expr->llvmValue(genContext);
-        if (expr->isTerminator()) return;
     }
 }
 
@@ -239,7 +236,7 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceFulcrumFunction(F
                                       *this,
                                       module,
                                       callName,
-                                      exprArgs,
+                                      std::move(exprArgs),
                                       getLanguageType(fnNode.returnType).value(),
                                       std::move(exprBody),
                                       fnNode.isPublic,
@@ -265,7 +262,7 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceCFunction(Functio
                                       *this,
                                       module,
                                       name,
-                                      exprArgs,
+                                      std::move(exprArgs),
                                       getLanguageType(fnNode.returnType).value(),
                                       Function::Body {},
                                       fnNode.isPublic,
