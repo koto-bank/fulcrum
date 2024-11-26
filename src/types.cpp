@@ -24,6 +24,11 @@ std::string IntegerType::signature() { return std::string(isSigned ? "i" : "u") 
 
 LanguageType *LanguageType::actualLanguageType() { return this; }
 
+bool LanguageType::assignable(LanguageType *other) const {
+    // whoa
+    return other == this;
+}
+
 FloatType::FloatType(CodegenContext &context, Bits bits)
     : LanguageType(context),
       bits(bits) {}
@@ -90,20 +95,30 @@ llvm::Type *VoidType::llvmType() { return llvm::Type::getVoidTy(context.context)
 
 llvm::Type *BoolType::llvmType() { return llvm::Type::getInt1Ty(context.context); }
 
-PointerType::PointerType(CodegenContext &context, LanguageType *pointerTo_)
+PointerType::PointerType(CodegenContext &context, LanguageType *targetType)
     : LanguageType(context),
-      pointerTo(pointerTo_) {}
+      targetType(targetType) {}
 
 llvm::Type *PointerType::llvmType() { return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0); }
 
-std::string PointerType::signature() { return pointerTo->signature() + "*"; }
+std::string PointerType::signature() { return targetType->signature() + "*"; }
 
 LanguageType *PointerType::actualLanguageType() {
-    auto actualInternal = pointerTo->actualLanguageType();
+    auto actualInternal = targetType->actualLanguageType();
     auto pointeeName = actualInternal->signature();
     auto ptrName = pointeeName + "*";
     // TODO: error check
     return context.emplaceType<PointerType>(ptrName, actualInternal);
+}
+
+bool PointerType::assignable(LanguageType *other) const {
+    if (other == this) {
+        return true;
+    }
+    if (auto at = dynamic_cast<ArrayType *>(other); at != nullptr) {
+        return targetType->assignable(at->targetType);
+    }
+    return false;
 }
 
 std::string VoidType::signature() { return "void"; }
