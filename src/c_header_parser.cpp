@@ -81,6 +81,52 @@ void disableUnusedCompilerOptions(clang::CompilerInvocation &ci) {
     ci.getLangOpts().XRayNeverInstrumentFiles.clear();
 }
 
+ASTType * qualTypeToASTType(const clang::QualType &qualType, CModule &cModule, const clang::ASTContext *ctx) {
+    if (qualType.isNull()) {
+        spdlog::info("qualType contains nullptr");
+        // why can this happen? is this a error?
+        return nullptr;
+    }
+    if (qualType->isBooleanType()) {
+        return cModule.types.getType<ASTBoolType>();
+    } else if (qualType->isIntegerType()
+               || qualType->isCharType()) {
+        bool isSigned = false;
+        if (qualType->isSignedIntegerType()) {
+            isSigned = true;
+        }
+        auto size = ctx->getTypeSize(qualType);
+        return cModule.types.getType<ASTIntegerType>(isSigned, size);
+    } else if (qualType->isFloatingType()) {
+        auto size = ctx->getTypeSize(qualType);
+        return cModule.types.getType<ASTFloatType>(size);
+    } else if (qualType->isVoidType()) {
+        return cModule.types.getType<ASTVoidType>();
+    } else if (qualType->isPointerType()
+               || qualType->isConstantArrayType()
+               || qualType->isIncompleteArrayType()) {
+        auto elType = qualType->getPointeeType();
+        auto underlyingType = qualTypeToASTType(elType, cModule, ctx);
+        if (underlyingType == nullptr) {
+            // when underlying type is unsupported
+            return nullptr;
+        }
+        return cModule.types.getType<ASTPointerType>(underlyingType);
+    } else if (qualType->isArrayType()) {
+        // ..?
+        spdlog::info("Array type {} is unsupported", qualType.getAsString());
+        return nullptr;
+    } else if (qualType->isStructureType()) {
+        auto rt = qualType->getAsRecordDecl();
+        fc_assert(rt != nullptr);
+        auto name = rt->getNameAsString();
+        return cModule.types.getType<ASTNamedType>(name);
+    } else {
+        spdlog::info("Unsupported type '{}'", qualType.getAsString());
+        return nullptr;
+    }
+}
+
 bool isInsideMainFile(clang::SourceLocation loc, const clang::SourceManager &sm) {
     if (!loc.isValid()) {
         return false;
@@ -95,6 +141,9 @@ public:
     DeclarationCollector(CModule &cModule)
         : cModule(cModule) {}
 
+    void setASTContext(clang::ASTContext &ctx) {
+        context = &ctx;
+    }
 
     bool VisitRecordDecl(clang::RecordDecl *d) {
         StructNode s;
@@ -104,8 +153,38 @@ public:
         return true;
     }
 
+    bool VisitFunctionDecl(clang::FunctionDecl *d) {
+        ArgList args;
+        auto name = d->getNameInfo().getAsString();
+        auto qualType = d->getReturnType();
+        ASTType* retType = qualTypeToASTType(qualType, cModule, context);
+        fc_assert(retType != nullptr);
+
+        for (auto i = 0u; i < d->getNumParams(); i++) {
+            auto param = d->getParamDecl(i);
+            auto argType = qualTypeToASTType(param->getType(), cModule, context);
+            if (argType == nullptr) {
+                spdlog::warn("Couldn't get type for argument #{} of function {}, skipping", i, name);
+                goto skipFn;
+            }
+            args.push_back({ param->getNameAsString(), argType });
+
+        }
+
+        cModule.functions.push_back(FunctionNode(NamePath::create(name).value(),
+                                                 std::move(args),
+                                                 retType,
+                                                 {},
+                                                 true,
+                                                 d->isVariadic()));
+
+        skipFn:
+        return true;
+    }
+
 private:
     CModule &cModule;
+    clang::ASTContext *context = nullptr;
 };
 
 class DeclarationConsumer : public clang::ASTConsumer {
@@ -114,6 +193,7 @@ public:
         : collector(cModule) {}
 
     void HandleTranslationUnit(clang::ASTContext &context) override {
+        collector.setASTContext(context);
         collector.TraverseDecl(context.getTranslationUnitDecl());
     }
 
@@ -312,32 +392,6 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
     }
 
     auto macroNum = processParsedMacros(cModule.types, cModule, *macroCollectorPtr, *clang);
-
-    // std::vector<clang::Decl *> parsedDecls = action->takeTopLevelDecls();
-    std::cout << fmt::format("Parsed {} macros from file {}\n", macroNum,  path);
-    /* for (auto d : parsedDecls) {
-        if (const clang::TypedefDecl *td = llvm::dyn_cast<clang::TypedefDecl>(d)) {
-            std::cout << "Typedef  " << td->getDeclName().getAsString() << std::endl;
-        } else if (const clang::RecordDecl *rd = llvm::dyn_cast<clang::RecordDecl>(d)) {
-            // struct/class
-            std::cout << "Record  " << rd->getDeclName().getAsString() << std::endl;
-        } else if (const clang::EnumDecl *ed = llvm::dyn_cast<clang::EnumDecl>(d)) {
-            std::cout << "Enum  " << ed->getDeclName().getAsString() << std::endl;
-            // enum
-            // also need to collect corresponding EnumConstantDecl to fill values
-        } else if (const clang::EnumConstantDecl *ecd = llvm::dyn_cast<clang::EnumConstantDecl>(d)) {
-            auto tt = (clang::TagType *)ecd->getType().getTypePtr();
-            std::cout << "Enum  " << tt->getDecl()->getDeclName().getAsString() << " " << ecd->getDeclName().getAsString() << " " << ecd->getValue().getLimitedValue() << std::endl;
-        } else if (const clang::FunctionDecl *fd = llvm::dyn_cast<clang::FunctionDecl>(d)) {
-            // function
-            std::cout << "Fn  " << fd->getDeclName().getAsString() << std::endl;
-        } else if (const clang::VarDecl *vd = llvm::dyn_cast<clang::VarDecl>(d)) {
-            // global var
-            std::cout << "Var  " << vd->getDeclName().getAsString() << std::endl;
-        } else {
-            // ignore
-        }
-    } */
 
     (void) buffer.release(); // TODO: do we really need to do this?
     return true;
