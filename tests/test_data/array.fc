@@ -3,26 +3,31 @@
 
 (fn print-array void ((array (array (ptr i8) 10)) (size i32))
   (var i i32 0)
-  (stdio.printf "Addr of passed array: %p\n" array)
   (while (< i size)
-    (stdio.puts (nth array i))
-    (set i (+ i 1))))
+    (stdio.printf "String at %p which is '%s'\n" (nth array i) (nth array i))
+   (set i (+ i 1))))
 
 (fn main i32 ((argc i32) (argv (ptr (ptr i8))))
-  (var str-arr (array (ptr i8) 10))
+  (var str-arr (array (ptr i8) 5))
   (var i i32 0)
-  (while (and (< i argc) (< i 10))
-    (set (nth str-arr i) (deref (ptr+ argv i)))
+  (var arr-size i32 (- argc 1))
+  (if (> arr-size 5)
+    (progn
+      (stdio.puts "More than 5 arguments passed, ignoring the rest\n")
+      (set arr-size 5)))
+
+  (while (< i arr-size)
+    (set (nth str-arr i) (deref (ptr+ argv (+ i 1))))
     (set i (+ i 1)))
 
+  (stdio.puts "First, print array from main function\n")
   (set i 0)
-  (while (< i argc)
-    (stdio.puts (nth str-arr i))
+  (while (< i arr-size)
+    (stdio.printf "String at %p which is '%s'\n" (nth str-arr i) (nth str-arr i))
     (set i (+ i 1)))
 
-  (stdio.printf "Addr of array: %p addr of 1st elt: %p\n" str-arr (nth str-arr 0))
-  (stdio.puts "----------------")
-
-  (print-array str-arr argc)
+  (stdio.puts "----------------------------------------\n")
+  (stdio.puts "Now, pass array as an argument\n")
+  (print-array str-arr arr-size)
 
   (return 0))
