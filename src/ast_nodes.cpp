@@ -16,6 +16,12 @@ ASTFloatType::ASTFloatType(uint32_t bits)
     : ASTBuiltinType(fmt::format("f{}", bits))
     , bits(bits) {}
 
+ASTBoolType::ASTBoolType()
+    : ASTBuiltinType("bool") {}
+
+ASTVoidType::ASTVoidType()
+    : ASTBuiltinType("void") {}
+
 ASTNamedType::ASTNamedType(NamePath &&name)
     : name(std::move(name)) {}
 

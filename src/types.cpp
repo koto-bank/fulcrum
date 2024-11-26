@@ -34,13 +34,6 @@ llvm::Type *FloatType::llvmType() {
     return bits == Bits::Float ? llvm::Type::getFloatTy(context.context) : llvm::Type::getDoubleTy(context.context);
 }
 
-StringType::StringType(CodegenContext &context)
-    : LanguageType(context) {}
-
-std::string StringType::signature() { return "str"; }
-
-llvm::Type *StringType::llvmType() { return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0); }
-
 AliasType::AliasType(CodegenContext &codegenContext, const NamePath &name, LanguageType *aliasTo_)
     : LanguageType(codegenContext),
       name(name),
@@ -92,10 +85,6 @@ UnionType::UnionType(CodegenContext &codegenContext, const NamePath &name, long 
 }
 
 llvm::Type *UnionType::llvmType() { return structType; }
-
-std::string CharType::signature() { return "char"; }
-
-llvm::Type *CharType::llvmType() { return llvm::Type::getInt8Ty(context.context); }
 
 llvm::Type *VoidType::llvmType() { return llvm::Type::getVoidTy(context.context); }
 

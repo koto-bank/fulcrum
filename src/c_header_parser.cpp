@@ -183,7 +183,7 @@ uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, Coll
                 }
                 // TODO: wide strings, some other errors, idk, looks kinda brittle
 
-                auto varVal = VariableDeclarationNode(NamePath::create(std::move(macroName)).value(), typeStorage.getType<ASTNamedType>("str"));
+                auto varVal = VariableDeclarationNode(NamePath::create(std::move(macroName)).value(), typeStorage.getType<ASTIntegerType>(true, 8));
                 varVal.initialValue = std::make_unique<ConstantStringNode>(sp.GetString().str());
                 cModule.globalVariables.push_back(std::move(varVal));
                 macroCount++;

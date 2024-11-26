@@ -35,6 +35,14 @@ struct ASTFloatType : ASTBuiltinType {
     ASTFloatType(uint32_t bits);
 };
 
+struct ASTBoolType : ASTBuiltinType {
+    ASTBoolType();
+};
+
+struct ASTVoidType : ASTBuiltinType {
+    ASTVoidType();
+};
+
 struct ASTNamedType : ASTType {
     NamePath name;
 
