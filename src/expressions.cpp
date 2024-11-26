@@ -153,16 +153,11 @@ BoolConstant::BoolConstant(LanguageType *type, bool constValue)
 
 std::string BoolConstant::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), constValue); }
 
-FunctionCall::FunctionCall(const std::string &name_, Args &&args)
+FunctionCall::FunctionCall(const std::string &name, Args &&args)
     // Initialize type with nullptr for now, since we don't know the return type yet
     : Expression(nullptr),
-      name(name_),
-      args(std::move(args)) {
-    // De-namespace special functions
-    auto namespaceSep = name.find('/');
-    auto baseName = name.substr(namespaceSep + 1);
-    if (specialFunctions.contains(baseName)) name = baseName;
-}
+      name(name),
+      args(std::move(args)) {}
 
 llvm::Value *FunctionCall::returnProcessor(ExpressionGenContext &genContext) {
     if (args.size() != 0 && args.size() != 1) { throw CodegenError("Return must have 0 or 1 arguments"); }
@@ -437,7 +432,7 @@ LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genC
     }
     auto varType = maybeVar->languageType(genContext);
     auto ptrTypeName = varType->signature() + "*";
-    auto ret = genContext.codegenContext.emplaceType<PointerType>(ptrTypeName, varType).value();
+    auto ret = genContext.codegenContext.emplaceType<PointerType>(ptrTypeName, varType);
     return ret;
 }
 
@@ -599,6 +594,9 @@ LanguageType *FunctionCall::languageType(const ExpressionGenContext &genContext)
         if (specialFunctions.contains(name)) {
             type = specialFunctions.at(name).second(this, genContext);
         } else {
+            if (genContext.codegenContext.namedFunctions.find(name) == genContext.codegenContext.namedFunctions.end()) {
+                throw CodegenError(fmt::format("Function {} is undefined", name));
+            }
             type = genContext.codegenContext.namedFunctions.at(name)->functionType()->returnType;
         }
     }
@@ -619,8 +617,13 @@ llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
 }
 
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
-    if (specialFunctions.contains(name)) return specialFunctions.at(name).first(this, genContext);
+    if (specialFunctions.contains(name)) {
+        return specialFunctions.at(name).first(this, genContext);
+    }
 
+    if (genContext.codegenContext.namedFunctions.find(name) == genContext.codegenContext.namedFunctions.end()) {
+        throw CodegenError(fmt::format("Function {} is undefined", name));
+    }
     auto calledFunction = genContext.codegenContext.namedFunctions.at(name).get();
 
     std::vector<llvm::Value *> argValues;

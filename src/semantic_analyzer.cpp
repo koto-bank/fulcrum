@@ -274,8 +274,12 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
         body.push_back(std::move(bodyForm.value()));
     }
 
-    module.functions.push_back(FunctionNode(NamePath::create(name).value(), std::move(args), std::move(returnType),
-                                            std::move(body), isPublic, false));
+    module.functions.push_back(FunctionNode(NamePath::create(name).value(),
+                                            std::move(args),
+                                            std::move(returnType),
+                                            std::move(body),
+                                            isPublic,
+                                            false));
     return true;
 }
 

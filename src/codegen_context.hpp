@@ -47,7 +47,6 @@ struct Function {
              bool isPublic,
              bool isVariadic);
 
-    const std::string &getName() const;
     FunctionType *functionType();
     llvm::Function *llvmFunction();
 
@@ -107,6 +106,8 @@ struct CodegenContext {
     CodegenContext(std::string moduleName, llvm::LLVMContext &context);
 
     void generate(FulcrumModule &&fulcrumModule);
+
+    // uh oh, unused
     void generate(CModule &&cModule);
 
     template <typename T>
@@ -126,10 +127,7 @@ struct CodegenContext {
     CodegenResult<Function> emplaceCFunction(FunctionNode &&);
 
     template <typename T, typename ...Args>
-    CodegenResult<T> emplaceType(const std::string& name, Args &&...args) {
-        if (namedTypes.contains(name)) {
-            return std::unexpected(CodegenError(fmt::format("Type {} already defined", name)));
-        }
+    T * emplaceType(const std::string& name, Args &&...args) {
         return static_cast<T *>(namedTypes.emplace(name, std::make_unique<T>(*this, std::forward<Args>(args)...)).first->second.get());
     }
 };

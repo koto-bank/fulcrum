@@ -324,11 +324,11 @@ void CodegenContext::generate(CModule &&cModule) {
 CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(const ASTType *type) {
     if (auto t = dynamic_cast<const ASTBuiltinType *>(type); t != nullptr) {
         fc_assert(namedTypes.contains(t->builtinName));
-        return namedTypes[t->builtinName].get();
+        return namedTypes.at(t->builtinName).get();
     } else if (auto t = dynamic_cast<const ASTIntegerType *>(type); t != nullptr) {
-        return namedTypes[t->builtinName].get();
+        return namedTypes.at(t->builtinName).get();
     } else if (auto t = dynamic_cast<const ASTFloatType *>(type); t != nullptr) {
-        return namedTypes[t->builtinName].get();
+        return namedTypes.at(t->builtinName).get();
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type); t != nullptr) {
         return namedTypes[t->name.join()].get();
     } else if (auto t = dynamic_cast<const ASTBoolType *>(type); t != nullptr) {
