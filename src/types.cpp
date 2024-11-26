@@ -103,7 +103,7 @@ LanguageType *PointerType::actualLanguageType() {
     auto pointeeName = actualInternal->signature();
     auto ptrName = pointeeName + "*";
     // TODO: error check
-    return context.emplaceType<PointerType>(ptrName, actualInternal).value();
+    return context.emplaceType<PointerType>(ptrName, actualInternal);
 }
 
 std::string VoidType::signature() { return "void"; }

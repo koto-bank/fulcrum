@@ -270,7 +270,7 @@ void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
         exprFields.emplace_back(name, getLanguageType(astType).value());
     }
 
-    auto structType = static_cast<StructType *>(namedTypes[structNode.name.join()].get());
+    auto structType = static_cast<StructType *>(namedTypes.at(structNode.name.join()).get());
     structType->fillFields(exprFields);
 }
 
