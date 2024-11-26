@@ -30,6 +30,8 @@ public:
     virtual std::string signature() = 0;
     virtual LanguageType *actualLanguageType();
 
+    virtual bool assignable(LanguageType *other) const;
+
     LanguageType(CodegenContext &context);
 
     virtual ~LanguageType() = default;
@@ -95,13 +97,15 @@ struct UnionType : StructType {
 };
 
 struct PointerType : LanguageType {
-    LanguageType *pointerTo;
+    LanguageType *targetType;
 
-    PointerType(CodegenContext &context, LanguageType *pointerTo);
+    PointerType(CodegenContext &context, LanguageType *targetType);
 
     llvm::Type *llvmType() override;
     std::string signature() override;
     LanguageType *actualLanguageType() override;
+
+    bool assignable(LanguageType *other) const override;
 };
 
 struct VoidType : LanguageType {

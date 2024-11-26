@@ -630,10 +630,9 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
     auto fnType = calledFunction->functionType();
     for (auto i = 0u; i < args.size(); i++) {
         LanguageType *argType = args[i]->languageType(genContext);
-
         if (!fnType->isVariadic || i < fnType->arguments.size()) {
             LanguageType *expectedType = fnType->arguments[i];
-            if (argType->actualLanguageType() != expectedType->actualLanguageType()) {
+            if (!expectedType->actualLanguageType()->assignable(argType->actualLanguageType())) {
                 throw CodegenError(fmt::format(
                                        "Incompatible argument type in {}: for argument #{}"
                                        " expected {}, but received {}",
@@ -789,7 +788,7 @@ LanguageType *Dereference::languageType(const ExpressionGenContext &genCont) {
     if (ptrType == nullptr)
         throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", derefing->signature()));
 
-    return ptrType->pointerTo;
+    return ptrType->targetType;
 }
 
 llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
