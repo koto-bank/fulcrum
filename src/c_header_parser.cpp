@@ -22,6 +22,8 @@
 
 #include <fmt/format.h>
 
+#include <spdlog/spdlog.h>
+
 #include "assert.hpp"
 #include "ast_nodes.hpp"
 #include "ast_type_storage.hpp"
@@ -148,7 +150,7 @@ public:
     bool VisitRecordDecl(clang::RecordDecl *d) {
         StructNode s;
         s.name.add(d->getQualifiedNameAsString());
-        llvm::outs() << "Record with name " << s.name.join() << '\n';
+        spdlog::info("Record with name {}", s.name.join());
         cModule.structs.push_back(std::move(s));
         return true;
     }
@@ -331,6 +333,8 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
     ciOpts.CC1Args = nullptr;
     ciOpts.RecoverOnError = true;
 
+    spdlog::info("Processing C header {}", moduleName);
+
     ciOpts.Diags = nullptr; // TODO: implement our diagnostics consumer,
     // because the docs say: Receives diagnostics encountered while parsing command-line flags.
     //                       If not provided, these are printed to stderr.
@@ -359,7 +363,7 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
     if (ci->getFrontendOpts().Inputs.size() > 0) {
         auto lang = ci->getFrontendOpts().Inputs[0].getKind().getLanguage();
         if (lang != clang::Language::C) {
-            std::cout << "Fulcrum only supports C includes\n";
+            spdlog::warn("Fulcrum only supports C includes");
             return false;
         }
     }
@@ -375,7 +379,7 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
     auto action = std::make_unique<FrontendAction>(cModule);
     const clang::FrontendInputFile &mainInput = clang->getFrontendOpts().Inputs[0];
     if (!action->BeginSourceFile(*clang, mainInput)) {
-        std::cout << fmt::format("BeginSourceFile() failed when building AST for {}\n",
+        spdlog::error("BeginSourceFile() failed when building AST for {}",
                                  std::string(mainInput.getFile()));
         return false;
     }
@@ -386,13 +390,14 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
     pp.addPPCallbacks(std::move(macroCollector));
 
     if (llvm::Error err = action->Execute()) {
-        std::cout << fmt::format("Execute() failed when building AST for {}: {}\n",
+        spdlog::error("Execute() failed when building AST for {}: {}",
                                  std::string(mainInput.getFile()),
                                  llvm::toString(std::move(err)));
     }
 
     auto macroNum = processParsedMacros(cModule.types, cModule, *macroCollectorPtr, *clang);
 
+    spdlog::info("Parsed {} macros from file {}", macroNum,  path);
     (void) buffer.release(); // TODO: do we really need to do this?
     return true;
 }

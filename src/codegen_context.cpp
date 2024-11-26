@@ -3,6 +3,8 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <spdlog/spdlog.h>
+
 #include "assert.hpp"
 #include "ast_name_path.hpp"
 #include "ast_nodes.hpp"
@@ -33,6 +35,7 @@ Function::Function(
     std::replace(name.begin(), name.end(), '/', '_');
 
     auto funcType = static_cast<llvm::FunctionType *>(type->llvmType());
+    spdlog::info("Creating LLVM function with name {}", name);
     function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
 
     for (auto i = 0u; i < function->arg_size(); i++) {
@@ -40,7 +43,6 @@ Function::Function(
     }
 }
 
-const std::string &Function::getName() const { return name; }
 FunctionType *Function::functionType() { return type.get(); }
 llvm::Function *Function::llvmFunction() { return function; }
 
@@ -56,7 +58,7 @@ void Function::generateExpressions(
 
 void Function::generateBody(ExpressionGenContext &genContext) {
     if (body.size() == 0) {
-        llvm::outs() << "Body for function " << name << " is empty!\n";
+        // it's a declaration. Probably we need a separate flag for this case.
         return;
     }
 

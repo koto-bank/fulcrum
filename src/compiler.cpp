@@ -113,6 +113,7 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
             typeStorage.merge(std::move(m.types));
 
             fc_assert(!nick.empty());
+            spdlog::info("Processing module {}", m.name);
             for (auto &&f : m.functions) {
                 spdlog::info("Importing function {} from module {}", f.signature(), nick);
                 f.nameForLinker = f.name.join();
@@ -202,8 +203,8 @@ int Compiler::run(int argc, char *argv[]) {
         std::cout << argParser;
         return 0;
     } catch (const args::Error &e) {
-        std::cerr << e.what() << std::endl;
-        std::cerr << argParser;
+        spdlog::error(e.what());
+        std::cout << argParser;
         return 1;
     }
 
@@ -253,7 +254,7 @@ int Compiler::run(int argc, char *argv[]) {
     }
 
     if (!res) {
-        std::cerr << fmt::format("Failed to parse module {}\n", fileArg.Get());
+        spdlog::error("Failed to parse module {}", fileArg.Get());
         parser.dumpErrors();
         return 1;
     }
@@ -261,7 +262,7 @@ int Compiler::run(int argc, char *argv[]) {
     SemanticAnalyzer sem;
     res = sem.run(parser);
     if (res == false) {
-        std::cerr << fmt::format("Failed to perform semantic analysis of module {}\n", fileArg.Get());
+        spdlog::error("Failed to perform semantic analysis of module {}", fileArg.Get());
         sem.dumpErrors();
         return 1;
     }
@@ -279,10 +280,7 @@ int Compiler::run(int argc, char *argv[]) {
             exprGenContext.function = fn.get();
             fn->generateBody(exprGenContext);
         } catch (const CodegenError &err) {
-            std::cout << fmt::format(
-                "{}\n{}", fmt::styled("Errors:", fmt::fg(fmt::color::red) | fmt::emphasis::bold), err.whatIndented(4)
-            ) << std::endl;
-
+            spdlog::error(err.whatIndented(4));
             return 1;
         }
     }
