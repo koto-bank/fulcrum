@@ -788,15 +788,10 @@ llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
         llvm::outs() << '\n';
         return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
     } */
-    auto maybeArray = dynamic_cast<ArrayType *>(languageType(genContext));
-    if (maybeArray != nullptr) {
-//        llvm::outs() << "Got variable access to array type\n";
-//        llvmType(genContext)->print(llvm::outs());
-//        llvm::outs() << "\nAccess value:\n";
-//        varAddress(genContext)->print(llvm::outs());
-//        llvm::outs() << '\n';
-        //llvm::outs() << "Array name: " << name << "\n";
-        return varAddress(genContext);
+    auto var = genContext.lookupVariable(name.join());
+    if (dynamic_cast<ArrayType *>(var->type) != nullptr) {
+        // no need to store arrays, since they are alloca'd and thus immutable
+        return var->value;
     }
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
