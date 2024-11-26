@@ -105,12 +105,14 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
                 return;
             }
             auto m = headerParser.takeModule();
-            typeStorage.merge(std::move(m.types));
-
             auto nick = importFrom.nickname;
             if (nick.empty()) {
                 nick = m.name;
             }
+
+            m.types.addNick(nick);
+            typeStorage.merge(std::move(m.types));
+
             fc_assert(!nick.empty());
             for (auto &&f : m.functions) {
                 importNamed(nick, std::move(f), importTo.functions);
@@ -174,6 +176,9 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
             for (auto &&v : m.globalVariables) {
                 importNamed(nick, std::move(v), importTo.globalVariables);
             }
+
+            m.types.addNick(nick);
+            typeStorage.merge(std::move(m.types));
         }
     }
 }
