@@ -42,7 +42,7 @@ struct Function {
     Function(CodegenContext &context,
              llvm::Module &module,
              const std::string &name,
-             const Args &arguments,
+             Args &&arguments,
              LanguageType *returnType,
              Body &&body,
              bool isPublic,
@@ -54,7 +54,6 @@ struct Function {
     bool generateTerminates = false;
     void generateExpressions(ExpressionGenContext &genContext,
                              const std::vector<std::unique_ptr<Expression>> &expressions);
-    void generateExpressions(ExpressionGenContext &genContext, std::vector<Expression *> expressions);
 
     void generateBody(ExpressionGenContext &builder);
 
