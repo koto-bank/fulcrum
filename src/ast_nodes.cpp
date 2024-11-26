@@ -4,23 +4,45 @@
 #include "codegen_context.hpp"
 #include "expressions.hpp"
 
+ASTType::~ASTType() = default;
+
 ASTBuiltinType::ASTBuiltinType(std::string&& name)
     : builtinName(name) {}
+
+std::string ASTBuiltinType::signature() const {
+    return builtinName;
+}
 
 ASTIntegerType::ASTIntegerType(bool isSigned, uint32_t bits)
     : ASTBuiltinType(fmt::format("{}{}", isSigned ? 'i' : 'u', bits))
     , bits(bits)
     , isSigned(isSigned) {}
 
+std::string ASTIntegerType::signature() const {
+    return fmt::format("{}{}", isSigned ? "i" : "u", bits);
+}
+
 ASTFloatType::ASTFloatType(uint32_t bits)
     : ASTBuiltinType(fmt::format("f{}", bits))
     , bits(bits) {}
 
+std::string ASTFloatType::signature() const {
+    return fmt::format("f{}", bits);
+}
+
 ASTBoolType::ASTBoolType()
     : ASTBuiltinType("bool") {}
 
+std::string ASTBoolType::signature() const {
+    return "bool";
+}
+
 ASTVoidType::ASTVoidType()
     : ASTBuiltinType("void") {}
+
+std::string ASTVoidType::signature() const {
+    return "void";
+}
 
 ASTNamedType::ASTNamedType(NamePath &&name)
     : name(std::move(name)) {}
@@ -28,16 +50,43 @@ ASTNamedType::ASTNamedType(NamePath &&name)
 ASTNamedType::ASTNamedType(const std::string &name)
     : name(NamePath::create(name).value()) {}
 
+std::string ASTNamedType::signature() const {
+    return name.join();
+}
+
 ASTPointerType::ASTPointerType(ASTType *targetType)
     : targetType(targetType) {}
+
+std::string ASTPointerType::signature() const {
+    return fmt::format("{}*", targetType->signature());
+}
 
 ASTArrayType::ASTArrayType(ASTType *targetType, size_t size)
     : targetType(targetType),
       size(size) {}
 
+std::string ASTArrayType::signature() const {
+    return fmt::format("{}[]", targetType->signature());
+}
+
 ASTFunctionType::ASTFunctionType(ArgTypes &&argTypes, ASTType *returnType)
     : argumentTypes(std::move(argTypes)),
       returnType(returnType) {}
+
+std::string ASTFunctionType::signature() const {
+    // TODO: do we need function type at all?
+    std::string argTypes = "(";
+    for (auto a : argumentTypes) {
+        argTypes += a->signature();
+        argTypes += ", ";
+    }
+    if (argTypes.size() > 1) {
+        argTypes.pop_back(); // -' '
+        argTypes.pop_back(); // -','
+    }
+    argTypes += ")";
+    return fmt::format("{}{}", returnType->signature(), argTypes);
+}
 
 StructNode::StructNode(NamePath &&name, Fields &&fields, bool isPublic)
     : name(name),
@@ -56,6 +105,24 @@ FunctionNode::FunctionNode(
     , returnType(returnType)
     , body(std::move(body))
     , isVariadic(isVariadic) {}
+
+std::string FunctionNode::signature() const {
+    std::string argTypes = "(";
+    for (auto &[_, a] : arguments) {
+        argTypes += a->signature();
+        argTypes += ", ";
+    }
+    if (argTypes.size() > 1) {
+        if (isVariadic) {
+            argTypes += "...";
+        } else {
+            argTypes.pop_back(); // remove ' '
+            argTypes.pop_back(); // remove ','
+        }
+    }
+    argTypes += ")";
+    return fmt::format("{} {}{}", returnType->signature(), name.join(), argTypes);
+}
 
 ConstantStringNode::ConstantStringNode(std::string value)
     : value(value) {}
