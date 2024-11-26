@@ -468,10 +468,10 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
                 throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", ptrType->signature()));
             varAddress = derefTarget->llvmValue(genContext);
         }
-        auto maybeArraySubscription = dynamic_cast<ArraySubscription *>(args[i].get());
-        if (maybeArraySubscription != nullptr) {
-            variableType = maybeArraySubscription->languageType(genContext);
-            varAddress = maybeArraySubscription->getElementPtr(genContext);
+        auto maybeSubscription = dynamic_cast<Subscription *>(args[i].get());
+        if (maybeSubscription != nullptr) {
+            variableType = maybeSubscription->languageType(genContext);
+            varAddress = maybeSubscription->getElementPtr(genContext);
         }
         if (variableType == nullptr) {
             auto maybeVarExpr = dynamic_cast<VariableAccess *>(args[i].get());
@@ -798,16 +798,18 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
 
 std::string Dereference::dump(int indent) { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
 
-ArraySubscription::ArraySubscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript)
+Subscription::Subscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript)
     : Expression(nullptr)
     , array(std::move(array))
     , subscript(std::move(subscript)) {}
 
-LanguageType *ArraySubscription::languageType(const ExpressionGenContext &genContext) {
-    auto maybeArrayType = array->languageType(genContext);
-    auto arrayType = dynamic_cast<ArrayType *>(maybeArrayType);
-    if (arrayType == nullptr) {
-        throw CodegenError(fmt::format("Subscripting a non-array type {}", maybeArrayType->signature()));
+LanguageType *Subscription::languageType(const ExpressionGenContext &genContext) {
+    targetType = array->languageType(genContext);
+    auto arrayType = dynamic_cast<ArrayType *>(targetType);
+    auto ptrType = dynamic_cast<PointerType *>(targetType);
+    if (arrayType == nullptr && ptrType == nullptr) {
+        fc_assert(targetType != nullptr);
+        throw CodegenError(fmt::format("Subscripting a non-subscriptable type {}", targetType->signature()));
     }
 
     auto subscriptType = subscript->languageType(genContext);
@@ -815,10 +817,10 @@ LanguageType *ArraySubscription::languageType(const ExpressionGenContext &genCon
     if (intType == nullptr) {
         throw CodegenError(fmt::format("Subscripting array with a value of non-integer type {}", subscriptType->signature()));
     }
-    return arrayType->targetType;
+    return arrayType != nullptr ? arrayType->targetType : ptrType->targetType;
 }
 
-llvm::Value *ArraySubscription::getElementPtr(ExpressionGenContext &genContext) {
+llvm::Value *Subscription::getElementPtr(ExpressionGenContext &genContext) {
     auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(genContext.codegenContext.context), 0);
     auto idx = subscript->llvmValue(genContext);
     return genContext.builder.CreateGEP(
@@ -827,7 +829,6 @@ llvm::Value *ArraySubscription::getElementPtr(ExpressionGenContext &genContext) 
         { zero, idx });
 }
 
-llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
     // TODO: this doesn't work at all
 //    array->llvmType(genContext)->print(llvm::outs());
 //    llvm::outs() << '\n';
@@ -835,11 +836,12 @@ llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
 //    llvm::outs() << '\n';
 //    array->llvmValue(genContext)->getType()->print(llvm::outs());
 //    llvm::outs() << '\n';
+llvm::Value *Subscription::llvmValue(ExpressionGenContext &genContext) {
     auto gep = getElementPtr(genContext);
     return genContext.builder.CreateLoad(llvmType(genContext), gep);
 }
 
-std::string ArraySubscription::dump(int indent) { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
+std::string Subscription::dump(int indent) { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
 
 VariableDeclaration::VariableDeclaration(
     const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue

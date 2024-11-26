@@ -158,7 +158,7 @@ SizeofNode::SizeofNode(ASTType *targetType)
 DereferenceNode::DereferenceNode(std::unique_ptr<ASTNode> &&target)
     : target(std::move(target)) {}
 
-ArrayNthNode::ArrayNthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript)
+NthNode::NthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript)
     : array(std::move(array))
     , subscript(std::move(subscript)) {}
 

@@ -200,12 +200,12 @@ struct Dereference : Expression {
     std::string dump(int indent) override;
 };
 
-struct ArraySubscription : Expression {
+struct Subscription : Expression {
     std::unique_ptr<Expression> array;
     std::unique_ptr<Expression> subscript;
-    LanguageType *ptrType;
+    LanguageType *targetType = nullptr;
 
-    ArraySubscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript);
+    Subscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript);
 
     llvm::Value *getElementPtr(ExpressionGenContext &genContext);
 

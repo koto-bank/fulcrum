@@ -414,8 +414,8 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
         return std::make_unique<VariableAccess>(t->name);
     } else if (auto t = dynamic_cast<DereferenceNode *>(node.get()); t != nullptr) {
         return std::make_unique<Dereference>(getExpression(std::move(t->target)));
-    } else if (auto t = dynamic_cast<ArrayNthNode *>(node.get()); t != nullptr) {
-        return std::make_unique<ArraySubscription>(getExpression(std::move(t->array)),
+    } else if (auto t = dynamic_cast<NthNode *>(node.get()); t != nullptr) {
+        return std::make_unique<Subscription>(getExpression(std::move(t->array)),
                                                    getExpression(std::move(t->subscript)));
     } else if (auto t = dynamic_cast<VariableDeclarationNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableDeclaration>(
