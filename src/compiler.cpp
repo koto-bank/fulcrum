@@ -114,6 +114,8 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
 
             fc_assert(!nick.empty());
             for (auto &&f : m.functions) {
+                spdlog::info("Importing function {} from module {}", f.signature(), nick);
+                f.nameForLinker = f.name.join();
                 importNamed(nick, std::move(f), importTo.functions);
             }
             for (auto &&s : m.structs) {

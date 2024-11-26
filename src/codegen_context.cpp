@@ -225,12 +225,17 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceFulcrumFunction(F
         exprBody.push_back(getExpression(std::move(node)));
     }
 
-    auto funcName = fnNode.name;
-    return namedFunctions.emplace(funcName.join(),
+    auto funcName = fnNode.name.join();
+    auto callName = funcName;
+    if (!fnNode.nameForLinker.empty()) {
+        // hehe hack. It will surely bite us in the ass someday
+        callName = fnNode.nameForLinker;
+    }
+    return namedFunctions.emplace(funcName,
                                   std::make_unique<Function>(
                                       *this,
                                       module,
-                                      funcName.join(),
+                                      callName,
                                       exprArgs,
                                       getLanguageType(fnNode.returnType).value(),
                                       std::move(exprBody),
