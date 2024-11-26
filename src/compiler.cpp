@@ -1,26 +1,3 @@
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/Metadata.h>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/Verifier.h>
-
-#include <llvm/MC/TargetRegistry.h>
-
-#include <llvm/Pass.h>
-
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/FileUtilities.h>
-#include <llvm/Support/Program.h>
-#include <llvm/Support/TargetSelect.h>
-#include <llvm/Target/TargetMachine.h>
-#include <llvm/TargetParser/Host.h>
-
-#include <fmt/color.h>
-
-#include <args.hxx>
-
 #include <algorithm>
 #include <concepts>
 #include <fstream>
@@ -32,6 +9,28 @@
 #include <string>
 #include <tuple>
 #include <vector>
+
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Pass.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/FileUtilities.h>
+#include <llvm/Support/Program.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/TargetParser/Host.h>
+
+#include <fmt/color.h>
+
+#include <args.hxx>
+
+#include <spdlog/spdlog.h>
 
 #include "ast_type_storage.hpp"
 #include "c_header_parser.hpp"
@@ -80,7 +79,7 @@ using ImportedModules = std::unordered_map<std::string, FulcrumModule>;
 template <typename T>
 bool importNamed(const std::string &nick, T &&namedThing, std::vector<T> &importTo) {
     if (std::find_if(importTo.begin(), importTo.end(),
-                     [&namedThing](const auto &fn) { return fn.name == namedThing.name; })
+                     [&namedThing](const auto &n) { return n.name == namedThing.name; })
         != importTo.end()) {
         std::cerr << fmt::format("Duplicate import name {}\n", namedThing.name.join());
         return false;
