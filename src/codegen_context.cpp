@@ -28,11 +28,16 @@ Function::Function(
     std::vector<LanguageType *> argumentTypes;
     for (const auto &arg : arguments) {
         argumentNames.push_back(arg.name);
-        argumentTypes.push_back(arg.type);
+        if (auto at = dynamic_cast<ArrayType *>(arg.type); at != nullptr) {
+            // decay to pointer right away
+            auto ptrType = at->decay(context);
+            argumentTypes.push_back(ptrType);
+        } else {
+            argumentTypes.push_back(arg.type);
+        }
     }
 
     type = std::make_unique<FunctionType>(context, argumentTypes, returnType, isVariadic);
-    std::replace(name.begin(), name.end(), '/', '_');
 
     auto funcType = static_cast<llvm::FunctionType *>(type->llvmType());
     spdlog::info("Creating LLVM function with name {}", name);
@@ -71,11 +76,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     for (auto i = 0u; i < argumentNames.size(); i++) {
         auto arg = functionType()->arguments[i];
         auto varDef = genContext.insertFunctionArgument(argumentNames[i], arg);
-        if (dynamic_cast<ArrayType *>(arg->actualLanguageType()) != nullptr) {
-            genContext.builder.CreateConstGEP2_32(arg->actualLanguageType()->llvmType(), varDef->value, 0, 0);
-        } else {
-            genContext.builder.CreateStore(function->getArg(i), varDef->value);
-        }
+        genContext.builder.CreateStore(function->getArg(i), varDef->value);
     }
 
     generateExpressions(genContext, body);

@@ -666,7 +666,13 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
                                        ));
             }
         }
-        argValues.push_back(args[i]->llvmValue(genContext));
+        llvm::Value *value = args[i]->llvmValue(genContext);
+        // we have to decay array to pointer when passing it to a function, instead of storing its value
+        if (dynamic_cast<ArrayType *>(argType) != nullptr) {
+            value = genContext.builder.CreateConstInBoundsGEP2_64(args[i]->llvmType(genContext), value, 0u, 0u);
+            value->setName("array.decay");
+        }
+        argValues.push_back(value);
     }
 
     auto ret = genContext.builder.CreateCall(calledFunction->llvmFunction(), argValues);
@@ -722,9 +728,14 @@ LanguageType *VariableAccess::languageType(const ExpressionGenContext &genCont) 
 
         return currentType;
     } else { */
-        auto var = genCont.lookupVariable(name.join());
-        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name.join()));
-        return var->type;
+    auto var = genCont.lookupVariable(name.join());
+    if (var == nullptr) {
+        throw CodegenError(fmt::format("Variable {} not defined", name.join()));
+    }
+    if (auto at = dynamic_cast<ArrayType *>(var->type); at != nullptr) {
+        return at->decay(genCont.codegenContext);
+    }
+    return var->type;
 //    }
 }
 
@@ -872,7 +883,14 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
             genContext, initialValue.get(),
             fmt::format("Expected value for #{} to to be an expression, but it's a statement", name)
         );
-        genContext.builder.CreateStore(initialValue->llvmValue(genContext), varDef->value);
+
+        auto value = initialValue->llvmValue(genContext);
+        if (dynamic_cast<ArrayType *>(initialValType) != nullptr) {
+            // decay first, then store
+            value = genContext.builder.CreateConstInBoundsGEP2_64(initialValue->llvmType(genContext), value, 0u, 0u);
+        }
+
+        genContext.builder.CreateStore(value, varDef->value);
     }
 
     return nullptr;
