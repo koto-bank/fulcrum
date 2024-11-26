@@ -55,13 +55,6 @@ struct FloatType : LanguageType {
     std::string signature() override;
 };
 
-struct StringType : LanguageType {
-    StringType(CodegenContext &context);
-
-    llvm::Type *llvmType() override;
-    std::string signature() override;
-};
-
 struct AliasType : LanguageType {
     NamePath name;
     LanguageType *aliasTo;
@@ -99,13 +92,6 @@ struct UnionType : StructType {
     UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize);
 
     llvm::Type *llvmType() override;
-};
-
-struct CharType : LanguageType {
-    using LanguageType::LanguageType;
-
-    llvm::Type *llvmType() override;
-    std::string signature() override;
 };
 
 struct PointerType : LanguageType {

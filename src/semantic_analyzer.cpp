@@ -560,12 +560,6 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
     }
 }
 
-
-template<typename T, typename U, typename... Args>
-bool matches(const T& match, const U& first, const Args&... args) {
-    return match == first || (... || (match == args));
-}
-
 std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &form) {
 // can be ptr, array, basic or custom:
 // ptr: (ptr Type)
@@ -585,15 +579,12 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
             return module.types.getType<ASTFloatType>(32);
         } else if (sym == "f64") {
             return module.types.getType<ASTFloatType>(64);
-        } else if (matches(sym
-                           , "void"
-                           , "bool"
-                           , "char"
-                           , "str")) {
-            return module.types.getType<ASTBuiltinType>(std::move(sym.value()));
-        } else if (matches(sym.value()[0]
-                           , 'i'
-                           , 'u')) {
+        } else if (sym == "void") {
+            return module.types.getType<ASTVoidType>();
+        } else if (sym == "bool") {
+            return module.types.getType<ASTBoolType>();
+        } else if (sym.value()[0] == 'i'
+                   || sym.value()[0] == 'u') {
             auto intType = parseIntType(*this, sym.value());
             if (intType != std::nullopt) {
                 return intType;

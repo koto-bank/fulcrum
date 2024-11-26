@@ -148,14 +148,13 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<FloatType>("f64", FloatType::Bits::Double);
     emplaceType<VoidType>("void");
     emplaceType<BoolType>("bool");
-    emplaceType<IntegerType>("i8", 8, true);
+    auto i8 = emplaceType<IntegerType>("i8", 8, true);
     emplaceType<IntegerType>("u8", 8, false);
     emplaceType<IntegerType>("i32", 32, true);
     emplaceType<IntegerType>("u32", 32, false);
     emplaceType<IntegerType>("i64", 64, true);
     emplaceType<IntegerType>("u64", 64, false);
-    emplaceType<CharType>("char");
-    emplaceType<StringType>("str");
+    emplaceType<PointerType>("i8*", i8); // for C strings
 
     // Why do we need this?
     emplaceType<VAType>(VAType::Signature);
@@ -332,6 +331,10 @@ CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(cons
         return namedTypes[t->builtinName].get();
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type); t != nullptr) {
         return namedTypes[t->name.join()].get();
+    } else if (auto t = dynamic_cast<const ASTBoolType *>(type); t != nullptr) {
+        return namedTypes.at(t->builtinName).get();
+    } else if (auto t = dynamic_cast<const ASTVoidType *>(type); t != nullptr) {
+        return namedTypes.at(t->builtinName).get();
     } else if (auto t = dynamic_cast<const ASTPointerType *>(type); t != nullptr) {
         auto targetLangTypeOrError = getLanguageType(t->targetType);
         if (!targetLangTypeOrError) {
@@ -374,7 +377,7 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
     } else if (auto t = dynamic_cast<const FunctionNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const ConstantStringNode *>(node.get()); t != nullptr) {
-        return std::make_unique<StringConstant>(namedTypes.at("str").get(), t->value);
+        return std::make_unique<StringConstant>(namedTypes.at("i8*").get(), t->value);
     } else if (auto t = dynamic_cast<const ConstantIntNode *>(node.get()); t != nullptr) {
         auto tp = dynamic_cast<IntegerType *>(getLanguageType(t->intType).value());
         fc_assert(tp != nullptr);
