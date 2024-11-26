@@ -436,6 +436,19 @@ LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genC
     return ret;
 }
 
+LanguageType *FunctionCall::prognType(const ExpressionGenContext &genContext) const {
+    if (args.empty()) {
+        return genContext.codegenContext.emplaceType<VoidType>("void");
+    }
+    LanguageType *retType;
+    for (auto &arg : args) {
+        retType = arg->languageType(genContext);
+    }
+
+    fc_assert(retType != nullptr);
+    return retType;
+}
+
 LanguageType *FunctionCall::arithmeticsProcessorType(const ExpressionGenContext &genCont) const {
     if (args.size() == 0) { throw CodegenError(fmt::format("Expected at least 1 argument to {}, but got 0", name)); }
     if (name == "=" || name == "!=" || name[0] == '>' || name[0] == '<')
@@ -614,6 +627,17 @@ llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
     }
     return maybeVar->varAddress(genContext);
+}
+
+llvm::Value *FunctionCall::prognValue(ExpressionGenContext &genContext) {
+    if (args.empty()) {
+        return nullptr;
+    }
+    llvm::Value *val;
+    for (auto &a : args) {
+        val = a->llvmValue(genContext);
+    }
+    return val;
 }
 
 llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {

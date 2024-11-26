@@ -126,12 +126,14 @@ private:
     llvm::Value *whileProcessor(ExpressionGenContext &genContext);
     llvm::Value *boolProcessor(ExpressionGenContext &genContext);
     llvm::Value *addrOfProcessor(ExpressionGenContext &genContext);
+    llvm::Value *prognValue(ExpressionGenContext &genContext);
 
     LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *boolProcessorType(const ExpressionGenContext &genContext) const;
     LanguageType *addrOfProcessorType(const ExpressionGenContext &genContext) const;
+    LanguageType *prognType(const ExpressionGenContext &genContext) const;
 
 public:
     using Args = std::vector<std::unique_ptr<Expression>>;
@@ -171,6 +173,8 @@ public:
         { ">=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         { "<", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
         { "<=", { &FunctionCall::arithmeticsProcessor, &FunctionCall::arithmeticsProcessorType } },
+
+        { "progn", { &FunctionCall::prognValue, &FunctionCall::prognType } },
     };
 
     bool isTerminator() override;
