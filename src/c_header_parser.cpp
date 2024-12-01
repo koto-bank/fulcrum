@@ -352,7 +352,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                     macroCount++;
                 } else if (litParser.isFloatingLiteral()) {
                     llvm::APFloat val(0.0f);
-                    litParser.GetFloatValue(val);
+                    litParser.GetFloatValue(val, llvm::RoundingMode::Dynamic);
                     auto type = cModule.types.getType<ASTFloatType>(32);
 
                     // TODO: how to do double literals?
