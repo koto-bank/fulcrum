@@ -7,6 +7,9 @@
 #include "ast_type_storage.hpp"
 
 struct FulcrumModule {
+    FulcrumModule(ASTTypeStorage &typeStorage);
+    FulcrumModule(FulcrumModule &&other) = default;
+
     std::string name;
 
     struct Import {
@@ -22,5 +25,5 @@ struct FulcrumModule {
     std::vector<TypeAliasNode> typeAliases;
     std::vector<VariableDeclarationNode> globalVariables;
 
-    ASTTypeStorage types;
+    ASTTypeStorage &types;
 };
