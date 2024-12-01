@@ -107,6 +107,10 @@ struct StructNode : ASTNode {
     StructNode(NamePath &&name, Fields &&fields, bool isPublic);
 };
 
+struct EnumNode : ASTNode {
+    NamePath name;
+};
+
 struct UnionNode : StructNode {
     long long biggestSize = 0;
     using StructNode::StructNode;
