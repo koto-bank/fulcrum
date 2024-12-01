@@ -60,7 +60,6 @@ struct ASTNamedType : ASTType {
     std::string signature() const override;
 
     ASTNamedType(NamePath &&name);
-    ASTNamedType(const std::string &name);
 };
 
 struct ASTPointerType : ASTType {

@@ -595,7 +595,8 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
             }
             // Then it's smth like u666-MyType, that is, a custom type
         }
-        return module.types.getType<ASTNamedType>(std::move(sym.value()));
+        auto name = NamePath::create(std::move(sym.value())).value();
+        return module.types.getType<ASTNamedType>(std::move(name));
     } else {
         // ptr or array
         if (form.children.empty()) {

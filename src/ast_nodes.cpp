@@ -47,9 +47,6 @@ std::string ASTVoidType::signature() const {
 ASTNamedType::ASTNamedType(NamePath &&name)
     : name(std::move(name)) {}
 
-ASTNamedType::ASTNamedType(const std::string &name)
-    : name(NamePath::create(name).value()) {}
-
 std::string ASTNamedType::signature() const {
     return name.join();
 }
