@@ -81,7 +81,7 @@ bool importNamed(const std::string &nick, T &&namedThing, std::vector<T> &import
     if (std::find_if(importTo.begin(), importTo.end(),
                      [&namedThing](const auto &n) { return n.name == namedThing.name; })
         != importTo.end()) {
-        std::cerr << fmt::format("Duplicate import name {}\n", namedThing.name.join());
+        // spdlog::info("Duplicate import name {}", namedThing.name.join());
         return false;
     }
     if (!nick.empty()) {
@@ -141,7 +141,8 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
             auto m = sem.takeModule();
             if (m.name != importFrom.target) {
                 throw CodegenError(fmt::format(
-                                       "Module was imported as {}, but the name declared in the module was {}", importFrom.target,
+                                       "Module was imported as {}, but the name declared in the module was {}",
+                                       importFrom.target,
                                        m.name
                                        ));
             }

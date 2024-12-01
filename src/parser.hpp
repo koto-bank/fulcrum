@@ -15,28 +15,37 @@ public:
     bool parse(std::istream *stream);
     bool parse(const std::string &str);
 
-    struct Error {
-        const std::string sourceLine;
-        const std::string error;
-        const uint32_t line;
-        const uint32_t col;
+    struct Pos {
+        uint32_t line = 0u;
+        uint32_t col = 0u;
     };
 
     std::string currentFileName;
 
-    std::vector<Error> getErrors() const;
-    void dumpErrors() const;
-
     struct Expression {
-        Expression() = default;
-        Expression(Expression *parent);
+        struct Extent {
+            Pos begin;
+            Pos end;
+        };
+
+        Expression(Pos begin);
+        Expression(Expression *parent, Pos begin);
 
         Expression *parent = nullptr;
         std::unique_ptr<token::Token> token; // lists have nullptr, atoms -- a corresponding token
         std::vector<Expression> children;
+        Extent extent;
 
         void dump(uint32_t indent = 0u) const;
     };
+
+    struct Error {
+        const std::string error;
+        Pos pos;
+    };
+
+    std::vector<Error> getErrors() const;
+    void dumpErrors() const;
 
     std::unique_ptr<Expression> releaseSyntaxTree();
     const Expression *getSyntaxTree() const;
@@ -53,16 +62,15 @@ private:
     bool matchNextToken(token::Type expectedType);
     bool matchNextTokenAndPushAtom(token::Type expectedAtomType);
 
-    void pushExpression();
-    void popExpression();
+    void pushExpression(Pos start);
+    void popExpression(Pos end);
 
     std::unique_ptr<Expression> syntaxTree;
     Expression *currentExpression;
 
 // Errors and recovery:
     struct LParen {
-        uint32_t line;
-        uint32_t col;
+        Pos pos;
     };
 
     std::vector<LParen> openParens;

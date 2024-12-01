@@ -1,9 +1,10 @@
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 
 #include <fmt/format.h>
+
+#include <spdlog/spdlog.h>
 
 #include "assert.hpp"
 #include "parser.hpp"
@@ -20,15 +21,17 @@
 
 namespace {
 void printError(const std::string &fileName, const Parser::Error &e) {
-    std::cerr << fmt::format("{}:{}:{}: error: {}\n", fileName, e.line, e.col, e.error);
-    if (!e.sourceLine.empty()) {
-        std::cerr << e.sourceLine << '\n';
-    }
+    auto msg = fmt::format("{}:{}:{}: error: {}", fileName, e.pos.line, e.pos.col, e.error);
+    spdlog::error(msg);
 }
 }
 
-Parser::Expression::Expression(Parser::Expression *_parent)
-    : parent(_parent) {}
+Parser::Expression::Expression(Pos begin)
+    : extent{ .begin = begin } {}
+
+Parser::Expression::Expression(Parser::Expression *parent, Pos begin)
+    : parent(parent)
+    , extent{ .begin = begin } {}
 
 std::unique_ptr<Parser::Expression> Parser::releaseSyntaxTree() {
     return std::move(syntaxTree);
@@ -84,7 +87,7 @@ bool Parser::parse(const std::filesystem::path &path) {
     currentFileName = path;
     std::ifstream file(path);
     if (!file.is_open()) {
-        errors.push_back({ "", "Failed to open file", 0, 0 });
+        errors.push_back({ "Failed to open file", { 0u, 0u } });
         return false;
     }
     return process(&file);
@@ -93,7 +96,7 @@ bool Parser::parse(const std::filesystem::path &path) {
 bool Parser::process(std::istream *stream) {
     Lexer lexer;
     tokens = lexer.lex(stream);
-    syntaxTree = std::make_unique<Expression>();
+    syntaxTree = std::make_unique<Expression>(Pos { 0u, 0u });
     syntaxTree->children.clear();
     currentExpression = syntaxTree.get();
     nextToken = tokens.begin();
@@ -120,7 +123,7 @@ bool Parser::parseExpression() {
 bool Parser::parseStrayRParen() {
     auto save = nextToken;
     if (matchNextToken(token::Type::RParen)) {
-        errors.push_back({"", "Unmatched closing parenthesis", (*save)->line, (*save)->col });
+        errors.push_back({ "Unmatched closing parenthesis", { (*save)->line, (*save)->col } });
         return true;
     } else {
         return false;
@@ -132,16 +135,19 @@ bool Parser::parseList() {
     if (!matchNextToken(token::Type::LParen)) {
         return false;
     }
-    openParens.push_back({ (*save)->line, (*save)->col });
-    pushExpression();
+    Pos start { (*save)->line, (*save)->col };
+    openParens.push_back({ start });
+    pushExpression(start);
+
     while (save = nextToken, parseExpression());
+
     if (nextToken = save, !matchNextToken(token::Type::RParen)) {
         fc_assert(!openParens.empty());
         const auto& paren = openParens.back();
-        errors.push_back({ "", "Unmatched opening parenthesis", paren.line, paren.col });
+        errors.push_back({ "Unmatched opening parenthesis", { paren.pos.line, paren.pos.col } });
     }
     openParens.pop_back();
-    popExpression();
+    popExpression({ (*save)->line, (*save)->col }); // maybe error here
     return true;
 }
 
@@ -169,23 +175,24 @@ bool Parser::matchNextToken(token::Type expectedType) {
 bool Parser::matchNextTokenAndPushAtom(token::Type expectedAtomType) {
     if (nextToken != tokens.end()
         && (*nextToken)->type == expectedAtomType) {
-        pushExpression();
+        pushExpression({ (*nextToken)->line, (*nextToken)->col });
         currentExpression->token = std::move(*nextToken++);
-        popExpression();
+        popExpression({ (*nextToken)->line, (*nextToken)->col });
         return true;
     } else {
         return false;
     };
 }
 
-void Parser::pushExpression() {
+void Parser::pushExpression(Pos start) {
     fc_assert(currentExpression != nullptr);
-    currentExpression->children.emplace_back(currentExpression); // expression's parent
+    currentExpression->children.emplace_back(currentExpression, start); // expression's parent
     currentExpression = &currentExpression->children.back();
 }
 
-void Parser::popExpression() {
+void Parser::popExpression(Pos end) {
     fc_assert(currentExpression->parent != nullptr);
+    currentExpression->extent.end = end;
     currentExpression = currentExpression->parent;
 }
 
