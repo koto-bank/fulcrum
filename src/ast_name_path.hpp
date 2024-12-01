@@ -1,6 +1,6 @@
 #pragma once
 
-#include <optional>
+#include <expected>
 #include <string>
 #include <vector>
 
@@ -14,7 +14,7 @@ struct NamePath {
     // (+ user.stats.counter 1) ; path is ("counter" "stats" "user")
     // (let ((w (new SDL.window)) ...) ; path is ("window" "SDL")
 
-    static std::optional<NamePath> create(const std::string &symbolName);
+    static std::expected<NamePath, std::string> create(const std::string &symbolName);
     static NamePath create(const char *symbolName); // for built-in literal types
 
     std::string join() const;
