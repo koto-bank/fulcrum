@@ -134,9 +134,6 @@ struct FunctionNode : ASTNode {
 
     bool isVariadic;
 
-    std::string nameForLinker; // if present, used for linking. To make C functions link despite
-    // being prefixed with module name for compiler
-
     FunctionNode(NamePath &&name, ArgList &&arguments, ASTType *returnType,
                  Body &&body, bool isPublic, bool isVariadic);
 
