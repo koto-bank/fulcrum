@@ -150,6 +150,8 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<BoolType>("bool");
     auto i8 = emplaceType<IntegerType>("i8", 8, true);
     emplaceType<IntegerType>("u8", 8, false);
+    emplaceType<IntegerType>("i16", 16, true);
+    emplaceType<IntegerType>("u16", 16, false);
     emplaceType<IntegerType>("i32", 32, true);
     emplaceType<IntegerType>("u32", 32, false);
     emplaceType<IntegerType>("i64", 64, true);
