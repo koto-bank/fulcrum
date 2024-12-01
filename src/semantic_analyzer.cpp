@@ -71,6 +71,9 @@ std::optional<T> getInteger(const Parser::Expression &expr) {
 }
 }
 
+SemanticAnalyzer::SemanticAnalyzer(ASTTypeStorage &typeStorage)
+    : module(typeStorage) {}
+
 bool SemanticAnalyzer::run(Parser &_parser) {
     parser = &_parser;
 

@@ -92,13 +92,13 @@ bool importNamed(const std::string &nick, T &&namedThing, std::vector<T> &import
 }
 
 void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage &typeStorage) {
+    HeaderParser headerParser(typeStorage, compiler);
     for (auto &importFrom : importTo.imports) {
         if (importFrom.isCImport) {
             auto targetPath = tryToFindImport(importFrom.target, compiler);
             if (targetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find C include '{}'", importFrom.target));
 
             auto cImport = targetPath.value();
-            HeaderParser headerParser;
             auto res = headerParser.parseHeader(cImport, compiler, cImport.stem());
             if (!res) {
                 return;
@@ -144,7 +144,7 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
                     fmt::format("Could not parse module {} ({})", importFrom.target, targetPath.string())
                     );
             }
-            SemanticAnalyzer sem;
+            SemanticAnalyzer sem(typeStorage);
             res = sem.run(parser);
             if (res == false) {
                 sem.dumpErrors();
@@ -244,7 +244,7 @@ int Compiler::run(int argc, char *argv[]) {
         }
     }
 
-    FulcrumModule moduleAST;
+    ASTTypeStorage typeStorage;
     Parser parser;
     bool res = false;
     if (!fileArg) {
@@ -259,7 +259,7 @@ int Compiler::run(int argc, char *argv[]) {
         return 1;
     }
 
-    SemanticAnalyzer sem;
+    SemanticAnalyzer sem(typeStorage);
     res = sem.run(parser);
     if (res == false) {
         spdlog::error("Failed to perform semantic analysis of module {}", fileArg.Get());
@@ -269,7 +269,6 @@ int Compiler::run(int argc, char *argv[]) {
     moduleAST = sem.takeModule();
 
     // At this point we have correctly parsed AST, annotated with types
-    ASTTypeStorage typeStorage;
     processImports(moduleAST, *this, typeStorage);
 
     codegenCont.generate(std::move(moduleAST));

@@ -26,7 +26,6 @@
 
 #include "assert.hpp"
 #include "ast_nodes.hpp"
-#include "ast_type_storage.hpp"
 #include "c_header_parser.hpp"
 #include "codegen_context.hpp"
 #include "compiler.hpp"
@@ -326,8 +325,11 @@ uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, Coll
 }
 }
 
+HeaderParser::HeaderParser(ASTTypeStorage &typeStorage, const Compiler &c)
+    : compiler(c)
+    , cModule(typeStorage) {}
+
 bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler, const std::string& moduleName) {
-    cModule.name = moduleName;
     clang::CreateInvocationOptions ciOpts;
     ciOpts.VFS = nullptr;
     ciOpts.CC1Args = nullptr;
@@ -405,5 +407,3 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
 CModule HeaderParser::takeModule() {
     return std::move(cModule);
 }
-
-HeaderParser::~HeaderParser() = default;
