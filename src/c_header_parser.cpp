@@ -308,8 +308,10 @@ uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, Coll
             }
 
             if (toks.size() != 1) {
+                spdlog::warn("Skipping multi-token object-like macro {} (they are not supported yet)", macroName);
                 continue; // TODO: support more complex macro evaluation
             }
+
             auto tok = toks[0];
             switch (tok.getKind()) {
             case clang::tok::numeric_constant: {
