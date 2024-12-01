@@ -279,10 +279,18 @@ private:
     clang::Preprocessor &pp;
 };
 
-uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, CollectMacros &macroCollector, clang::CompilerInstance &ci) {
+uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, clang::CompilerInstance &ci) {
     uint32_t macroCount = 0u;
     for (auto &[macroName, md] : macroCollector.takeMacroDefinitions()) {
         const auto *mi = md->getMacroInfo();
+        auto namePathOrError = NamePath::create(macroName);
+        if (!namePathOrError) {
+            reportNamePathError(namePathOrError.error(), macroName);
+            continue;
+        }
+
+        auto namePath = namePathOrError.value();
+
         if (mi->isObjectLike()) {
             const auto &toks = mi->tokens();
 
@@ -299,7 +307,8 @@ uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, Coll
                 }
                 // TODO: wide strings, some other errors, idk, looks kinda brittle
 
-                auto varVal = VariableDeclarationNode(NamePath::create(std::move(macroName)).value(), typeStorage.getType<ASTIntegerType>(true, 8));
+                auto varVal = VariableDeclarationNode(std::move(namePath),
+                                                      cModule.types.getType<ASTIntegerType>(true, 8));
                 varVal.initialValue = std::make_unique<ConstantStringNode>(sp.GetString().str());
                 cModule.globalVariables.push_back(std::move(varVal));
                 macroCount++;
@@ -335,16 +344,20 @@ uint32_t processParsedMacros(ASTTypeStorage &typeStorage, CModule &cModule, Coll
                 if (litParser.isIntegerLiteral()) {
                     llvm::APInt val(64, 0);
                     litParser.GetIntegerValue(val);
-                    auto varVal = VariableDeclarationNode(NamePath::create(std::move(macroName)).value(), typeStorage.getType<ASTIntegerType>(!litParser.isUnsigned, 64));
-                    varVal.initialValue = std::make_unique<ConstantIntNode>(typeStorage.getType<ASTIntegerType>(!litParser.isUnsigned, 64), val.getLimitedValue());
+                    auto type = cModule.types.getType<ASTIntegerType>(!litParser.isUnsigned, 64);
+
+                    auto varVal = VariableDeclarationNode(std::move(namePath), type);
+                    varVal.initialValue = std::make_unique<ConstantIntNode>(type, val.getLimitedValue());
                     cModule.globalVariables.push_back(std::move(varVal));
                     macroCount++;
                 } else if (litParser.isFloatingLiteral()) {
                     llvm::APFloat val(0.0f);
                     litParser.GetFloatValue(val);
+                    auto type = cModule.types.getType<ASTFloatType>(32);
+
                     // TODO: how to do double literals?
-                    auto varVal = VariableDeclarationNode(NamePath::create(std::move(macroName)).value(), typeStorage.getType<ASTFloatType>(32));
-                    varVal.initialValue = std::make_unique<ConstantFloatNode>(typeStorage.getType<ASTFloatType>(32), val.convertToFloat());
+                    auto varVal = VariableDeclarationNode(std::move(namePath), type);
+                    varVal.initialValue = std::make_unique<ConstantFloatNode>(type, val.convertToFloat());
                     cModule.globalVariables.push_back(std::move(varVal));
                     macroCount++;
                 }
@@ -366,13 +379,15 @@ HeaderParser::HeaderParser(ASTTypeStorage &typeStorage, const Compiler &c)
     : compiler(c)
     , cModule(typeStorage) {}
 
-bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler, const std::string& moduleName) {
+bool HeaderParser::parseHeader(const std::filesystem::path &path) {
+    fc_assert(moduleTaken == false);
+
     clang::CreateInvocationOptions ciOpts;
     ciOpts.VFS = nullptr;
     ciOpts.CC1Args = nullptr;
     ciOpts.RecoverOnError = true;
 
-    spdlog::info("Processing C header {}", moduleName);
+    spdlog::info("Processing C header {}", path.string());
 
     ciOpts.Diags = nullptr; // TODO: implement our diagnostics consumer,
     // because the docs say: Receives diagnostics encountered while parsing command-line flags.
@@ -393,8 +408,8 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
 
     // Read file to be processed
     auto fs = llvm::vfs::createPhysicalFileSystem();
-    auto contents = fs->getBufferForFile(path).get()->getBuffer().str();
-    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(contents, path);
+    auto contents = fs->getBufferForFile(path.string()).get()->getBuffer().str();
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(contents, path.string());
 
     ci->getPreprocessorOpts().addRemappedFile(
         ci->getFrontendOpts().Inputs[0].getFile(), buffer.get());
@@ -434,13 +449,15 @@ bool HeaderParser::parseHeader(const std::string &path, const Compiler &compiler
                                  llvm::toString(std::move(err)));
     }
 
-    auto macroNum = processParsedMacros(cModule.types, cModule, *macroCollectorPtr, *clang);
+    auto macroNum = processParsedMacros(cModule, *macroCollectorPtr, *clang);
 
-    spdlog::info("Parsed {} macros from file {}", macroNum,  path);
+    spdlog::info("Parsed {} macros from file {}", macroNum,  path.string());
     (void) buffer.release(); // TODO: do we really need to do this?
     return true;
 }
 
 CModule HeaderParser::takeModule() {
+    fc_assert(moduleTaken == false);
+    moduleTaken = true;
     return std::move(cModule);
 }

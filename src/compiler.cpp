@@ -92,43 +92,29 @@ bool importNamed(const std::string &nick, T &&namedThing, std::vector<T> &import
 }
 
 void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage &typeStorage) {
+    bool hasCIncludes = false;
     HeaderParser headerParser(typeStorage, compiler);
+
     for (auto &importFrom : importTo.imports) {
         if (importFrom.isCImport) {
             auto targetPath = tryToFindImport(importFrom.target, compiler);
-            if (targetPath == std::nullopt) throw CodegenError(fmt::format("Failed to find C include '{}'", importFrom.target));
+            if (targetPath == std::nullopt) {
+                throw CodegenError(fmt::format("Failed to find C include '{}'", importFrom.target));
+            }
 
-            auto cImport = targetPath.value();
-            auto res = headerParser.parseHeader(cImport, compiler, cImport.stem());
+            auto headerPath = targetPath.value();
+
+            auto res = headerParser.parseHeader(headerPath);
             if (!res) {
+                spdlog::error("Failed to parse C import {}", headerPath.string());
                 return;
             }
-            auto m = headerParser.takeModule();
-            auto nick = importFrom.nickname;
-            if (nick.empty()) {
-                nick = m.name;
-            }
 
-            m.types.addNick(nick);
-            typeStorage.merge(std::move(m.types));
-
-            fc_assert(!nick.empty());
-            spdlog::info("Processing module {}", m.name);
-            for (auto &&f : m.functions) {
-                spdlog::info("Importing function {} from module {}", f.signature(), nick);
-                f.nameForLinker = f.name.join();
-                importNamed(nick, std::move(f), importTo.functions);
-            }
-            for (auto &&s : m.structs) {
-                importNamed(nick, std::move(s), importTo.structs);
-            }
-            for (auto &&t : m.typeAliases) {
-                importNamed(nick, std::move(t), importTo.typeAliases);
-            }
-            for (auto &&v : m.globalVariables) {
-                importNamed(nick, std::move(v), importTo.globalVariables);
-            }
+            auto name = headerPath.stem().string();
+            spdlog::info("Processing C header {}", name);
+            hasCIncludes = true;
         } else {
+            // probably won't work as expected
             auto maybeTargetPath = tryToFindImport(importFrom.target, compiler);
             if (maybeTargetPath == std::nullopt) {
                 // TODO: replace with std::expected
@@ -178,10 +164,27 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
             for (auto &&v : m.globalVariables) {
                 importNamed(nick, std::move(v), importTo.globalVariables);
             }
-
-            m.types.addNick(nick);
-            typeStorage.merge(std::move(m.types));
         }
+    }
+
+    if (!hasCIncludes) {
+        return;
+    }
+
+    auto m = headerParser.takeModule();
+    for (auto &&f : m.functions) {
+        if (importNamed("", std::move(f), importTo.functions)) {
+            spdlog::info("Imported C function {}", importTo.functions.back().signature());
+        }
+    }
+    for (auto &&s : m.structs) {
+        importNamed("", std::move(s), importTo.structs);
+    }
+    for (auto &&t : m.typeAliases) {
+        importNamed("", std::move(t), importTo.typeAliases);
+    }
+    for (auto &&v : m.globalVariables) {
+        importNamed("", std::move(v), importTo.globalVariables);
     }
 }
 
@@ -266,7 +269,7 @@ int Compiler::run(int argc, char *argv[]) {
         sem.dumpErrors();
         return 1;
     }
-    moduleAST = sem.takeModule();
+    FulcrumModule moduleAST(sem.takeModule());
 
     // At this point we have correctly parsed AST, annotated with types
     processImports(moduleAST, *this, typeStorage);

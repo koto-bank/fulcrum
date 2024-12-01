@@ -3,23 +3,20 @@
   (import :c "SDL2/SDL_video.h")
   (import :c "stdio.h"))
 
-(struct Mouse
-  (enum Buttons
-    (left 1u)
-    (right (ash 1u 1u))
-    (middle (ash 1u 2u)))
-  (x u32 0u)
-  (y u32 0u)
-  (buttons u32 0u))
-
-(fn main i64 ()
-  (printf "INIT_TIMER %d\n" SDL_INIT_TIMER)
-  (printf "INIT_AUTDIO %d\n" SDL_INIT_AUDIO)
-  (printf "INIT_EVERYTHING %d\n" SDL_INIT_EVERYTHING)
-  (var window (ptr SDL_Window))
-  (var surface (ptr SDL_Surface))
-  (if (< 0 (SDL_Init SDL_INIT_VIDEO))
-      (do
-       (puts "Failed to initialize")
-       (return 1)))
+(fn main i32 ()
+  (if (< 0 (SDL_Init 0x00000020u)) ; for SDL_INIT_VIDEO (we don't have even automatic upcasts yet)
+       (puts "Failed to initialize"))
+  (var event SDL_Event)
+  (var window (ptr SDL_Window)
+    (SDL_CreateWindow "Hello from Fulcrum"
+                       500 ; pos x
+                       500 ; pos y
+                       800 ; width
+                       600 ; height
+                       0u))
+  (SDL_ShowWindow window)
+  (while (> (SDL_PollEvent (addr-of event)) 0)
+    (SDL_Delay 100u))
+  (SDL_DestroyWindow window)
+  (SDL_Quit)
   (return 0))

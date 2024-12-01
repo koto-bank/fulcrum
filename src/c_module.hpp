@@ -8,8 +8,6 @@
 #include "ast_type_storage.hpp"
 
 struct CModule {
-    std::string name; // file name without extension, e.g. 'stdio.h' -> 'stdio'
-                      // name is used when no nickname is specified
     CModule(ASTTypeStorage &typeStorage);
 
     std::vector<FunctionNode> functions;
