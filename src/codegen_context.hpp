@@ -113,6 +113,7 @@ struct CodegenContext {
     template <typename T>
     using CodegenResult = std::expected<T *, CodegenError>;
 
+    CodegenResult<LanguageType> getNamedType(const std::string &name) const;
     CodegenResult<LanguageType> getLanguageType(const ASTType *type);
     std::unique_ptr<Expression> getExpression(std::unique_ptr<ASTNode> &&node);
 

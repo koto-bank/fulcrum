@@ -40,7 +40,6 @@ Function::Function(
     type = std::make_unique<FunctionType>(context, argumentTypes, returnType, isVariadic);
 
     auto funcType = static_cast<llvm::FunctionType *>(type->llvmType());
-    spdlog::info("Creating LLVM function with name {}", name);
     function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, name.data(), module);
 
     for (auto i = 0u; i < function->arg_size(); i++) {
@@ -197,7 +196,11 @@ CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
         return std::unexpected(CodegenError(fmt::format("Global variable with name {} already exists", name)));
     }
 
-    auto varDef = std::make_unique<VariableDefinition>(varNode.name.join(), getLanguageType(varNode.type).value());
+    auto type = getLanguageType(varNode.type);
+    if (!type) {
+        return std::unexpected(type.error());
+    }
+    auto varDef = std::make_unique<VariableDefinition>(varNode.name.join(), *type);
 
     if (varNode.initialValue != nullptr) {
         auto expr = getExpression(std::move(varNode.initialValue));
@@ -217,9 +220,18 @@ CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
 
 CodegenContext::CodegenResult<Function> CodegenContext::emplaceFulcrumFunction(FunctionNode &&fnNode) {
     // TODO: already existing functions?
+    auto funcName = fnNode.name.join();
+    if (namedFunctions.contains(funcName)) {
+        return namedFunctions.at(funcName).get();
+    }
+
     Function::Args exprArgs;
     for (auto &[name, astType] : fnNode.arguments) {
-        exprArgs.push_back({ name, getLanguageType(astType).value() });
+        auto type = getLanguageType(astType);
+        if (!type) {
+            return std::unexpected(type.error());
+        }
+        exprArgs.push_back({ name, *type });
     }
 
     Function::Body exprBody;
@@ -282,19 +294,23 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
     }
 
     // Now insert all alias types
-    for (auto &aliasNode : fulcrumModule.typeAliases)
+    for (auto &aliasNode : fulcrumModule.typeAliases) {
         emplaceAliasType(std::move(aliasNode));
+    }
 
     // Now fill structure type fields, which could possibly refer
     // to other structures or aliases
-    for (auto &structNode : fulcrumModule.structs)
+    for (auto &structNode : fulcrumModule.structs) {
         fillStructTypeFields(std::move(structNode));
+    }
 
-    for (auto &globalVar : fulcrumModule.globalVariables)
+    for (auto &globalVar : fulcrumModule.globalVariables) {
         emplaceGlobalVar(std::move(globalVar));
+    }
 
-    for (auto &function : fulcrumModule.functions)
+    for (auto &function : fulcrumModule.functions) {
         emplaceFulcrumFunction(std::move(function));
+    }
 }
 
 void CodegenContext::generate(CModule &&cModule) {
@@ -322,20 +338,39 @@ void CodegenContext::generate(CModule &&cModule) {
     }
 }
 
+CodegenContext::CodegenResult<LanguageType> CodegenContext::getNamedType(const std::string &name) const {
+    if (!namedTypes.contains(name)) {
+        spdlog::error("Can't find type with name {}", name);
+        return std::unexpected(CodegenError(fmt::format("Can't find type with name {}", name)));
+    }
+    return namedTypes.at(name).get();
+}
+
 CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(const ASTType *type) {
     if (auto t = dynamic_cast<const ASTBuiltinType *>(type); t != nullptr) {
-        fc_assert(namedTypes.contains(t->builtinName));
-        return namedTypes.at(t->builtinName).get();
+        auto ret = getNamedType(t->builtinName);
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTIntegerType *>(type); t != nullptr) {
-        return namedTypes.at(t->builtinName).get();
+        auto ret = getNamedType(t->builtinName);
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTFloatType *>(type); t != nullptr) {
-        return namedTypes.at(t->builtinName).get();
+        auto ret = getNamedType(t->builtinName);
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type); t != nullptr) {
-        return namedTypes[t->name.join()].get();
+        auto ret = getNamedType(t->name.join());
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTBoolType *>(type); t != nullptr) {
-        return namedTypes.at(t->builtinName).get();
+        auto ret = getNamedType(t->builtinName);
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTVoidType *>(type); t != nullptr) {
-        return namedTypes.at(t->builtinName).get();
+        auto ret = getNamedType(t->builtinName);
+        fc_assert(ret != nullptr);
+        return ret;
     } else if (auto t = dynamic_cast<const ASTPointerType *>(type); t != nullptr) {
         auto targetLangTypeOrError = getLanguageType(t->targetType);
         if (!targetLangTypeOrError) {
