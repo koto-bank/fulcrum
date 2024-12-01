@@ -5,46 +5,46 @@
 TEST(ast_name_path, error_periods) {
     std::string tok = "a.b..c.d";
     auto res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 
     tok = "a..b.c";
     res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 
     tok = "..a.b";
     res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 
     tok = "a..b";
     res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 
     tok = "a..";
     res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 
     tok = "..";
     res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 }
 
 TEST(ast_name_path, error_empty_string) {
     const std::string tok = "";
     auto res = NamePath::create(tok);
-    EXPECT_EQ(res, std::nullopt);
+    EXPECT_FALSE(res.has_value());
 }
 
 TEST(ast_name_path, valid) {
     std::string tok = "a";
     auto res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     auto &name = res.value();
     EXPECT_EQ(name.size(), 1);
     EXPECT_EQ(name.getPath()[0], "a");
 
     tok = "a.b";
     res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     name = res.value();
     EXPECT_EQ(name.size(), 2);
     EXPECT_EQ(name.getPath()[0], "b");
@@ -52,7 +52,7 @@ TEST(ast_name_path, valid) {
 
     tok = "a.b.c";
     res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     name = res.value();
     EXPECT_EQ(name.size(), 3);
     EXPECT_EQ(name.getPath()[0], "c");
@@ -61,14 +61,14 @@ TEST(ast_name_path, valid) {
 
     tok = "long-name";
     res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     name = res.value();
     EXPECT_EQ(name.size(), 1);
     EXPECT_EQ(name.getPath()[0], "long-name");
 
     tok = "some-name.some-field.other-field";
     res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     name = res.value();
     EXPECT_EQ(name.size(), 3);
     EXPECT_EQ(name.getPath()[0], "other-field");
@@ -77,7 +77,7 @@ TEST(ast_name_path, valid) {
 
     tok = "some.n.ame.so.m.e";
     res = NamePath::create(tok);
-    EXPECT_NE(res, std::nullopt);
+    EXPECT_TRUE(res.has_value());
     name = res.value();
     EXPECT_EQ(name.size(), 6);
     EXPECT_EQ(name.getPath()[0], "e");

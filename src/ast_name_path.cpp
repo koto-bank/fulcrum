@@ -3,12 +3,12 @@
 #include "assert.hpp"
 #include "ast_name_path.hpp"
 
-std::optional<NamePath> NamePath::create(const std::string &symbolName) {
+std::expected<NamePath, std::string> NamePath::create(const std::string &symbolName) {
     if (symbolName.empty()
         || symbolName.front() == '.'
         || symbolName.back() == '.')
     {
-        return std::nullopt;
+        return std::unexpected("Bad name to create namepath");
     }
 
     auto start = symbolName.begin();
@@ -19,7 +19,7 @@ std::optional<NamePath> NamePath::create(const std::string &symbolName) {
         if (*end == '.') {
             if (periodEncountered) {
                 // two periods in a row
-                return std::nullopt;
+                return std::unexpected("Two periods in a row");
             }
             periodEncountered = true;
             result.path.emplace_back(start, end);
