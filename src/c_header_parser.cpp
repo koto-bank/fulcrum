@@ -32,6 +32,10 @@
 #include "types.hpp"
 
 namespace {
+inline void reportNamePathError(const std::string& error, const std::string &name) {
+    spdlog::error("Failed to create name path for symbol '{}', reason: {}", name, error);
+}
+
 void disableUnusedCompilerOptions(clang::CompilerInvocation &ci) {
     ci.getFrontendOpts().DisableFree = false;
     ci.getLangOpts().CommentOpts.ParseAllComments = true;
@@ -82,9 +86,11 @@ void disableUnusedCompilerOptions(clang::CompilerInvocation &ci) {
     ci.getLangOpts().XRayNeverInstrumentFiles.clear();
 }
 
-ASTType * qualTypeToASTType(const clang::QualType &qualType, CModule &cModule, const clang::ASTContext *ctx) {
+ASTType * qualTypeToASTType(const clang::QualType &qualType,
+                            CModule &cModule,
+                            const clang::ASTContext *ctx) {
     if (qualType.isNull()) {
-        spdlog::info("qualType contains nullptr");
+        spdlog::error("qualType contains nullptr");
         // why can this happen? is this a error?
         return nullptr;
     }
@@ -117,13 +123,35 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType, CModule &cModule, c
         // ..?
         spdlog::info("Array type {} is unsupported", qualType.getAsString());
         return nullptr;
-    } else if (qualType->isStructureType()) {
-        auto rt = qualType->getAsRecordDecl();
+    } else if (qualType->isRecordType()) {
+        auto rt = qualType->getAsTagDecl();
         fc_assert(rt != nullptr);
         auto name = rt->getNameAsString();
-        return cModule.types.getType<ASTNamedType>(name);
+        if (name.empty()) {
+            if (rt->isEmbeddedInDeclarator()) {
+                auto typedefDeclType = rt->getTypeForDecl();
+                auto qt = clang::QualType(typedefDeclType, 0u);
+                name = qt.getAsString();
+                spdlog::debug("Anon struct typedefd as {}", name);
+            } else {
+                // shouldn't happen. probably?
+                fc_unreachable();
+            }
+        }
+        auto namePath = NamePath::create(name).value();
+        return cModule.types.getType<ASTNamedType>(std::move(namePath));
+    } else if (qualType->isFunctionProtoType()) {
+        auto ft = qualType->getAs<clang::FunctionProtoType>();
+        ASTFunctionType::ArgTypes argTypes;
+        for (auto &a : ft->getParamTypes()) {
+            argTypes.push_back(qualTypeToASTType(a, cModule, ctx));
+        }
+
+        auto retType = qualTypeToASTType(ft->getReturnType(), cModule, ctx);
+
+        return cModule.types.getType<ASTFunctionType>(std::move(argTypes), retType);
     } else {
-        spdlog::info("Unsupported type '{}'", qualType.getAsString());
+        spdlog::warn("Unsupported type '{}'", qualType.getAsString());
         return nullptr;
     }
 }
@@ -146,11 +174,14 @@ public:
         context = &ctx;
     }
 
-    bool VisitRecordDecl(clang::RecordDecl *d) {
-        StructNode s;
-        s.name.add(d->getQualifiedNameAsString());
-        spdlog::info("Record with name {}", s.name.join());
-        cModule.structs.push_back(std::move(s));
+    bool VisitTagDecl(clang::TagDecl *td) {
+        if (td->isRecord()) {
+            StructNode s;
+            s.name.add(td->getQualifiedNameAsString());
+            cModule.structs.push_back(std::move(s));
+        } else if (td->isEnum()) {
+            // TODO: enum support
+        }
         return true;
     }
 
@@ -165,21 +196,25 @@ public:
             auto param = d->getParamDecl(i);
             auto argType = qualTypeToASTType(param->getType(), cModule, context);
             if (argType == nullptr) {
-                spdlog::warn("Couldn't get type for argument #{} of function {}, skipping", i, name);
-                goto skipFn;
+                spdlog::warn("Failed to get type for argument #{} for function {}, skipping it", i, name);
+                return true;
             }
             args.push_back({ param->getNameAsString(), argType });
 
         }
 
-        cModule.functions.push_back(FunctionNode(NamePath::create(name).value(),
+        auto namePathOrError = NamePath::create(name);
+        if (!namePathOrError) {
+            reportNamePathError(namePathOrError.error(), name);
+            return false;
+        }
+        auto namePath = namePathOrError.value();
+        cModule.functions.push_back(FunctionNode(std::move(namePath),
                                                  std::move(args),
                                                  retType,
                                                  {},
                                                  true,
                                                  d->isVariadic()));
-
-        skipFn:
         return true;
     }
 
