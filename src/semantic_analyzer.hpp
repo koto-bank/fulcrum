@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "ast_nodes.hpp"
+#include "ast_type_storage.hpp"
 #include "fulcrum_module.hpp"
 #include "parser.hpp"
 
@@ -13,6 +14,8 @@
 */
 
 struct SemanticAnalyzer {
+    SemanticAnalyzer(ASTTypeStorage &typeStorage);
+
     bool run(Parser &parser);
 
     FulcrumModule takeModule();
@@ -43,7 +46,7 @@ struct SemanticAnalyzer {
     std::vector<Error> getErrors() const;
     void dumpErrors() const;
 
-    Parser *parser {};
+    Parser *parser = nullptr;
     FulcrumModule module;
     std::vector<Error> errors;
 };
