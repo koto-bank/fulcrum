@@ -18,19 +18,19 @@ Function::Function(
     llvm::Module &module,
     const std::string &name_,
     Args &&arguments,
-    LanguageType *returnType,
+    const LanguageType *returnType,
     Body &&body,
     bool isPublic,
     bool isVariadic)
     : isPublic(isPublic)
     , name(name_)
     , body(std::move(body)) {
-    std::vector<LanguageType *> argumentTypes;
+    std::vector<const LanguageType *> argumentTypes;
     for (auto &&arg : arguments) {
         argumentNames.push_back(arg.name);
-        if (auto at = dynamic_cast<ArrayType *>(arg.type); at != nullptr) {
+        if (auto at = dynamic_cast<const ArrayType *>(arg.type); at != nullptr) {
             // decay to pointer right away
-            auto ptrType = at->decay(context);
+            auto ptrType = at->decay();
             argumentTypes.push_back(ptrType);
         } else {
             argumentTypes.push_back(arg.type);
@@ -143,31 +143,31 @@ const char *StackedCodegenErrors::whatIndented(int indent) const {
 CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &context)
     : context(context),
       module(moduleName, context) {
-    emplaceType<FloatType>("f32", FloatType::Bits::Float);
-    emplaceType<FloatType>("f64", FloatType::Bits::Double);
-    emplaceType<VoidType>("void");
-    emplaceType<BoolType>("bool");
-    auto i8 = emplaceType<IntegerType>("i8", 8, true);
-    emplaceType<IntegerType>("u8", 8, false);
-    emplaceType<IntegerType>("i16", 16, true);
-    emplaceType<IntegerType>("u16", 16, false);
-    emplaceType<IntegerType>("i32", 32, true);
-    emplaceType<IntegerType>("u32", 32, false);
-    emplaceType<IntegerType>("i64", 64, true);
-    emplaceType<IntegerType>("u64", 64, false);
-    emplaceType<PointerType>("i8*", i8); // for C strings
+    emplaceType<FloatType>(FloatType::Bits::Float);
+    emplaceType<FloatType>(FloatType::Bits::Double);
+    voidType = emplaceType<VoidType>();
+    boolType = emplaceType<BoolType>();
+    auto i8 = emplaceType<IntegerType>(8, true);
+    emplaceType<IntegerType>(8, false);
+    emplaceType<IntegerType>(16, true);
+    emplaceType<IntegerType>(16, false);
+    emplaceType<IntegerType>(32, true);
+    emplaceType<IntegerType>(32, false);
+    emplaceType<IntegerType>(64, true);
+    emplaceType<IntegerType>(64, false);
+    emplaceType<PointerType>(i8); // for C strings
 
     // Why do we need this?
-    emplaceType<VAType>(VAType::Signature);
+    emplaceType<VAType>();
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(StructNode &&structNode) {
     auto name = structNode.name.join();
     if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
-        return emplaceType<UnionType>(name, structNode.name, structNode.isPublic);
+        return emplaceType<UnionType>(structNode.name, structNode.isPublic);
     } else {
-        return emplaceType<StructType>(name, structNode.name, structNode.isPublic);
+        return emplaceType<StructType>(structNode.name, structNode.isPublic);
     }
 }
 
@@ -175,18 +175,18 @@ CodegenContext::CodegenResult<StructType> CodegenContext::emplaceCStructType(Str
     auto name = structNode.name.join();
     if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
-        return emplaceType<UnionType>(name, structNode.name, u->biggestSize);
+        return emplaceType<UnionType>(structNode.name, u->biggestSize);
     } else {
-        return emplaceType<StructType>(name, structNode.name, structNode.isPublic);
+        return emplaceType<StructType>(structNode.name, structNode.isPublic);
     }
 }
 
 CodegenContext::CodegenResult<AliasType> CodegenContext::emplaceAliasType(TypeAliasNode &&aliasNode) {
-    return emplaceType<AliasType>(aliasNode.name.join(), aliasNode.name, getLanguageType(aliasNode.target).value());
+    return emplaceType<AliasType>(aliasNode.name, getLanguageType(aliasNode.target).value());
 }
 
 CodegenContext::CodegenResult<AliasType> CodegenContext::emplaceCAliasType(TypeAliasNode &&aliasNode) {
-    return emplaceType<AliasType>(aliasNode.name.join(), aliasNode.name, getLanguageType(aliasNode.target).value());
+    return emplaceType<AliasType>(aliasNode.name, getLanguageType(aliasNode.target).value());
 }
 
 CodegenContext::CodegenResult<VariableDefinition>
@@ -280,10 +280,11 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceCFunction(Functio
 void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
     StructType::Fields exprFields;
     for (auto &[name, astType] : structNode.fields) {
-        exprFields.emplace_back(name, getLanguageType(astType).value());
+        exprFields.push_back({ name, getLanguageType(astType).value() });
     }
 
-    auto structType = static_cast<StructType *>(namedTypes.at(structNode.name.join()).get());
+    auto structType = dynamic_cast<StructType *>(namedTypes.at(structNode.name.join()).get());
+    fc_assert(structType != nullptr);
     structType->fillFields(exprFields);
 }
 
@@ -376,26 +377,20 @@ CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(cons
         if (!targetLangTypeOrError) {
             return targetLangTypeOrError;
         }
-        auto pointeeName = targetLangTypeOrError.value()->signature();
-        auto ptrName = pointeeName + "*";
-        return emplaceType<PointerType>(ptrName, targetLangTypeOrError.value());
+        return emplaceType<PointerType>(targetLangTypeOrError.value());
     } else if (auto t = dynamic_cast<const ASTArrayType *>(type); t != nullptr) {
         auto targetLangTypeOrError = getLanguageType(t->targetType);
         if (!targetLangTypeOrError) {
             return targetLangTypeOrError;
         }
-        auto pointeeName = targetLangTypeOrError.value()->signature();
-        auto arrName = fmt::format("{}[{}]", pointeeName, t->size);
-        return emplaceType<ArrayType>(arrName, targetLangTypeOrError.value(), t->size);
+        return emplaceType<ArrayType>(targetLangTypeOrError.value(), t->size);
     } else if (auto t = dynamic_cast<const ASTFunctionType *>(type); t != nullptr) {
-        std::vector<LanguageType *> exprArgs;
+        std::vector<const LanguageType *> exprArgs;
         for (const auto &astType : t->argumentTypes) {
             exprArgs.emplace_back(getLanguageType(astType).value());
         }
         auto retType = getLanguageType(t->returnType);
-        return emplaceType<FunctionType>(
-            FunctionType::signatureFrom(exprArgs, retType.value()),
-            exprArgs, retType.value(), false);
+        return emplaceType<FunctionType>(exprArgs, retType.value(), false);
     } else {
         // new type, unsupported above?
         fc_unreachable();
@@ -415,13 +410,13 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
     } else if (auto t = dynamic_cast<const ConstantStringNode *>(node.get()); t != nullptr) {
         return std::make_unique<StringConstant>(namedTypes.at("i8*").get(), t->value);
     } else if (auto t = dynamic_cast<const ConstantIntNode *>(node.get()); t != nullptr) {
-        auto tp = dynamic_cast<IntegerType *>(getLanguageType(t->intType).value());
+        auto tp = dynamic_cast<const IntegerType *>(getLanguageType(t->intType).value());
         fc_assert(tp != nullptr);
         return t->isSigned
             ? std::make_unique<IntegerConstant>(tp, std::get<int64_t>(t->value))
             : std::make_unique<IntegerConstant>(tp, std::get<uint64_t>(t->value));
     } else if (auto t = dynamic_cast<const ConstantFloatNode *>(node.get()); t != nullptr) {
-        auto tp = dynamic_cast<FloatType *>(getLanguageType(t->floatType).value());
+        auto tp = dynamic_cast<const FloatType *>(getLanguageType(t->floatType).value());
         if (tp->bits == FloatType::Bits::Float) {
             return std::make_unique<FloatConstant>(tp, static_cast<float>(t->value));
         } else {

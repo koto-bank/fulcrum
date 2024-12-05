@@ -22,15 +22,11 @@ protected:
 
 public:
     // Used for allocating variables of the type
-    virtual llvm::Type *llvmType() = 0;
+    virtual llvm::Type *llvmType() const = 0;
 
-    // Used for accessing variables of the type
-    // For most types, same as llvmType, for arrays it returns ptr
-    virtual llvm::Type* llvmTypeAccess();
-    virtual std::string signature() = 0;
-    virtual LanguageType *actualLanguageType();
+    virtual std::string signature() const = 0;
 
-    virtual bool assignable(LanguageType *other) const;
+    virtual bool assignable(const LanguageType *other) const;
 
     LanguageType(CodegenContext &context);
 
@@ -43,8 +39,8 @@ struct IntegerType : LanguageType {
 
     IntegerType(CodegenContext &context, unsigned int bits, bool isSigned);
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 };
 
 struct FloatType : LanguageType {
@@ -53,20 +49,20 @@ struct FloatType : LanguageType {
 
     FloatType(CodegenContext &context, Bits bits);
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 };
 
 struct AliasType : LanguageType {
     NamePath name;
-    LanguageType *aliasTo;
+    const LanguageType *targetType;
+    const LanguageType *type;
 
-    AliasType(CodegenContext &codegenContext, const NamePath &name, LanguageType *aliasTo);
+    AliasType(CodegenContext &codegenContext, const NamePath &name, const LanguageType *targetType);
 
-    llvm::Type *llvmType() override;
-    LanguageType *actualLanguageType() override;
+    llvm::Type *llvmType() const override;
 
-    std::string signature() override;
+    std::string signature() const override;
 };
 
 struct StructType : LanguageType {
@@ -76,7 +72,11 @@ protected:
 public:
     NamePath name;
 
-    using Fields = std::vector<std::tuple<std::string, LanguageType *>>;
+    struct Field {
+        std::string name;
+        const LanguageType *type;
+    };
+    using Fields = std::vector<Field>;
     Fields fields;
     bool isPublic;
 
@@ -84,44 +84,44 @@ public:
 
     virtual void fillFields(const Fields &fields_);
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 
-    int fieldIndex(const std::string &fieldName);
+    int32_t fieldIndex(const std::string &fieldName) const;
 };
 
 struct UnionType : StructType {
     UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize);
 
-    llvm::Type *llvmType() override;
+    llvm::Type *llvmType() const override;
 };
 
 struct PointerType : LanguageType {
-    LanguageType *targetType;
+    const LanguageType *targetType;
+    const LanguageType *type;
 
-    PointerType(CodegenContext &context, LanguageType *targetType);
+    PointerType(CodegenContext &context, const LanguageType *targetType);
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
-    LanguageType *actualLanguageType() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 
-    bool assignable(LanguageType *other) const override;
+    bool assignable(const LanguageType *other) const override;
 };
 
 struct VoidType : LanguageType {
     using LanguageType::LanguageType;
 
-    llvm::Type *llvmType() override;
+    llvm::Type *llvmType() const override;
 
-    std::string signature() override;
+    std::string signature() const override;
 };
 
 struct BoolType : LanguageType {
     using LanguageType::LanguageType;
 
-    llvm::Type *llvmType() override;
+    llvm::Type *llvmType() const override;
 
-    std::string signature() override;
+    std::string signature() const override;
 };
 
 struct FunctionType : LanguageType {
@@ -129,36 +129,34 @@ private:
     llvm::FunctionType *funcType = nullptr;
 
 public:
-    std::vector<LanguageType *> arguments;
-    LanguageType *returnType;
+    std::vector<const LanguageType *> arguments;
+    const LanguageType *returnType;
     bool isVariadic;
 
-    FunctionType(CodegenContext &context, std::vector<LanguageType *> args, LanguageType *returnType, bool isVariadic);
+    FunctionType(CodegenContext &context, std::vector<const LanguageType *> args, const LanguageType *returnType, bool isVariadic);
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
-
-    static std::string signatureFrom(const std::vector<LanguageType *> &arguments, LanguageType *returnType);
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 };
 
 struct ArrayType : LanguageType {
-    LanguageType *targetType;
+    const LanguageType *targetType;
+    const PointerType *decayedType;
     size_t size;
 
-    ArrayType(CodegenContext &context, LanguageType *targetType, size_t size);
+    ArrayType(CodegenContext &context, const LanguageType *targetType, size_t size);
 
-    PointerType *decay(CodegenContext &context) const;
+    const PointerType *decay() const;
 
-    llvm::Type *llvmType() override;
-    llvm::Type *llvmTypeAccess() override;
-    std::string signature() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 };
 
 struct VAType : LanguageType {
     using LanguageType::LanguageType;
 
-    llvm::Type *llvmType() override;
-    std::string signature() override;
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
 
     constexpr static auto Signature = "(va-list)";
 };
