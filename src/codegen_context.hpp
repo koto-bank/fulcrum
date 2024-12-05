@@ -31,7 +31,7 @@ class Function;
 struct Function {
     struct Arg {
         std::string name;
-        LanguageType *type;
+        const LanguageType *type;
     };
 
     using Args = std::vector<Arg>;
@@ -43,7 +43,7 @@ struct Function {
              llvm::Module &module,
              const std::string &name,
              Args &&arguments,
-             LanguageType *returnType,
+             const LanguageType *returnType,
              Body &&body,
              bool isPublic,
              bool isVariadic);
@@ -111,7 +111,7 @@ struct CodegenContext {
     void generate(CModule &&cModule);
 
     template <typename T>
-    using CodegenResult = std::expected<T *, CodegenError>;
+    using CodegenResult = std::expected<const T *, CodegenError>;
 
     CodegenResult<LanguageType> getNamedType(const std::string &name) const;
     CodegenResult<LanguageType> getLanguageType(const ASTType *type);
@@ -128,7 +128,11 @@ struct CodegenContext {
     CodegenResult<Function> emplaceCFunction(FunctionNode &&);
 
     template <typename T, typename ...Args>
-    T * emplaceType(const std::string& name, Args &&...args) {
-        return static_cast<T *>(namedTypes.emplace(name, std::make_unique<T>(*this, std::forward<Args>(args)...)).first->second.get());
+    T * emplaceType(Args &&...args) {
+        auto val = std::make_unique<T>(*this, std::forward<Args>(args)...);
+        return static_cast<T *>(namedTypes.emplace(val->signature(), std::move(val)).first->second.get());
     }
+
+    const BoolType *boolType = nullptr;
+    const VoidType *voidType = nullptr;
 };

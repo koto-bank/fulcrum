@@ -23,10 +23,10 @@ struct FloatType;
 
 struct VariableDefinition {
     std::string name;
-    LanguageType *type;
+    const LanguageType *type;
     llvm::Value *value;
 
-    VariableDefinition(const std::string &name, LanguageType *type);
+    VariableDefinition(const std::string &name, const LanguageType *type);
 };
 
 struct ExpressionGenContext {
@@ -38,8 +38,8 @@ struct ExpressionGenContext {
     CodegenContext &codegenContext;
 
     const VariableDefinition *lookupVariable(const std::string &name) const;
-    VariableDefinition *insertVariable(const std::string &name, LanguageType *type);
-    VariableDefinition *insertFunctionArgument(const std::string &name, LanguageType *type);
+    VariableDefinition *insertVariable(const std::string &name, const LanguageType *type);
+    VariableDefinition *insertFunctionArgument(const std::string &name, const LanguageType *type);
 
     void pushScope();
     void popScope();
@@ -51,13 +51,13 @@ protected:
 
     std::string indentSpaces(int n);
 
-    LanguageType *type = nullptr;
+    const LanguageType *type = nullptr;
     void assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage);
 
 public:
-    Expression(LanguageType *type);
+    Expression(const LanguageType *type);
 
-    virtual LanguageType *languageType(const ExpressionGenContext &genContext);
+    virtual const LanguageType *languageType(const ExpressionGenContext &genContext);
     virtual llvm::Type *llvmType(ExpressionGenContext &genContext);
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext);
     virtual bool isTerminator();
@@ -76,7 +76,7 @@ struct ConstantExpression : Expression {
 struct IntegerConstant : ConstantExpression {
     std::variant<uint64_t, int64_t> constValue;
 
-    IntegerConstant(IntegerType *type, IsLongInteger auto _constValue);
+    IntegerConstant(const IntegerType *type, IsLongInteger auto _constValue);
 
     std::string dump(int indent) override;
 };
@@ -87,7 +87,7 @@ concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
 struct FloatConstant : ConstantExpression {
     std::variant<float, double> constValue;
 
-    FloatConstant(LanguageType *type, IsFloatingPoint auto constValue_);
+    FloatConstant(const FloatType *type, IsFloatingPoint auto constValue_);
 
     std::string dump(int indent) override;
 };
@@ -99,7 +99,7 @@ private:
 public:
     std::string constValue;
 
-    StringConstant(LanguageType *type, const std::string &constValue);
+    StringConstant(const LanguageType *type, const std::string &constValue);
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Constant *llvmConstant(CodegenContext &context) override;
@@ -110,7 +110,7 @@ struct BoolConstant : ConstantExpression {
 public:
     bool constValue;
 
-    BoolConstant(LanguageType *type, bool constValue);
+    BoolConstant(const LanguageType *type, bool constValue);
 
     std::string dump(int indent) override;
 };
@@ -128,12 +128,12 @@ private:
     llvm::Value *addrOfProcessor(ExpressionGenContext &genContext);
     llvm::Value *prognValue(ExpressionGenContext &genContext);
 
-    LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *boolProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *addrOfProcessorType(const ExpressionGenContext &genContext) const;
-    LanguageType *prognType(const ExpressionGenContext &genContext) const;
+    const LanguageType *arithmeticsProcessorType(const ExpressionGenContext &genContext) const;
+    const LanguageType *ptrArithmeticsProcessorType(const ExpressionGenContext &genContext) const;
+    const LanguageType *voidProcessorType(const ExpressionGenContext &genContext) const;
+    const LanguageType *boolProcessorType(const ExpressionGenContext &genContext) const;
+    const LanguageType *addrOfProcessorType(const ExpressionGenContext &genContext) const;
+    const LanguageType *prognType(const ExpressionGenContext &genContext) const;
 
 public:
     using Args = std::vector<std::unique_ptr<Expression>>;
@@ -144,7 +144,7 @@ public:
     FunctionCall(const std::string &name, Args &&args);
 
     using SpecialFunctionProcessor = std::function<llvm::Value *(FunctionCall *, ExpressionGenContext &)>;
-    using SpecialFunctionTyping = std::function<LanguageType *(FunctionCall *, const ExpressionGenContext &)>;
+    using SpecialFunctionTyping = std::function<const LanguageType *(FunctionCall *, const ExpressionGenContext &)>;
 
     const std::map<std::string, std::pair<SpecialFunctionProcessor, SpecialFunctionTyping>> specialFunctions {
         { "return", { &FunctionCall::returnProcessor, &FunctionCall::voidProcessorType } },
@@ -178,7 +178,7 @@ public:
     };
 
     bool isTerminator() override;
-    LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 };
@@ -188,7 +188,7 @@ public:
     NamePath name;
 
     VariableAccess(const NamePath &name);
-    LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 
@@ -199,7 +199,7 @@ struct Dereference : Expression {
     std::unique_ptr<Expression> target;
 
     Dereference(std::unique_ptr<Expression> &&target);
-    LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 };
@@ -207,13 +207,13 @@ struct Dereference : Expression {
 struct Subscription : Expression {
     std::unique_ptr<Expression> array;
     std::unique_ptr<Expression> subscript;
-    LanguageType *targetType = nullptr;
+    const LanguageType *targetType = nullptr;
 
     Subscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript);
 
     llvm::Value *getElementPtr(ExpressionGenContext &genContext);
 
-    LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
 };
@@ -223,7 +223,7 @@ struct VariableDeclaration : Expression {
 
     std::string name;
 
-    VariableDeclaration(const std::string &name, LanguageType *type, std::unique_ptr<Expression> &&initialValue);
+    VariableDeclaration(const std::string &name, const LanguageType *type, std::unique_ptr<Expression> &&initialValue);
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Type *llvmType(ExpressionGenContext &genContext) override;
 
@@ -231,9 +231,9 @@ struct VariableDeclaration : Expression {
 };
 
 struct Sizeof : Expression {
-    LanguageType *targetType;
+    const LanguageType *targetType;
 
-    Sizeof(CodegenContext &context, LanguageType *targetType);
+    Sizeof(CodegenContext &context, const LanguageType *targetType);
 
     std::string dump(int indent) override;
 };
@@ -241,7 +241,7 @@ struct Sizeof : Expression {
 struct Cast : Expression {
     std::unique_ptr<Expression> targetExpression;
 
-    Cast(CodegenContext &context, LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression);
+    Cast(CodegenContext &context, const LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression);
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) override;
