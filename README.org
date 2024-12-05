@@ -5,6 +5,32 @@ Generate:
 Build:
 ~cmake --build _build~
 
+** Not the freshest Linux distro
+Take for example Ubuntu 22, which has the following issues:
+1. llvm in package manager is very outdated
+2. C++ compiler is also quite outdated, and doesn't support
+   e.g. std::expected
+
+The 1st problem can be solved by llvm provided script to install fresh
+version:
+
+~sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"~
+
+Ah, the safe and reliable wget2sudo, my beloved.
+
+The 2nd one is partially solved by the 1st step leaving us with a
+modern clang, but there's also an issue of libstdc++ expecting
+different language macro values than libc++ would have, specifically,
+we need ~__cpp_concepts~ to be defined with value >=202002L in order
+for std::expected to work. Thus, to correctly configure Fulcrum for
+building, the following CMake command shall be used:
+#+begin_src
+cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+-DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_C_COMPILER=clang-18
+-DCMAKE_CXX_FLAGS="-D__cpp_concepts=202412L
+-Wno-builtin-macro-redefined" -DLLVM_CONFIG_BIN=llvm-config-18
+#+end_src
+
 ** Macos
 Don't forget to export paths to LLVM and Clang:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
@@ -43,28 +69,18 @@ not allowed in module names.
 To import names directly into current module, and to select specific
 names to import, mechanisms will be deviced later.
 
-* Compilation on not the freshest Linux distro
-Take for example Ubuntu 22, which has the following issues:
-1. llvm in package manager is very outdated
-2. C++ compiler is also quite outdated, and doesn't support
-   e.g. std::expected
-
-The 1st problem can be solved by llvm provided script to install fresh
-version:
-
-~sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"~
-
-Ah, the safe and reliable wget2sudo, my beloved.
-
-The 2nd one is partially solved by the 1st step leaving us with a
-modern clang, but there's also an issue of libstdc++ expecting
-different language macro values than libc++ would have, specifically,
-we need ~__cpp_concepts~ to be defined with value >=202002L in order
-for std::expected to work. Thus, to correctly configure Fulcrum for
-building, the following CMake command shall be used:
+** Function definitions
 #+begin_src
-cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
--DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_C_COMPILER=clang-18
--DCMAKE_CXX_FLAGS="-D__cpp_concepts=202412L
--Wno-builtin-macro-redefined" -DLLVM_CONFIG_BIN=llvm-config-18
+(fn function-name ret-type ((arg-1 arg-1-type) (arg-2 arg-2-type))
+fn-body)
 #+end_src
+
+** Variable declaration
+#+begin_src
+(var name type [initial value])
+#+end_src
+
+** Structures
+(struct name
+  (field-1-name type-1)
+  (field-2-name type-2))
