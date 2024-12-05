@@ -24,8 +24,8 @@ public:
 
     struct Expression {
         struct Extent {
-            Pos begin;
-            Pos end;
+            Pos begin {};
+            Pos end {};
         };
 
         Expression(Pos begin);
