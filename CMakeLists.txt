@@ -10,6 +10,10 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
 
+if (${LLVM_CONFIG_BIN} STREQUAL "")
+    set(LLVM_CONFIG_BIN "llvm-config")
+endif()
+
 ### Library
 
 add_library(${FULCRUM_LIB} OBJECT
@@ -31,7 +35,6 @@ add_library(${FULCRUM_LIB} OBJECT
 target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
-
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
@@ -40,13 +43,14 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS} ${CL
 
 target_compile_definitions(${FULCRUM_LIB} INTERFACE ${LLVM_DEFINITIONS_LIST})
 set(LLVM_COMPONENTS support core irreader native)
-execute_process(COMMAND llvm-config --libs ${LLVM_COMPONENTS} OUTPUT_VARIABLE llvm_libs)
+execute_process(COMMAND ${LLVM_CONFIG_BIN} --libs ${LLVM_COMPONENTS} OUTPUT_VARIABLE llvm_libs)
 
 if("${llvm_libs}" STREQUAL "")
+    message(WARNING "${LLVM_CONFIG_BIN} failed to fetch components, falling back to llvm_map_components_to_libnames")
     llvm_map_components_to_libnames(llvm_libs ${LLVM_COMPONENTS})
 else()
     string(STRIP ${llvm_libs} llvm_libs)
-    execute_process(COMMAND llvm-config --libdir OUTPUT_VARIABLE llvm_libdir)
+    execute_process(COMMAND ${LLVM_CONFIG_BIN} --libdir OUTPUT_VARIABLE llvm_libdir)
     string(STRIP ${llvm_libdir} llvm_libdir)
     target_link_directories(${FULCRUM_LIB} PUBLIC ${llvm_libdir})
 endif()
