@@ -10,6 +10,64 @@
 LanguageType::LanguageType(CodegenContext &context)
     : context(context) {}
 
+bool LanguageType::same(const LanguageType *type, const LanguageType *other) {
+    if (auto at = dynamic_cast<const AliasType *>(type); at != nullptr) {
+        return same(at->targetType, other);
+    }
+
+    if (auto at = dynamic_cast<const AliasType *>(other); at != nullptr) {
+        return same(type, at->targetType);
+    }
+
+    return type->signature() == other->signature();
+}
+
+bool LanguageType::assignable(const LanguageType *to, const LanguageType *from) {
+    // Fuck it, let's have this whole check in one place, instead of all over the types
+    // _this_ kind of polymorphic behavior doesn't seem right for some reason
+
+    // 1. This method is only for primitive types, i.e. numeric types, pointers, arrays
+    // 2. One of the purposes of this method is to extract underlying type from type alias
+    // 3. CV-correctness is checked as in C
+    // 4. This is very low-level and should not leak
+
+    // void type is unassignable
+    if (dynamic_cast<const VoidType *>(to) != nullptr
+        || dynamic_cast<const VoidType *>(from) != nullptr) {
+        return false;
+    }
+
+    // we can assign from array to pointer, if their underlying types are the same...
+    auto ptTo = dynamic_cast<const PointerType *>(to);
+    auto atFrom = dynamic_cast<const ArrayType *>(from);
+    if (ptTo != nullptr && atFrom != nullptr) {
+        return same(ptTo->targetType, atFrom->targetType);
+    }
+
+    // ...the same when both are pointers...
+    auto ptFrom = dynamic_cast<const PointerType *>(from);
+    if (ptTo != nullptr && ptFrom != nullptr) {
+        return same(ptTo->targetType, ptFrom->targetType);
+    }
+
+    // ...and when both are arrays. Can't assign from pointer to array though
+    auto atTo = dynamic_cast<const ArrayType *>(to);
+    if (atTo != nullptr && atFrom != nullptr) {
+        return same(atTo->targetType, atFrom->targetType);
+    }
+
+    // Integer types
+    auto itTo = dynamic_cast<const IntegerType *>(to);
+    auto itFrom = dynamic_cast<const IntegerType *>(from);
+    if (itTo != nullptr && itFrom != nullptr) {
+        // can assign to wider type
+        return itTo->bits >= itFrom->bits;
+    }
+
+    // Can assign same to same, of course
+    return same(to, from);
+}
+
 IntegerType::IntegerType(CodegenContext &context, unsigned int bits, bool isSigned)
     : LanguageType(context),
       bits(bits),
@@ -18,11 +76,6 @@ IntegerType::IntegerType(CodegenContext &context, unsigned int bits, bool isSign
 llvm::Type *IntegerType::llvmType() const { return llvm::Type::getIntNTy(context.context, bits); }
 
 std::string IntegerType::signature() const { return std::string(isSigned ? "i" : "u") + std::to_string(bits); }
-
-bool LanguageType::assignable(const LanguageType *other) const {
-    // whoa
-    return other == this;
-}
 
 FloatType::FloatType(CodegenContext &context, Bits bits)
     : LanguageType(context),
@@ -102,16 +155,6 @@ llvm::Type *PointerType::llvmType() const {
 }
 
 std::string PointerType::signature() const { return targetType->signature() + "*"; }
-
-bool PointerType::assignable(const LanguageType *other) const {
-    if (other == this) {
-        return true;
-    }
-    if (auto at = dynamic_cast<const ArrayType *>(other); at != nullptr) {
-        return targetType->assignable(at->targetType);
-    }
-    return false;
-}
 
 std::string VoidType::signature() const { return "void"; }
 
