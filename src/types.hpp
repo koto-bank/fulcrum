@@ -26,11 +26,13 @@ public:
 
     virtual std::string signature() const = 0;
 
-    virtual bool assignable(const LanguageType *other) const;
 
     LanguageType(CodegenContext &context);
 
     virtual ~LanguageType() = default;
+
+    static bool same(const LanguageType *type, const LanguageType *other);
+    static bool assignable(const LanguageType *to, const LanguageType *from);
 };
 
 struct IntegerType : LanguageType {
@@ -105,7 +107,6 @@ struct PointerType : LanguageType {
     llvm::Type *llvmType() const override;
     std::string signature() const override;
 
-    bool assignable(const LanguageType *other) const override;
 };
 
 struct VoidType : LanguageType {

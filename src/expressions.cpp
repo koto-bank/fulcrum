@@ -510,7 +510,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
         );
 
         auto newValType = newValue->languageType(genContext);
-        if (variableType != newValType)
+        if (!LanguageType::assignable(variableType, newValType))
             throw CodegenError(fmt::format(
                 "Variable {} is of type {}, argument to set is of type {}", args[i]->dump(), variableType->signature(),
                 newValType->signature()
@@ -657,7 +657,7 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
         const LanguageType *argType = args[i]->languageType(genContext);
         if (!fnType->isVariadic || i < fnType->arguments.size()) {
             const LanguageType *expectedType = fnType->arguments[i];
-            if (!expectedType->assignable(argType)) {
+            if (!LanguageType::assignable(expectedType, argType)) {
                 throw CodegenError(fmt::format(
                                        "Incompatible argument type in {}: for argument #{}"
                                        " expected {}, but received {}",
