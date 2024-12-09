@@ -38,7 +38,7 @@ target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
-target_include_directories(${FULCRUM_LIB} SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS} ${CLANG_DEFINITIONS})
 
 target_compile_definitions(${FULCRUM_LIB} INTERFACE ${LLVM_DEFINITIONS_LIST})
@@ -65,7 +65,8 @@ target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 add_subdirectory(deps/spdlog)
 
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
-target_link_libraries(${FULCRUM_LIB} PRIVATE fmt args clang-cpp spdlog::spdlog ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PRIVATE args clang-cpp spdlog::spdlog ${llvm_libs})
+target_link_libraries(${FULCRUM_LIB} PUBLIC fmt::fmt)
 
 ### Compiler
 
@@ -73,3 +74,17 @@ add_executable(${FULCRUM_COMPILER} "src/main.cpp" $<TARGET_OBJECTS:${FULCRUM_LIB
 target_compile_definitions(${FULCRUM_COMPILER} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
 target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB} spdlog::spdlog)
 target_compile_options(${FULCRUM_COMPILER} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
+
+### Tests
+
+set(FULCRUM_TESTS fulcrum-tests)
+file(GLOB_RECURSE TEST_SRCS "src/*.test.cpp")
+add_subdirectory(deps/googletest googletest)
+add_executable(${FULCRUM_TESTS}
+    "tests/main.cpp"
+    "src/tree_matcher.cpp"
+    ${TEST_SRCS}
+    $<TARGET_OBJECTS:libfulcrum>)
+
+target_compile_definitions(${FULCRUM_TESTS} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
+target_link_libraries(${FULCRUM_TESTS} libfulcrum gtest)
