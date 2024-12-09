@@ -140,7 +140,7 @@ const char *StackedCodegenErrors::whatIndented(int indent) const {
     return indentedMsg.data();
 }
 
-CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &context)
+CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext &context)
     : context(context),
       module(moduleName, context) {
     emplaceType<FloatType>(FloatType::Bits::Float);
@@ -155,10 +155,13 @@ CodegenContext::CodegenContext(std::string moduleName, llvm::LLVMContext &contex
     emplaceType<IntegerType>(32, false);
     emplaceType<IntegerType>(64, true);
     emplaceType<IntegerType>(64, false);
-    emplaceType<PointerType>(i8); // for C strings
+    auto str = emplaceType<PointerType>(i8); // for C strings
 
     // Why do we need this?
     emplaceType<VAType>();
+
+    auto name = NamePath::create("str");
+    emplaceType<AliasType>(name, str);
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(StructNode &&structNode) {

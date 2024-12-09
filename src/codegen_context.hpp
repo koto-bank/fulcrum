@@ -103,7 +103,7 @@ struct CodegenContext {
     std::unordered_map<std::string, std::unique_ptr<VariableDefinition>> globalVars;
     std::unordered_map<std::string, std::unique_ptr<Function>> namedFunctions;
 
-    CodegenContext(std::string moduleName, llvm::LLVMContext &context);
+    CodegenContext(const std::string &moduleName, llvm::LLVMContext &context);
 
     void generate(FulcrumModule &&fulcrumModule);
 

@@ -95,7 +95,7 @@ AliasType::AliasType(CodegenContext &codegenContext, const NamePath &name, const
 
 llvm::Type *AliasType::llvmType() const { return targetType->llvmType(); }
 
-std::string AliasType::signature() const { return fmt::format("{} ({})", name.join(), targetType->signature()); }
+std::string AliasType::signature() const { return fmt::format("{}", name.join()); }
 
 StructType::StructType(CodegenContext &codegenContext, const NamePath &name, bool isPublic)
     : LanguageType(codegenContext),
