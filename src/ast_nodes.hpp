@@ -97,7 +97,11 @@ struct ASTNode {
 };
 
 struct StructNode : ASTNode {
-    using Fields = std::vector<std::tuple<std::string, ASTType *>>;
+    struct Field {
+        std::string name;
+        const ASTType *type;
+    };
+    using Fields = std::vector<Field>;
 
     NamePath name;
     bool isPublic;
