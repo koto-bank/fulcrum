@@ -660,8 +660,69 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
     }
 }
 
-bool SemanticAnalyzer::parseStructureDefinition(const Parser::Expression &) {
-    // TODO
+bool SemanticAnalyzer::parseStructureDefinition(const Parser::Expression &form) {
+    /*
+      (struct name
+        [(name type)])
+    */
+    if (form.children.size() < 2) {
+        reportError(form.token, "expected struct, struct-, and structure name");
+        return false;
+    }
+    auto type = getSymbol(form.children[0]);
+    if (type == std::nullopt
+        || !(type.value() == "struct"
+             || type.value() == "struct-")) {
+        reportError(form.children[0].token, "expected struct or struct-");
+        return false;
+    }
+
+    bool isPublic;
+    if (type == "struct") {
+        isPublic = true;
+    } else if (type == "struct-") {
+        isPublic = false;
+    } else {
+        fc_unreachable();
+    }
+
+    auto maybeName = getSymbol(form.children[1]);
+    if (maybeName == std::nullopt) {
+        reportError(form.children[1].token, "structure name must be a symbol");
+        return false;
+    }
+
+    StructNode::Fields fields;
+    for (auto i = 2u; i < form.children.size(); i++) {
+        const auto &fieldForm = form.children[i];
+        if (fieldForm.token != nullptr) {
+            reportError(form.children[i].token, "expected list as structure field definition");
+            return false;
+        }
+
+        if (fieldForm.children.size() == 0) {
+            reportError(form.children[i].token, "structure field definition can't be empty");
+            return false;
+        }
+
+        if (fieldForm.children.size() != 2) {
+            reportError(form.children[i].token, "structure field definition must consist of name and type");
+            return false;
+        }
+
+        auto fieldName = getSymbol(fieldForm.children[0]);
+        if (fieldName == std::nullopt) {
+            reportError(fieldForm.children[0].token, "field name must be a symbol");
+            return false;
+        }
+
+        auto fieldType = parseType(fieldForm.children[1]);
+        if (fieldType == std::nullopt) {
+            return false;
+        }
+        fields.push_back({ *fieldName, *fieldType });
+    }
+    module.structs.emplace_back(*NamePath::create(*maybeName), std::move(fields), isPublic);
     return true;
 }
 
