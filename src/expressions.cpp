@@ -62,7 +62,7 @@ void Expression::assumeExpression(ExpressionGenContext &genContext, Expression *
         throw CodegenError(errorMessage);
 }
 
-std::string Expression::indentSpaces(int n) { return fmt::format("{: >{}}", "", n); }
+std::string Expression::indentSpaces(int n) const { return fmt::format("{: >{}}", "", n); }
 
 Expression::Expression(const LanguageType *type)
     : type(type) {}
@@ -90,7 +90,7 @@ IntegerConstant::IntegerConstant(const IntegerType *type, IsLongInteger auto _co
 template IntegerConstant::IntegerConstant(const IntegerType *type, int64_t _constValue);
 template IntegerConstant::IntegerConstant(const IntegerType *type, uint64_t _constValue);
 
-std::string IntegerConstant::dump(int indent) {
+std::string IntegerConstant::dump(int indent) const {
     auto isSigned = static_cast<const IntegerType *>(type)->isSigned;
 
     return isSigned ? fmt::format("{}{}{}", indentSpaces(indent), std::get<int64_t>(constValue), type->signature())
@@ -109,7 +109,7 @@ FloatConstant::FloatConstant(const FloatType *type, IsFloatingPoint auto constVa
 template FloatConstant::FloatConstant(const FloatType *type, float constValue_);
 template FloatConstant::FloatConstant(const FloatType *type, double constValue_);
 
-std::string FloatConstant::dump(int indent) {
+std::string FloatConstant::dump(int indent) const {
     auto floatbits = ((FloatType *)type)->bits;
 
     return fmt::format(
@@ -145,7 +145,7 @@ llvm::Constant *StringConstant::llvmConstant(CodegenContext &codegenContext) {
     return llvmConst;
 }
 
-std::string StringConstant::dump(int indent) { return fmt::format("{}\"{}\"", indentSpaces(indent), constValue); }
+std::string StringConstant::dump(int indent) const { return fmt::format("{}\"{}\"", indentSpaces(indent), constValue); }
 
 BoolConstant::BoolConstant(const LanguageType *type, bool constValue)
     : ConstantExpression(type),
@@ -153,7 +153,7 @@ BoolConstant::BoolConstant(const LanguageType *type, bool constValue)
     value = llvm::ConstantInt::get(type->llvmType(), constValue ? 1 : 0);
 }
 
-std::string BoolConstant::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), constValue); }
+std::string BoolConstant::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), constValue); }
 
 FunctionCall::FunctionCall(const std::string &name, Args &&args)
     // Initialize type with nullptr for now, since we don't know the return type yet
@@ -688,7 +688,7 @@ bool FunctionCall::isTerminator() {
     return false;
 }
 
-std::string FunctionCall::dump(int indent) {
+std::string FunctionCall::dump(int indent) const {
     std::vector<std::string> argDumps;
     for (auto &arg : args) {
         if (arg != nullptr) {
@@ -795,7 +795,7 @@ llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
-std::string VariableAccess::dump(int indent) { return fmt::format("{}{}", indentSpaces(indent), name.join()); }
+std::string VariableAccess::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), name.join()); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
@@ -814,7 +814,7 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
     return genCont.builder.CreateLoad(languageType(genCont)->llvmType(), target->llvmValue(genCont));
 }
 
-std::string Dereference::dump(int indent) { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
+std::string Dereference::dump(int indent) const { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
 
 Subscription::Subscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript)
     : Expression(nullptr)
@@ -853,7 +853,7 @@ llvm::Value *Subscription::llvmValue(ExpressionGenContext &genContext) {
     return genContext.builder.CreateLoad(llvmType(genContext), gep);
 }
 
-std::string Subscription::dump(int indent) { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
+std::string Subscription::dump(int indent) const { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
 
 VariableDeclaration::VariableDeclaration(
     const std::string &name, const LanguageType *type, std::unique_ptr<Expression> &&initialValue
@@ -892,7 +892,7 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
 
 llvm::Type *VariableDeclaration::llvmType(ExpressionGenContext &) { return nullptr; }
 
-std::string VariableDeclaration::dump(int indent) {
+std::string VariableDeclaration::dump(int indent) const {
     return fmt::format(
         "{}($var {} {}", indentSpaces(indent), name,
         type->signature() + (initialValue == nullptr ? ")" : fmt::format(" {})", initialValue->dump(0)))
@@ -907,7 +907,7 @@ Sizeof::Sizeof(CodegenContext &context, const LanguageType *targetType)
     );
 }
 
-std::string Sizeof::dump(int indent) {
+std::string Sizeof::dump(int indent) const {
     return fmt::format("{}($sizeof {})", indentSpaces(indent), targetType->signature());
 }
 
@@ -915,7 +915,7 @@ Cast::Cast(CodegenContext &, const LanguageType *targetType, std::unique_ptr<Exp
     : Expression(targetType),
       targetExpression(std::move(targetExpression)) {}
 
-std::string Cast::dump(int indent) {
+std::string Cast::dump(int indent) const {
     return fmt::format("{}($cast {} {})", indentSpaces(indent), type->signature(), targetExpression->dump());
 }
 

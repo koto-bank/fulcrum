@@ -49,7 +49,7 @@ struct Expression {
 protected:
     llvm::Value *value = nullptr;
 
-    std::string indentSpaces(int n);
+    std::string indentSpaces(int n) const;
 
     const LanguageType *type = nullptr;
     void assumeExpression(ExpressionGenContext &genContext, Expression *expr, const std::string &errorMessage);
@@ -62,7 +62,7 @@ public:
     virtual llvm::Value *llvmValue(ExpressionGenContext &genContext);
     virtual bool isTerminator();
 
-    virtual std::string dump(int indent = 0) = 0;
+    virtual std::string dump(int indent = 0) const = 0;
 
     virtual ~Expression() = default;
 };
@@ -78,7 +78,7 @@ struct IntegerConstant : ConstantExpression {
 
     IntegerConstant(const IntegerType *type, IsLongInteger auto _constValue);
 
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 template<typename T>
@@ -89,7 +89,7 @@ struct FloatConstant : ConstantExpression {
 
     FloatConstant(const FloatType *type, IsFloatingPoint auto constValue_);
 
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct StringConstant : ConstantExpression {
@@ -103,7 +103,7 @@ public:
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Constant *llvmConstant(CodegenContext &context) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct BoolConstant : ConstantExpression {
@@ -112,7 +112,7 @@ public:
 
     BoolConstant(const LanguageType *type, bool constValue);
 
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct FunctionCall : Expression {
@@ -180,7 +180,7 @@ public:
     bool isTerminator() override;
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct VariableAccess : Expression {
@@ -190,7 +190,7 @@ public:
     VariableAccess(const NamePath &name);
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 
     llvm::Value *varAddress(ExpressionGenContext &genContext);
 };
@@ -201,7 +201,7 @@ struct Dereference : Expression {
     Dereference(std::unique_ptr<Expression> &&target);
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct Subscription : Expression {
@@ -215,7 +215,7 @@ struct Subscription : Expression {
 
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct VariableDeclaration : Expression {
@@ -227,7 +227,7 @@ struct VariableDeclaration : Expression {
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     llvm::Type *llvmType(ExpressionGenContext &genContext) override;
 
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct Sizeof : Expression {
@@ -235,7 +235,7 @@ struct Sizeof : Expression {
 
     Sizeof(CodegenContext &context, const LanguageType *targetType);
 
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
 
 struct Cast : Expression {
@@ -244,5 +244,5 @@ struct Cast : Expression {
     Cast(CodegenContext &context, const LanguageType *targetType, std::unique_ptr<Expression> &&targetExpression);
 
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
-    std::string dump(int indent) override;
+    std::string dump(int indent) const override;
 };
