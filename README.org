@@ -56,18 +56,14 @@ bool SemanticAnalyzer::run(Parser &_parser) {
 (module module-name
    (import some-module)
    (import :c "stdio.h")
+   (import :c "SDL2/SDL.h"))
    (import other-module :as nickname)
-   (import :c "SDL2/SDL.h" :as sdl))
 #+end_src
 
 Imports with nicknames are imported as ~nickname.symbol_name~.
 Imports without nicknames are prefixed as module name.
-C imports witout nicknames are imported as filename sans extension,
-e.g. ~(import :c "stdio.h")~ becomes just ~stdio~. Thus, periods are
-not allowed in module names.
 
-To import names directly into current module, and to select specific
-names to import, mechanisms will be deviced later.
+Names from C imports are imported directly inside the module.
 
 ** Function definitions
 #+begin_src
