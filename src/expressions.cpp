@@ -701,7 +701,7 @@ std::string FunctionCall::dump(int indent) const {
     return fmt::format("{}($call {} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
 
-VariableAccess::VariableAccess(const NamePath &path)
+VariableAccess::VariableAccess(const std::string &path)
     : Expression(nullptr),
       name(path) {}
 
@@ -727,9 +727,9 @@ const LanguageType *VariableAccess::languageType(const ExpressionGenContext &gen
 
         return currentType;
     } else { */
-    auto var = genCont.lookupVariable(name.join());
+    auto var = genCont.lookupVariable(name);
     if (var == nullptr) {
-        throw CodegenError(fmt::format("Variable {} not defined", name.join()));
+        throw CodegenError(fmt::format("Variable {} not defined", name));
     }
     if (auto at = dynamic_cast<const ArrayType *>(var->type); at != nullptr) {
         return at->decay();
@@ -774,8 +774,8 @@ llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
         }
         return currentValue;
     } else { */
-        auto var = genCont.lookupVariable(name.join());
-        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name.join()));
+        auto var = genCont.lookupVariable(name);
+        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
         return var->value;
 //    }
 }
@@ -787,7 +787,7 @@ llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
         llvm::outs() << '\n';
         return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
     } */
-    auto var = genContext.lookupVariable(name.join());
+    auto var = genContext.lookupVariable(name);
     if (dynamic_cast<const ArrayType *>(var->type) != nullptr) {
         // no need to store arrays, since they are alloca'd and thus immutable
         return var->value;
@@ -795,7 +795,7 @@ llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
-std::string VariableAccess::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), name.join()); }
+std::string VariableAccess::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), name); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),

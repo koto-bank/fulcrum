@@ -32,10 +32,6 @@
 #include "types.hpp"
 
 namespace {
-inline void reportNamePathError(const std::string& error, const std::string &name) {
-    spdlog::error("Failed to create name path for symbol '{}', reason: {}", name, error);
-}
-
 void disableUnusedCompilerOptions(clang::CompilerInvocation &ci) {
     ci.getFrontendOpts().DisableFree = false;
     ci.getLangOpts().CommentOpts.ParseAllComments = true;
@@ -138,8 +134,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
                 fc_unreachable();
             }
         }
-        auto namePath = NamePath::create(name).value();
-        return cModule.types.getType<ASTNamedType>(std::move(namePath));
+        return cModule.types.getType<ASTNamedType>(std::move(name));
     } else if (qualType->isFunctionProtoType()) {
         auto ft = qualType->getAs<clang::FunctionProtoType>();
         ASTFunctionType::ArgTypes argTypes;
@@ -177,7 +172,7 @@ public:
     bool VisitTagDecl(clang::TagDecl *td) {
         if (td->isRecord()) {
             StructNode s;
-            s.name.add(td->getQualifiedNameAsString());
+            s.name = td->getQualifiedNameAsString();
             cModule.structs.push_back(std::move(s));
         } else if (td->isEnum()) {
             // TODO: enum support
@@ -203,13 +198,7 @@ public:
 
         }
 
-        auto namePathOrError = NamePath::create(name);
-        if (!namePathOrError) {
-            reportNamePathError(namePathOrError.error(), name);
-            return false;
-        }
-        auto namePath = namePathOrError.value();
-        cModule.functions.push_back(FunctionNode(std::move(namePath),
+        cModule.functions.push_back(FunctionNode(std::move(name),
                                                  std::move(args),
                                                  retType,
                                                  {},
@@ -283,14 +272,6 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
     uint32_t macroCount = 0u;
     for (auto &[macroName, md] : macroCollector.takeMacroDefinitions()) {
         const auto *mi = md->getMacroInfo();
-        auto namePathOrError = NamePath::create(macroName);
-        if (!namePathOrError) {
-            reportNamePathError(namePathOrError.error(), macroName);
-            continue;
-        }
-
-        auto namePath = namePathOrError.value();
-
         if (mi->isObjectLike()) {
             const auto &toks = mi->tokens();
 
@@ -307,7 +288,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                 }
                 // TODO: wide strings, some other errors, idk, looks kinda brittle
 
-                auto varVal = VariableDeclarationNode(std::move(namePath),
+                auto varVal = VariableDeclarationNode(std::move(macroName),
                                                       cModule.types.getType<ASTIntegerType>(true, 8));
                 varVal.initialValue = std::make_unique<ConstantStringNode>(sp.GetString().str());
                 cModule.globalVariables.push_back(std::move(varVal));
@@ -346,7 +327,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                     litParser.GetIntegerValue(val);
                     auto type = cModule.types.getType<ASTIntegerType>(!litParser.isUnsigned, 64);
 
-                    auto varVal = VariableDeclarationNode(std::move(namePath), type);
+                    auto varVal = VariableDeclarationNode(std::move(macroName), type);
                     varVal.initialValue = std::make_unique<ConstantIntNode>(type, val.getLimitedValue());
                     cModule.globalVariables.push_back(std::move(varVal));
                     macroCount++;
@@ -356,7 +337,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                     auto type = cModule.types.getType<ASTFloatType>(32);
 
                     // TODO: how to do double literals?
-                    auto varVal = VariableDeclarationNode(std::move(namePath), type);
+                    auto varVal = VariableDeclarationNode(std::move(macroName), type);
                     varVal.initialValue = std::make_unique<ConstantFloatNode>(type, val.convertToFloat());
                     cModule.globalVariables.push_back(std::move(varVal));
                     macroCount++;

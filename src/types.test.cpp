@@ -27,9 +27,9 @@ struct TypeTest : public testing::Test {
         ptri8 = emplaceType<PointerType>(i8);
         ptri16 = emplaceType<PointerType>(i16);
 
-        str = emplaceType<AliasType>(NamePath::create("str"), ptri8);
-        strAlias = emplaceType<AliasType>(NamePath::create("str-other"), str);
-        str16 = emplaceType<AliasType>(NamePath::create("str16"), ptri16);
+        str = emplaceType<AliasType>("str", ptri8);
+        strAlias = emplaceType<AliasType>("str-other", str);
+        str16 = emplaceType<AliasType>("str16", ptri16);
 
         strArray = emplaceType<ArrayType>(str, 8);
         ptri8Array = emplaceType<ArrayType>(ptri8, 8);

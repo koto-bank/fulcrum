@@ -6,7 +6,7 @@
 
 ASTType::~ASTType() = default;
 
-ASTBuiltinType::ASTBuiltinType(std::string&& name)
+ASTBuiltinType::ASTBuiltinType(const std::string &name)
     : builtinName(name) {}
 
 std::string ASTBuiltinType::signature() const {
@@ -44,11 +44,11 @@ std::string ASTVoidType::signature() const {
     return "void";
 }
 
-ASTNamedType::ASTNamedType(NamePath &&name)
-    : name(std::move(name)) {}
+ASTNamedType::ASTNamedType(const std::string &name)
+    : name(name) {}
 
 std::string ASTNamedType::signature() const {
-    return name.join();
+    return name;
 }
 
 ASTPointerType::ASTPointerType(ASTType *targetType)
@@ -85,18 +85,18 @@ std::string ASTFunctionType::signature() const {
     return fmt::format("{}{}", returnType->signature(), argTypes);
 }
 
-StructNode::StructNode(NamePath &&name, Fields &&fields, bool isPublic)
+StructNode::StructNode(const std::string &name, Fields &&fields, bool isPublic)
     : name(name),
       isPublic(isPublic),
       fields(std::move(fields)) {}
 
-TypeAliasNode::TypeAliasNode(NamePath &&name, ASTType *target)
-    : name(std::move(name)),
+TypeAliasNode::TypeAliasNode(const std::string &name, ASTType *target)
+    : name(name),
       target(target) {}
 
 FunctionNode::FunctionNode(
-    NamePath &&name, ArgList &&arguments, ASTType *returnType, Body &&body, bool isPublic, bool isVariadic)
-    : name(std::move(name))
+    const std::string &name, ArgList &&arguments, ASTType *returnType, Body &&body, bool isPublic, bool isVariadic)
+    : name(name)
     , isPublic(isPublic)
     , arguments(arguments)
     , returnType(returnType)
@@ -118,7 +118,7 @@ std::string FunctionNode::signature() const {
         }
     }
     argTypes += ")";
-    return fmt::format("{} {}{}", returnType->signature(), name.join(), argTypes);
+    return fmt::format("{} {}{}", returnType->signature(), name, argTypes);
 }
 
 ConstantStringNode::ConstantStringNode(std::string value)
@@ -139,13 +139,13 @@ ConstantFloatNode::ConstantFloatNode(ASTType *floatType, double constValue)
 ConstantBoolNode::ConstantBoolNode(bool value)
     : value(value) {}
 
-FunctionCallNode::FunctionCallNode(NamePath &&name)
-    : name(std::move(name)) {}
+FunctionCallNode::FunctionCallNode(const std::string &name)
+    : name(name) {}
 
-VariableAccessNode::VariableAccessNode(NamePath &&name)
-    : name(std::move(name)) {}
+VariableAccessNode::VariableAccessNode(const std::string &name)
+    : name(name) {}
 
-VariableDeclarationNode::VariableDeclarationNode(NamePath &&name, ASTType *type)
+VariableDeclarationNode::VariableDeclarationNode(const std::string &name, ASTType *type)
     : type(type)
     , name(name) {}
 

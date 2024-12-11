@@ -7,7 +7,6 @@
 
 #include <llvm/IR/IRBuilder.h>
 
-#include "ast_name_path.hpp"
 #include "is_long_integer.hpp"
 
 namespace llvm {
@@ -185,9 +184,9 @@ public:
 
 struct VariableAccess : Expression {
 public:
-    NamePath name;
+    std::string name;
 
-    VariableAccess(const NamePath &name);
+    VariableAccess(const std::string &name);
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) const override;

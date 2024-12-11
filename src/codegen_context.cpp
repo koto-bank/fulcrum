@@ -6,7 +6,6 @@
 #include <spdlog/spdlog.h>
 
 #include "assert.hpp"
-#include "ast_name_path.hpp"
 #include "ast_nodes.hpp"
 #include "c_module.hpp"
 #include "codegen_context.hpp"
@@ -160,12 +159,11 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     // Why do we need this?
     emplaceType<VAType>();
 
-    auto name = NamePath::create("str");
-    emplaceType<AliasType>(name, str);
+    emplaceType<AliasType>("str", str);
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(StructNode &&structNode) {
-    auto name = structNode.name.join();
+    auto name = structNode.name;
     if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
         return emplaceType<UnionType>(structNode.name, structNode.isPublic);
@@ -175,7 +173,7 @@ CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(Stru
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceCStructType(StructNode &&structNode) {
-    auto name = structNode.name.join();
+    auto name = structNode.name;
     if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
         // TODO: private/public unions
         return emplaceType<UnionType>(structNode.name, u->biggestSize);
@@ -194,7 +192,7 @@ CodegenContext::CodegenResult<AliasType> CodegenContext::emplaceCAliasType(TypeA
 
 CodegenContext::CodegenResult<VariableDefinition>
 CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
-    auto name = varNode.name.join();
+    auto name = varNode.name;
     if (globalVars.contains(name)) {
         return std::unexpected(CodegenError(fmt::format("Global variable with name {} already exists", name)));
     }
@@ -203,18 +201,18 @@ CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
     if (!type) {
         return std::unexpected(type.error());
     }
-    auto varDef = std::make_unique<VariableDefinition>(varNode.name.join(), *type);
+    auto varDef = std::make_unique<VariableDefinition>(varNode.name, *type);
 
     if (varNode.initialValue != nullptr) {
         auto expr = getExpression(std::move(varNode.initialValue));
         auto constExpr = dynamic_cast<ConstantExpression *>(expr.get());
         if (constExpr == nullptr) {
-            return std::unexpected(CodegenError(fmt::format("Global variable of non-constant type not supported: {}", varNode.name.join())));
+            return std::unexpected(CodegenError(fmt::format("Global variable of non-constant type not supported: {}", varNode.name)));
         }
 
         auto constVal = constExpr->llvmConstant(*this);
         auto llvmGlobal = new llvm::GlobalVariable(
-            module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, varNode.name.join()
+            module, constVal->getType(), false, llvm::GlobalVariable::PrivateLinkage, constVal, varNode.name
         );
         varDef->value = llvmGlobal;
     }
@@ -223,7 +221,7 @@ CodegenContext::emplaceGlobalVar(VariableDeclarationNode &&varNode) {
 
 CodegenContext::CodegenResult<Function> CodegenContext::emplaceFulcrumFunction(FunctionNode &&fnNode) {
     // TODO: already existing functions?
-    auto funcName = fnNode.name.join();
+    auto funcName = fnNode.name;
     if (namedFunctions.contains(funcName)) {
         return namedFunctions.at(funcName).get();
     }
@@ -261,8 +259,8 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceCFunction(Functio
     }
     fc_assert(fnNode.body.size() == 0);
     // Fixme: we should properly report this error
-    fc_assert(fnNode.name.join() != "main");
-    auto name = fnNode.name.join();
+    fc_assert(fnNode.name != "main");
+    auto name = fnNode.name;
 
     if (namedFunctions.contains(name)) {
         return std::unexpected(CodegenError(fmt::format("C function with name {} is already declared",  name)));
@@ -286,7 +284,7 @@ void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
         exprFields.push_back({ name, getLanguageType(astType).value() });
     }
 
-    auto structType = dynamic_cast<StructType *>(namedTypes.at(structNode.name.join()).get());
+    auto structType = dynamic_cast<StructType *>(namedTypes.at(structNode.name).get());
     fc_assert(structType != nullptr);
     structType->fillFields(exprFields);
 }
@@ -364,7 +362,7 @@ CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(cons
         fc_assert(ret != nullptr);
         return ret;
     } else if (auto t = dynamic_cast<const ASTNamedType *>(type); t != nullptr) {
-        auto ret = getNamedType(t->name.join());
+        auto ret = getNamedType(t->name);
         fc_assert(ret != nullptr);
         return ret;
     } else if (auto t = dynamic_cast<const ASTBoolType *>(type); t != nullptr) {
@@ -435,7 +433,7 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
         for (const auto &a : argsExprs) {
             a->dump();
         }
-        std::string fullName = t->name.join();
+        std::string fullName = t->name;
         return std::make_unique<FunctionCall>(fullName, std::move(argsExprs));
     } else if (auto t = dynamic_cast<const VariableAccessNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableAccess>(t->name);
@@ -446,7 +444,7 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
                                                    getExpression(std::move(t->subscript)));
     } else if (auto t = dynamic_cast<VariableDeclarationNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableDeclaration>(
-            t->name.join(),
+            t->name,
             getLanguageType(t->type).value(),
             t->initialValue != nullptr
             ? getExpression(std::move(t->initialValue))

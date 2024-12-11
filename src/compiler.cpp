@@ -81,11 +81,13 @@ bool importNamed(const std::string &nick, T &&namedThing, std::vector<T> &import
     if (std::find_if(importTo.begin(), importTo.end(),
                      [&namedThing](const auto &n) { return n.name == namedThing.name; })
         != importTo.end()) {
-        // spdlog::info("Duplicate import name {}", namedThing.name.join());
+        // spdlog::info("Duplicate import name {}", namedThing.name);
         return false;
     }
+    // TODO: unfuck Fulcrum module imports
+    // maybe it would have had more sense to start with an actual test
     if (!nick.empty()) {
-        namedThing.name.add(nick);
+        namedThing.name = nick + ":" + namedThing.name;
     }
     importTo.push_back(std::move(namedThing));
     return true;

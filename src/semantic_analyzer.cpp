@@ -277,7 +277,7 @@ bool SemanticAnalyzer::parseFunctionDefinition(const Parser::Expression &form) {
         body.push_back(std::move(bodyForm.value()));
     }
 
-    module.functions.push_back(FunctionNode(NamePath::create(name).value(),
+    module.functions.push_back(FunctionNode(std::move(name),
                                             std::move(args),
                                             std::move(returnType),
                                             std::move(body),
@@ -382,7 +382,7 @@ std::optional<std::unique_ptr<FunctionCallNode>> SemanticAnalyzer::parseFunction
         return std::nullopt;
     }
 
-    auto fnCall = std::make_unique<FunctionCallNode>(NamePath::create(name.value()).value());
+    auto fnCall = std::make_unique<FunctionCallNode>(std::move(name.value()));
     for (auto i = 1u; i < form.children.size(); i++) {
         auto arg = parseArgExpression(form.children[i]);
         if (arg == std::nullopt) {
@@ -420,14 +420,14 @@ SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
     if (form.children.size() == 4) {
         auto initialValue = parseArgExpression(form.children[3]);
         if (initialValue != std::nullopt) {
-            auto res = std::make_unique<VariableDeclarationNode>(NamePath::create(std::move(varName.value())).value(), type.value());
+            auto res = std::make_unique<VariableDeclarationNode>(std::move(varName.value()), type.value());
             res->initialValue = std::move(initialValue.value());
             return res;
         } else {
             return std::nullopt;
         }
     } else {
-        return std::make_unique<VariableDeclarationNode>(NamePath::create(std::move(varName.value())).value(), type.value());
+        return std::make_unique<VariableDeclarationNode>(std::move(varName.value()), type.value());
     }
 }
 
@@ -464,7 +464,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         case token::Type::Symbol: {
             // variable access
             auto sym = form.token->as<token::Symbol>();
-            return std::make_unique<VariableAccessNode>(NamePath::create(sym->symbol).value());
+            return std::make_unique<VariableAccessNode>(std::move(sym->symbol));
         }
         default:
             reportError(form.token, "unexpected token");
@@ -554,7 +554,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
 
             return std::make_unique<SizeofNode>(std::move(type.value()));
         } else {
-            auto fnCall = std::make_unique<FunctionCallNode>(NamePath::create(std::move(sym.value())).value());
+            auto fnCall = std::make_unique<FunctionCallNode>(std::move(sym.value()));
             for (auto i = 1u; i < form.children.size(); i++) {
                 auto arg = parseArgExpression(form.children[i]);
                 if (arg == std::nullopt) {
@@ -598,7 +598,7 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
             }
             // Then it's smth like u666-MyType, that is, a custom type
         }
-        auto name = NamePath::create(std::move(sym.value())).value();
+        auto name = sym.value();
         return module.types.getType<ASTNamedType>(std::move(name));
     } else {
         // ptr or array
@@ -722,7 +722,7 @@ bool SemanticAnalyzer::parseStructureDefinition(const Parser::Expression &form) 
         }
         fields.push_back({ *fieldName, *fieldType });
     }
-    module.structs.emplace_back(*NamePath::create(*maybeName), std::move(fields), isPublic);
+    module.structs.emplace_back(*maybeName, std::move(fields), isPublic);
     return true;
 }
 

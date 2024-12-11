@@ -7,7 +7,6 @@
 
 #include <fmt/format.h>
 
-#include "ast_name_path.hpp"
 #include "expressions.hpp"
 #include "types.hpp"
 

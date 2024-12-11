@@ -87,7 +87,7 @@ llvm::Type *FloatType::llvmType() const {
     return bits == Bits::Float ? llvm::Type::getFloatTy(context.context) : llvm::Type::getDoubleTy(context.context);
 }
 
-AliasType::AliasType(CodegenContext &codegenContext, const NamePath &name, const LanguageType *targetType)
+AliasType::AliasType(CodegenContext &codegenContext, const std::string &name, const LanguageType *targetType)
     : LanguageType(codegenContext),
       name(name),
       targetType(targetType) {
@@ -95,9 +95,9 @@ AliasType::AliasType(CodegenContext &codegenContext, const NamePath &name, const
 
 llvm::Type *AliasType::llvmType() const { return targetType->llvmType(); }
 
-std::string AliasType::signature() const { return fmt::format("{}", name.join()); }
+std::string AliasType::signature() const { return fmt::format("{}", name); }
 
-StructType::StructType(CodegenContext &codegenContext, const NamePath &name, bool isPublic)
+StructType::StructType(CodegenContext &codegenContext, const std::string &name, bool isPublic)
     : LanguageType(codegenContext),
       name(name),
       isPublic(isPublic) {}
@@ -113,7 +113,7 @@ void StructType::fillFields(const Fields &newFields) {
         return tp->llvmType();
     });
 
-    structType = llvm::StructType::create(context.context, fieldTypes, name.join());
+    structType = llvm::StructType::create(context.context, fieldTypes, name);
 }
 
 int32_t StructType::fieldIndex(const std::string &fieldName) const {
@@ -127,16 +127,16 @@ int32_t StructType::fieldIndex(const std::string &fieldName) const {
     return std::distance(fields.begin(), fieldIter);
 }
 
-std::string StructType::signature() const { return name.join(); }
+std::string StructType::signature() const { return name; }
 
 llvm::Type *StructType::llvmType() const {
     return structType;
 }
 
-UnionType::UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize)
+UnionType::UnionType(CodegenContext &codegenContext, const std::string &name, long long biggestSize)
     : StructType(codegenContext, name, true) {
     auto unionArrayType = ArrayType(context, context.namedTypes.at("i8").get(), biggestSize);
-    structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name.join());
+    structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
 }
 
 llvm::Type *UnionType::llvmType() const { return structType; }
