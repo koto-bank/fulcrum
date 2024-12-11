@@ -6,8 +6,6 @@
 #include <tuple>
 #include <vector>
 
-#include "ast_name_path.hpp"
-
 namespace llvm {
 class FunctionType;
 class StructType;
@@ -56,11 +54,11 @@ struct FloatType : LanguageType {
 };
 
 struct AliasType : LanguageType {
-    NamePath name;
+    std::string name;
     const LanguageType *targetType;
     const LanguageType *type;
 
-    AliasType(CodegenContext &codegenContext, const NamePath &name, const LanguageType *targetType);
+    AliasType(CodegenContext &codegenContext, const std::string &name, const LanguageType *targetType);
 
     llvm::Type *llvmType() const override;
 
@@ -72,7 +70,7 @@ protected:
     llvm::StructType *structType = nullptr;
 
 public:
-    NamePath name;
+    std::string name;
 
     struct Field {
         std::string name;
@@ -82,7 +80,7 @@ public:
     Fields fields;
     bool isPublic;
 
-    StructType(CodegenContext &codegenContext, const NamePath &name, bool isPublic);
+    StructType(CodegenContext &codegenContext, const std::string &name, bool isPublic);
 
     virtual void fillFields(const Fields &fields_);
 
@@ -93,7 +91,7 @@ public:
 };
 
 struct UnionType : StructType {
-    UnionType(CodegenContext &codegenContext, const NamePath &name, long long biggestSize);
+    UnionType(CodegenContext &codegenContext, const std::string &name, long long biggestSize);
 
     llvm::Type *llvmType() const override;
 };

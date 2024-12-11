@@ -32,7 +32,7 @@ TEST_F(SemaTest, structure_definition_ok) {
     {
         auto &s = sema.module.structs[0];
 
-        EXPECT_EQ(s.name.join(), "s");
+        EXPECT_EQ(s.name, "s");
         EXPECT_TRUE(s.isPublic);
         EXPECT_EQ(s.fields.size(), 0);
     }
@@ -45,7 +45,7 @@ TEST_F(SemaTest, structure_definition_ok) {
     EXPECT_EQ(sema.module.structs.size(), 2);
     {
         auto &s = sema.module.structs[1];
-        EXPECT_EQ(s.name.join(), "s2");
+        EXPECT_EQ(s.name, "s2");
         EXPECT_TRUE(s.isPublic);
         EXPECT_EQ(s.fields.size(), 1);
 
@@ -64,7 +64,7 @@ TEST_F(SemaTest, structure_definition_ok) {
     EXPECT_EQ(sema.module.structs.size(), 3);
     {
         auto &s = sema.module.structs[2];
-        EXPECT_EQ(s.name.join(), "s3");
+        EXPECT_EQ(s.name, "s3");
         EXPECT_TRUE(s.isPublic);
         EXPECT_EQ(s.fields.size(), 3);
 
@@ -87,7 +87,7 @@ TEST_F(SemaTest, structure_definition_ok) {
             EXPECT_EQ(s.fields[2].name, "z");
             auto fieldType = dynamic_cast<const ASTNamedType *>(s.fields[2].type);
             EXPECT_NE(fieldType, nullptr);
-            EXPECT_EQ(fieldType->name.join(), "str");
+            EXPECT_EQ(fieldType->name, "str");
         }
     }
 

@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "ast_name_path.hpp"
 #include "is_long_integer.hpp"
 
 // Fulcrum types and expressions.
@@ -22,7 +21,7 @@ struct ASTBuiltinType : ASTType {
 
     std::string signature() const override;
 
-    ASTBuiltinType(std::string &&name);
+    ASTBuiltinType(const std::string &name);
 };
 
 struct ASTIntegerType : ASTBuiltinType {
@@ -55,11 +54,11 @@ struct ASTVoidType : ASTBuiltinType {
 };
 
 struct ASTNamedType : ASTType {
-    NamePath name;
+    std::string name;
 
     std::string signature() const override;
 
-    ASTNamedType(NamePath &&name);
+    ASTNamedType(const std::string &name);
 };
 
 struct ASTPointerType : ASTType {
@@ -103,16 +102,16 @@ struct StructNode : ASTNode {
     };
     using Fields = std::vector<Field>;
 
-    NamePath name;
+    std::string name;
     bool isPublic;
     Fields fields;
 
     StructNode() = default;
-    StructNode(NamePath &&name, Fields &&fields, bool isPublic);
+    StructNode(const std::string &name, Fields &&fields, bool isPublic);
 };
 
 struct EnumNode : ASTNode {
-    NamePath name;
+    std::string name;
 };
 
 struct UnionNode : StructNode {
@@ -121,10 +120,10 @@ struct UnionNode : StructNode {
 };
 
 struct TypeAliasNode : ASTNode {
-    NamePath name;
+    std::string name;
     ASTType *target;
 
-    TypeAliasNode(NamePath &&name, ASTType *target);
+    TypeAliasNode(const std::string &name, ASTType *target);
 };
 
 using ArgList = std::vector<std::pair<std::string, ASTType *>>;
@@ -132,7 +131,7 @@ using ArgList = std::vector<std::pair<std::string, ASTType *>>;
 struct FunctionNode : ASTNode {
     using Body = std::vector<std::unique_ptr<ASTNode>>;
 
-    NamePath name;
+    std::string name;
     bool isPublic;
 
     ArgList arguments;
@@ -142,7 +141,7 @@ struct FunctionNode : ASTNode {
 
     bool isVariadic;
 
-    FunctionNode(NamePath &&name, ArgList &&arguments, ASTType *returnType,
+    FunctionNode(const std::string &name, ArgList &&arguments, ASTType *returnType,
                  Body &&body, bool isPublic, bool isVariadic);
 
     std::string signature() const;
@@ -176,16 +175,16 @@ struct ConstantBoolNode : ASTNode {
 };
 
 struct FunctionCallNode : ASTNode {
-    NamePath name;
+    std::string name;
     std::vector<std::unique_ptr<ASTNode>> args;
 
-    FunctionCallNode(NamePath&& name);
+    FunctionCallNode(const std::string &name);
 };
 
 struct VariableAccessNode : ASTNode {
-    NamePath name;
+    std::string name;
 
-    VariableAccessNode(NamePath&& name);
+    VariableAccessNode(const std::string &name);
 };
 
 struct DereferenceNode : ASTNode {
@@ -203,9 +202,9 @@ struct NthNode : ASTNode {
 
 struct VariableDeclarationNode : ASTNode {
     ASTType *type;
-    NamePath name;
+    std::string name;
 
-    VariableDeclarationNode(NamePath &&name, ASTType *type);
+    VariableDeclarationNode(const std::string &name, ASTType *type);
 
     std::unique_ptr<ASTNode> initialValue;
 };
