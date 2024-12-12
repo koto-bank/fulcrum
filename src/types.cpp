@@ -1,7 +1,10 @@
+#include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/TypedPointerType.h>
 #include <llvm/IR/Type.h>
+
+#include <spdlog/spdlog.h>
 
 #include "assert.hpp"
 #include "codegen_context.hpp"
@@ -102,7 +105,7 @@ StructType::StructType(CodegenContext &codegenContext, const std::string &name, 
       name(name),
       isPublic(isPublic) {}
 
-void StructType::fillFields(const Fields &newFields) {
+bool StructType::fillFields(const Fields &newFields, const llvm::DataLayout &) {
     fc_assert(structType == nullptr);
 
     fields = newFields;
@@ -114,6 +117,18 @@ void StructType::fillFields(const Fields &newFields) {
     });
 
     structType = llvm::StructType::create(context.context, fieldTypes, name);
+    return true;
+}
+
+const LanguageType *StructType::fieldType(const std::string &fieldName) const {
+    auto fieldIter
+        = std::find_if(fields.begin(), fields.end(), [&fieldName](const StructType::Fields::value_type &elem) {
+              return elem.name == fieldName;
+          });
+    if (fieldIter == fields.end()) {
+        throw CodegenError(fmt::format("No field named {} in type {}", fieldName, signature()));
+    }
+    return fieldIter->type;
 }
 
 int32_t StructType::fieldIndex(const std::string &fieldName) const {
@@ -127,19 +142,47 @@ int32_t StructType::fieldIndex(const std::string &fieldName) const {
     return std::distance(fields.begin(), fieldIter);
 }
 
-std::string StructType::signature() const { return name; }
+std::string StructType::signature() const {
+    return name;
+}
 
 llvm::Type *StructType::llvmType() const {
     return structType;
 }
 
-UnionType::UnionType(CodegenContext &codegenContext, const std::string &name, long long biggestSize)
-    : StructType(codegenContext, name, true) {
-    auto unionArrayType = ArrayType(context, context.namedTypes.at("i8").get(), biggestSize);
-    structType = llvm::StructType::create(context.context, { unionArrayType.llvmType() }, name);
-}
+bool UnionType::fillFields(const Fields &newFields, const llvm::DataLayout &dl) {
+    fc_assert(structType == nullptr);
 
-llvm::Type *UnionType::llvmType() const { return structType; }
+    fields = newFields;
+
+    llvm::Type *biggestType = nullptr;
+    size_t biggestSize;
+    for (auto& field : fields) {
+        auto t = field.type->llvmType();
+        if (t == nullptr) {
+            spdlog::info("Failed to get llvm type for type {} of {}.{}",
+                                           field.type->signature(),
+                                           name,
+                                           field.name);
+            return false;
+        }
+        if (biggestType == nullptr) {
+            biggestType = t;
+            biggestSize = dl.getTypeAllocSize(t);
+        } else if (auto s = dl.getTypeAllocSize(t); s > biggestSize) {
+            biggestType = t;
+            biggestSize = s;
+        }
+    }
+
+    std::vector<llvm::Type *> types;
+    if (biggestType != nullptr) {
+        types.push_back(biggestType);
+    }
+
+    structType = llvm::StructType::create(context.context, types, name);
+    return true;
+}
 
 llvm::Type *VoidType::llvmType() const { return llvm::Type::getVoidTy(context.context); }
 

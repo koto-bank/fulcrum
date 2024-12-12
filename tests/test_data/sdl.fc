@@ -1,25 +1,26 @@
-; Warning! The resulting program currently crashes, probably because we don't
-; support structures yet and can't allocate memory for SDL_Event instance
-
 (module hello-sdl
   (import :c "SDL2/SDL.h")
-  (import :c "SDL2/SDL_video.h")
-  (import :c "stdio.h"))
+  (import :c "SDL2/SDL_events.h")
+  (import :c "SDL2/SDL_video.h"))
 
 (fn main i32 ()
   (if (< 0 (SDL_Init 0x00000020u)) ; for SDL_INIT_VIDEO (we don't have even automatic upcasts yet)
        (puts "Failed to initialize"))
   (var event SDL_Event)
+  (var running bool true)
   (var window (ptr SDL_Window)
-    (SDL_CreateWindow "Hello from Fulcrum"
-                       500 ; pos x
-                       500 ; pos y
-                       800 ; width
-                       600 ; height
-                       0u))
+  (SDL_CreateWindow "Hello from Fulcrum"
+                     500 ; pos x
+                     500 ; pos y
+                     800 ; width
+                     600 ; height
+                     0u))
   (SDL_ShowWindow window)
-  (while (> (SDL_PollEvent (addr-of event)) 0)
-    (SDL_Delay 100u))
+  (while running
+    (while (> (SDL_PollEvent (addr-of event)) 0)
+      (if (= (at event type) SDL_QUIT)
+          (set running false))
+      (SDL_Delay 16u)))
   (SDL_DestroyWindow window)
   (SDL_Quit)
   (return 0))

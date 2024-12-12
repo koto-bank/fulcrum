@@ -485,7 +485,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
                 throw CodegenError(fmt::format("Dereferencing a non-pointer type {}", ptrType->signature()));
             varAddress = derefTarget->llvmValue(genContext);
         }
-        auto maybeSubscription = dynamic_cast<Subscription *>(args[i].get());
+        auto maybeSubscription = dynamic_cast<InboundAccess *>(args[i].get());
         if (maybeSubscription != nullptr) {
             variableType = maybeSubscription->languageType(genContext);
             varAddress = maybeSubscription->getElementPtr(genContext);
@@ -682,10 +682,23 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
 }
 
 bool FunctionCall::isTerminator() {
-    if (name == "return") return true;
+    if (name == "return") {
+        return true;
+    }
     if (name == "do") {
-        for (auto &arg : args)
-            if (arg->isTerminator()) return true;
+        for (auto &arg : args) {
+            if (arg->isTerminator()) {
+                return true;
+            }
+        }
+    }
+
+    if (name == "while") {
+        for (auto &arg : args) {
+            if (arg->isTerminator()) {
+                return true;
+            }
+        }
     }
 
     return false;
@@ -731,6 +744,10 @@ llvm::Value *SymbolAccess::llvmValue(ExpressionGenContext &genContext) {
         // no need to store arrays, since they are alloca'd and thus immutable
         return var->value;
     }
+    if (dynamic_cast<const StructType *>(var->type) != nullptr) {
+        // alloca'd structs don't need to be loaded also
+        return var->value;
+    }
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
@@ -755,48 +772,97 @@ llvm::Value *Dereference::llvmValue(ExpressionGenContext &genCont) {
 
 std::string Dereference::dump(int indent) const { return fmt::format("{}@{}", indentSpaces(indent), target->dump(0)); }
 
-Subscription::Subscription(std::unique_ptr<Expression> &&array, std::unique_ptr<Expression> &&subscript)
+InboundAccess::InboundAccess(std::unique_ptr<Expression> &&target, std::unique_ptr<Expression> &&subscript)
     : Expression(nullptr)
-    , array(std::move(array))
+    , target(std::move(target))
     , subscript(std::move(subscript)) {}
 
-const LanguageType *Subscription::languageType(const ExpressionGenContext &genContext) {
-    targetType = array->languageType(genContext);
-    auto arrayType = dynamic_cast<const ArrayType *>(targetType);
-    auto ptrType = dynamic_cast<const PointerType *>(targetType);
-    if (arrayType == nullptr && ptrType == nullptr) {
+const LanguageType *InboundAccess::languageType(const ExpressionGenContext &genContext) {
+    targetType = target->languageType(genContext);
+    auto structType = dynamic_cast<const StructType *>(targetType);
+    if (structType == nullptr) {
+        auto arrayType = dynamic_cast<const ArrayType *>(targetType);
+        auto ptrType = dynamic_cast<const PointerType *>(targetType);
+        if (arrayType == nullptr
+            && ptrType == nullptr) {
+            fc_assert(targetType != nullptr);
+            throw CodegenError(fmt::format("Subscripting a non-subscriptable type {}", targetType->signature()));
+        }
+
+        auto subscriptType = subscript->languageType(genContext);
+        auto intType = dynamic_cast<const IntegerType *>(subscriptType);
+        if (intType == nullptr) {
+            throw CodegenError(fmt::format("Subscripting with a value of non-integer type {}", subscriptType->signature()));
+        }
+        return arrayType != nullptr ? arrayType->targetType : ptrType->targetType;
+    } else {
+        auto sa = dynamic_cast<SymbolAccess *>(subscript.get());
+        if (sa == nullptr) {
+            throw CodegenError(fmt::format("Expected symbol for field access, got {}", subscript->languageType(genContext)->signature()));
+        }
+        return structType->fieldType(sa->name);
+    }
+}
+
+llvm::Value *InboundAccess::getElementPtr(ExpressionGenContext &genContext) {
+    // TODO: fix this profound skill issue
+    if (targetType == nullptr) {
+        languageType(genContext);
+    }
+    auto structType = dynamic_cast<const StructType *>(targetType);
+    if (structType == nullptr) {
+        auto idx = subscript->llvmValue(genContext);
         fc_assert(targetType != nullptr);
-        throw CodegenError(fmt::format("Subscripting a non-subscriptable type {}", targetType->signature()));
+        return genContext.builder.CreateInBoundsGEP(
+            target->llvmType(genContext),
+            target->llvmValue(genContext),
+            idx);
+    } else {
+        auto structType = dynamic_cast<const StructType *>(targetType);
+        auto sa = dynamic_cast<SymbolAccess *>(subscript.get());
+        fc_assert(sa != nullptr);
+        auto fieldIndex = structType->fieldIndex(sa->name);
+        if (auto unionType = dynamic_cast<const UnionType *>(structType); unionType != nullptr) {
+            auto targetType = unionType->fieldType(sa->name);
+            if (dynamic_cast<const StructType *>(targetType) != nullptr) {
+                return genContext.builder.CreateStructGEP(
+                    targetType->llvmType(),
+                    target->llvmValue(genContext),
+                    fieldIndex,
+                    sa->name);
+            } else {
+                // basic types in union don't require GEP
+                return target->llvmValue(genContext);
+            }
+        } else {
+            return genContext.builder.CreateStructGEP(
+                target->llvmType(genContext),
+                target->llvmValue(genContext),
+                fieldIndex,
+                sa->name);
+        }
     }
-
-    auto subscriptType = subscript->languageType(genContext);
-    auto intType = dynamic_cast<const IntegerType *>(subscriptType);
-    if (intType == nullptr) {
-        throw CodegenError(fmt::format("Subscripting array with a value of non-integer type {}", subscriptType->signature()));
-    }
-    return arrayType != nullptr ? arrayType->targetType : ptrType->targetType;
 }
 
-llvm::Value *Subscription::getElementPtr(ExpressionGenContext &genContext) {
-    auto idx = subscript->llvmValue(genContext);
-    fc_assert(targetType != nullptr);
-    return genContext.builder.CreateInBoundsGEP(
-        array->llvmType(genContext),
-        array->llvmValue(genContext),
-        idx);
-}
-
-llvm::Value *Subscription::llvmValue(ExpressionGenContext &genContext) {
-    fc_assert(targetType != nullptr);
+llvm::Value *InboundAccess::llvmValue(ExpressionGenContext &genContext) {
     auto gep = getElementPtr(genContext);
     return genContext.builder.CreateLoad(llvmType(genContext), gep);
 }
 
-std::string Subscription::dump(int indent) const { return fmt::format("{}{}[{}]", indentSpaces(indent), array->dump(0), subscript->dump(0)); }
+std::string InboundAccess::dump(int indent) const {
+    auto structType = dynamic_cast<const StructType *>(targetType);
+    if (structType == nullptr) {
+        return fmt::format("{}{}[{}]", indentSpaces(indent), target->dump(0), subscript->dump(0));
+    } else {
+        auto sa = dynamic_cast<SymbolAccess *>(subscript.get());
+        fc_assert(sa != nullptr);
+        return fmt::format("{}.{}", indentSpaces(indent), target->dump(0), sa->name);
+    }
+}
 
-VariableDeclaration::VariableDeclaration(
-    const std::string &name, const LanguageType *type, std::unique_ptr<Expression> &&initialValue
-)
+VariableDeclaration::VariableDeclaration(const std::string &name,
+                                         const LanguageType *type,
+                                         std::unique_ptr<Expression> &&initialValue)
     : Expression(type),
       initialValue(std::move(initialValue)),
       name(name) {}

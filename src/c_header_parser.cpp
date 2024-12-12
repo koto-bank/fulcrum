@@ -87,6 +87,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
                             const clang::ASTContext *ctx) {
     if (qualType.isNull()) {
         spdlog::error("qualType contains nullptr");
+        fc_unreachable();
         // why can this happen? is this a error?
         return nullptr;
     }
@@ -104,10 +105,8 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         auto size = ctx->getTypeSize(qualType);
         return cModule.types.getOrEmplaceType<ASTFloatType>(size);
     } else if (qualType->isVoidType()) {
-        return cModule.types.getType<ASTVoidType>();
-    } else if (qualType->isPointerType()
-               || qualType->isConstantArrayType()
-               || qualType->isIncompleteArrayType()) {
+        return cModule.types.getOrEmplaceType<ASTVoidType>();
+    } else if (qualType->isPointerType()) {
         auto elType = qualType->getPointeeType();
         auto underlyingType = qualTypeToASTType(elType, cModule, ctx);
         if (underlyingType == nullptr) {
@@ -115,6 +114,12 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
             return nullptr;
         }
         return cModule.types.getOrEmplaceType<ASTPointerType>(underlyingType);
+    } else if (qualType->isConstantArrayType()) {
+        auto arrayType = llvm::cast<clang::ConstantArrayType>(qualType);
+        auto elType = arrayType->getElementType();
+        auto underlyingType = qualTypeToASTType(elType, cModule, ctx);
+        auto size = arrayType->getSize();
+        return cModule.types.getOrEmplaceType<ASTArrayType>(underlyingType, size.getLimitedValue());
     } else if (qualType->isArrayType()) {
         // ..?
         spdlog::info("Array type {} is unsupported", qualType.getAsString());
@@ -122,12 +127,11 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
     } else if (qualType->isRecordType()) {
         auto rt = qualType->getAsTagDecl();
         fc_assert(rt != nullptr);
-        auto name = rt->getNameAsString();
+        auto name = rt->getName().str();
         if (name.empty()) {
             if (rt->isEmbeddedInDeclarator()) {
-                auto typedefDeclType = rt->getTypeForDecl();
-                auto qt = clang::QualType(typedefDeclType, 0u);
-                name = qt.getAsString();
+                auto typedefDeclType = ctx->getTypeDeclType(rt);
+                name = typedefDeclType.getAsString();
                 spdlog::debug("Anon struct typedefd as {}", name);
             } else {
                 // shouldn't happen. probably?
@@ -170,12 +174,47 @@ public:
     }
 
     bool VisitTagDecl(clang::TagDecl *td) {
-        if (td->isRecord()) {
+        if (auto isUnion = td->isUnion(); isUnion || td->isStruct()) {
+            auto recordDecl = llvm::cast<clang::RecordDecl>(td);
             StructNode s;
-            s.name = td->getQualifiedNameAsString();
+            s.name = recordDecl->getName().str();
+            if (s.name.empty()) {
+                if (recordDecl->isEmbeddedInDeclarator()) {
+                    auto typedefDeclType = context->getTypeDeclType(recordDecl);
+                    s.name = typedefDeclType.getAsString();
+                } else {
+                    // shouldn't happen. probably?
+                    fc_unreachable();
+                }
+            }
+            if (std::find_if(cModule.structs.begin(),
+                             cModule.structs.end(),
+                             [&name=s.name](const auto &s) {
+                                 return s.name == name;
+
+            }) != cModule.structs.end()) {
+                return true;
+            }
+            s.isUnion = isUnion;
+            fc_assert(recordDecl != nullptr);
+            // NB! bit fields are not supported yet
+            for (const auto& f : recordDecl->fields()) {
+                auto name = f->getNameAsString();
+                auto type = qualTypeToASTType(f->getType(), cModule, context);
+                s.fields.push_back({ name, type });
+            }
             cModule.structs.push_back(std::move(s));
         } else if (td->isEnum()) {
-            // TODO: enum support
+            auto enumDecl = llvm::cast<clang::EnumDecl>(td);
+            for (auto ecd : enumDecl->enumerators()) {
+                auto name = ecd->getName();
+                auto val = ecd->getInitVal().getLimitedValue();
+
+                auto type = cModule.types.getOrEmplaceType<ASTIntegerType>(false, 32);
+                auto varVal = VariableDeclarationNode(name.str(), type);
+                varVal.initialValue = std::make_unique<ConstantIntNode>(type, val);
+                cModule.globalVariables.push_back(std::move(varVal));
+            }
         }
         return true;
     }

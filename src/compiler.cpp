@@ -177,11 +177,12 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
     auto m = headerParser.takeModule();
     for (auto &&f : m.functions) {
         if (importNamed("", std::move(f), importTo.functions)) {
-            spdlog::info("Imported C function {}", importTo.functions.back().signature());
+            // spdlog::info("Imported C function {}", importTo.functions.back().signature());
         }
     }
     for (auto &&s : m.structs) {
         importNamed("", std::move(s), importTo.structs);
+        spdlog::info("Imported C struct {}", importTo.structs.back().name);
     }
     for (auto &&t : m.typeAliases) {
         importNamed("", std::move(t), importTo.typeAliases);
@@ -290,7 +291,8 @@ int Compiler::run(int argc, char *argv[]) {
         }
     }
 
-    llvm::errs() << codegenCont.module;
+    // module dunping was here, but there's a segfault...
+    // llvm::errs() << codegenCont.module;
 
     if (llvm::verifyModule(codegenCont.module, &llvm::errs())) {
         // Exit early if there's an error
