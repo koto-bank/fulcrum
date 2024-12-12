@@ -142,7 +142,7 @@ ConstantBoolNode::ConstantBoolNode(bool value)
 FunctionCallNode::FunctionCallNode(const std::string &name)
     : name(name) {}
 
-VariableAccessNode::VariableAccessNode(const std::string &name)
+SymbolNode::SymbolNode(const std::string &name)
     : name(name) {}
 
 VariableDeclarationNode::VariableDeclarationNode(const std::string &name, ASTType *type)
@@ -155,8 +155,8 @@ SizeofNode::SizeofNode(ASTType *targetType)
 DereferenceNode::DereferenceNode(std::unique_ptr<ASTNode> &&target)
     : target(std::move(target)) {}
 
-NthNode::NthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript)
-    : array(std::move(array))
+AtNode::AtNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&subscript)
+    : target(std::move(target))
     , subscript(std::move(subscript)) {}
 
 CastNode::CastNode(std::unique_ptr<ASTNode> &&target, ASTType *targetType)

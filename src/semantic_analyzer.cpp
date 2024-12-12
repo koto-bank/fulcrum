@@ -500,9 +500,9 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
                 return std::nullopt;
             }
             return std::make_unique<DereferenceNode>(std::move(target.value()));
-        } else if (sym == "nth") {
+        } else if (sym == "at") {
             if (form.children.size() != 3) {
-                reportError(symForm.token, "nth must have 2 arguments: an array and element number");
+                reportError(symForm.token, "at must have 2 arguments: an target and a subscript");
                 return std::nullopt;
             }
 
@@ -516,8 +516,8 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
                 return std::nullopt;
             }
 
-            return std::make_unique<NthNode>(std::move(target.value()),
-                                             std::move(subscript.value()));
+            return std::make_unique<AtNode>(std::move(target.value()),
+                                            std::move(subscript.value()));
         } else if (sym == "cast") {
             if (form.children.size() < 3) {
                 reportError(symForm.token, "cast must have target and type");
