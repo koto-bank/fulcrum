@@ -88,7 +88,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
     if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
         // If the function is not void, insert unreachable at the end, since the user must return
         // something
-        if (genContext.function->functionType()->returnType != context.namedTypes.at("void").get()) {
+        if (genContext.function->functionType()->returnType != genContext.codegenContext.voidType) {
             genContext.builder.CreateUnreachable();
         } else {
             // Otherwise, return void automatically
@@ -159,7 +159,7 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     // Why do we need this?
     emplaceType<VAType>();
 
-    emplaceType<AliasType>("str", str);
+    strType = emplaceType<AliasType>("str", str);
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(StructNode &&structNode) {
@@ -409,7 +409,7 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
     } else if (auto t = dynamic_cast<const FunctionNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const ConstantStringNode *>(node.get()); t != nullptr) {
-        return std::make_unique<StringConstant>(namedTypes.at("i8*").get(), t->value);
+        return std::make_unique<StringConstant>(strType, t->value);
     } else if (auto t = dynamic_cast<const ConstantIntNode *>(node.get()); t != nullptr) {
         auto tp = dynamic_cast<const IntegerType *>(getLanguageType(t->intType).value());
         fc_assert(tp != nullptr);
@@ -424,7 +424,7 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
             return std::make_unique<FloatConstant>(tp, t->value);
         }
     } else if (auto t = dynamic_cast<const ConstantBoolNode *>(node.get()); t != nullptr) {
-        return std::make_unique<BoolConstant>(namedTypes.at("bool").get(), t->value);
+        return std::make_unique<BoolConstant>(boolType, t->value);
     } else if (auto t = dynamic_cast<FunctionCallNode *>(node.get()); t != nullptr) {
         FunctionCall::Args argsExprs;
         for (auto &arg : t->args) {

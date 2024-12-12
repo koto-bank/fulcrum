@@ -134,4 +134,5 @@ struct CodegenContext {
 
     const BoolType *boolType = nullptr;
     const VoidType *voidType = nullptr;
+    const AliasType *strType = nullptr;
 };
