@@ -156,6 +156,9 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     emplaceType<IntegerType>(64, false);
     auto str = emplaceType<PointerType>(i8); // for C strings
 
+    // u128 for __darwin_arm_neon_state64
+    emplaceType<IntegerType>(128, false);
+
     // Why do we need this?
     emplaceType<VAType>();
 
