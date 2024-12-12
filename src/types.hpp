@@ -7,6 +7,7 @@
 #include <vector>
 
 namespace llvm {
+class DataLayout;
 class FunctionType;
 class StructType;
 class Type;
@@ -82,18 +83,19 @@ public:
 
     StructType(CodegenContext &codegenContext, const std::string &name, bool isPublic);
 
-    virtual void fillFields(const Fields &fields_);
+    virtual bool fillFields(const Fields &fields, const llvm::DataLayout &);
 
     llvm::Type *llvmType() const override;
     std::string signature() const override;
 
+    const LanguageType *fieldType(const std::string &fieldName) const;
     int32_t fieldIndex(const std::string &fieldName) const;
 };
 
 struct UnionType : StructType {
-    UnionType(CodegenContext &codegenContext, const std::string &name, long long biggestSize);
+    using StructType::StructType;
 
-    llvm::Type *llvmType() const override;
+    bool fillFields(const Fields &fields, const llvm::DataLayout &) override;
 };
 
 struct PointerType : LanguageType {

@@ -3,6 +3,7 @@
 #include <expected>
 #include <map>
 
+#include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Module.h>
 
 #include <fmt/format.h>
@@ -20,7 +21,6 @@ struct FulcrumModule;
 struct FunctionNode;
 struct StructNode;
 struct TypeAliasNode;
-struct UnionNode;
 struct VariableDeclarationNode;
 
 namespace llvm {
@@ -97,6 +97,7 @@ public:
 struct CodegenContext {
     llvm::LLVMContext &context;
     llvm::Module module;
+    llvm::DataLayout dataLayout;
 
     std::unordered_map<std::string, std::unique_ptr<LanguageType>> namedTypes;
     std::unordered_map<std::string, std::unique_ptr<VariableDefinition>> globalVars;
@@ -116,15 +117,11 @@ struct CodegenContext {
     CodegenResult<LanguageType> getLanguageType(const ASTType *type);
     std::unique_ptr<Expression> getExpression(std::unique_ptr<ASTNode> &&node);
 
-    CodegenResult<StructType> emplaceStructType(StructNode &&);
+    CodegenResult<StructType> emplaceStructType(const StructNode &);
     CodegenResult<AliasType> emplaceAliasType(TypeAliasNode &&);
     CodegenResult<VariableDefinition> emplaceGlobalVar(VariableDeclarationNode &&);
     CodegenResult<Function> emplaceFulcrumFunction(FunctionNode &&);
-    void fillStructTypeFields(StructNode &&);
-
-    CodegenResult<StructType> emplaceCStructType(StructNode &&);
-    CodegenResult<AliasType> emplaceCAliasType(TypeAliasNode &&);
-    CodegenResult<Function> emplaceCFunction(FunctionNode &&);
+    bool fillStructTypeFields(const StructNode &, std::vector<StructNode> &unprocessed);
 
     template <typename T, typename ...Args>
     T * emplaceType(Args &&...args) {

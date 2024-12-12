@@ -103,6 +103,7 @@ struct StructNode : ASTNode {
     using Fields = std::vector<Field>;
 
     std::string name;
+    bool isUnion = false;
     bool isPublic;
     Fields fields;
 
@@ -112,11 +113,7 @@ struct StructNode : ASTNode {
 
 struct EnumNode : ASTNode {
     std::string name;
-};
-
-struct UnionNode : StructNode {
-    long long biggestSize = 0;
-    using StructNode::StructNode;
+    // TODO: how and where store values? separate case for C?
 };
 
 struct TypeAliasNode : ASTNode {

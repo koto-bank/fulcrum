@@ -140,8 +140,10 @@ const char *StackedCodegenErrors::whatIndented(int indent) const {
 }
 
 CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext &context)
-    : context(context),
-      module(moduleName, context) {
+    : context(context)
+    , module(moduleName, context)
+    , dataLayout (&module) {
+
     emplaceType<FloatType>(FloatType::Bits::Float);
     emplaceType<FloatType>(FloatType::Bits::Double);
     voidType = emplaceType<VoidType>();
@@ -165,31 +167,16 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     strType = emplaceType<AliasType>("str", str);
 }
 
-CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(StructNode &&structNode) {
+CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(const StructNode &structNode) {
     auto name = structNode.name;
-    if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
-        // TODO: private/public unions
+    if (structNode.isUnion) {
         return emplaceType<UnionType>(structNode.name, structNode.isPublic);
     } else {
         return emplaceType<StructType>(structNode.name, structNode.isPublic);
     }
 }
 
-CodegenContext::CodegenResult<StructType> CodegenContext::emplaceCStructType(StructNode &&structNode) {
-    auto name = structNode.name;
-    if (auto u = dynamic_cast<UnionNode *>(&structNode); u != nullptr) {
-        // TODO: private/public unions
-        return emplaceType<UnionType>(structNode.name, u->biggestSize);
-    } else {
-        return emplaceType<StructType>(structNode.name, structNode.isPublic);
-    }
-}
-
 CodegenContext::CodegenResult<AliasType> CodegenContext::emplaceAliasType(TypeAliasNode &&aliasNode) {
-    return emplaceType<AliasType>(aliasNode.name, getLanguageType(aliasNode.target).value());
-}
-
-CodegenContext::CodegenResult<AliasType> CodegenContext::emplaceCAliasType(TypeAliasNode &&aliasNode) {
     return emplaceType<AliasType>(aliasNode.name, getLanguageType(aliasNode.target).value());
 }
 
@@ -255,33 +242,7 @@ CodegenContext::CodegenResult<Function> CodegenContext::emplaceFulcrumFunction(F
                                       fnNode.isVariadic)).first->second.get();
 }
 
-CodegenContext::CodegenResult<Function> CodegenContext::emplaceCFunction(FunctionNode &&fnNode) {
-    Function::Args exprArgs;
-    for (auto &[name, astType] : fnNode.arguments) {
-        exprArgs.push_back({ name, getLanguageType(astType).value() });
-    }
-    fc_assert(fnNode.body.size() == 0);
-    // Fixme: we should properly report this error
-    fc_assert(fnNode.name != "main");
-    auto name = fnNode.name;
-
-    if (namedFunctions.contains(name)) {
-        return std::unexpected(CodegenError(fmt::format("C function with name {} is already declared",  name)));
-    }
-
-    return namedFunctions.emplace(name,
-                                  std::make_unique<Function>(
-                                      *this,
-                                      module,
-                                      name,
-                                      std::move(exprArgs),
-                                      getLanguageType(fnNode.returnType).value(),
-                                      Function::Body {},
-                                      fnNode.isPublic,
-                                      fnNode.isVariadic)).first->second.get();
-}
-
-void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
+bool CodegenContext::fillStructTypeFields(const StructNode &structNode, std::vector<StructNode> &unprocessed) {
     StructType::Fields exprFields;
     for (auto &[name, astType] : structNode.fields) {
         exprFields.push_back({ name, getLanguageType(astType).value() });
@@ -289,13 +250,17 @@ void CodegenContext::fillStructTypeFields(StructNode &&structNode) {
 
     auto structType = dynamic_cast<StructType *>(namedTypes.at(structNode.name).get());
     fc_assert(structType != nullptr);
-    structType->fillFields(exprFields);
+    if (structType->fillFields(exprFields, dataLayout) == false) {
+        unprocessed.push_back(structNode);
+        return false;
+    }
+    return true;
 }
 
 void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
     // First insert all the structure types
     for (auto &structNode : fulcrumModule.structs) {
-        emplaceStructType(std::move(structNode));
+        emplaceStructType(structNode);
     }
 
     // Now insert all alias types
@@ -305,8 +270,23 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
 
     // Now fill structure type fields, which could possibly refer
     // to other structures or aliases
-    for (auto &structNode : fulcrumModule.structs) {
-        fillStructTypeFields(std::move(structNode));
+    // May require more than one pass since structures can be nested and mutually
+    // dependent. Detect circular deps though
+    std::vector<StructNode> unprocessedNodes;
+    for (auto &s : fulcrumModule.structs) {
+        fillStructTypeFields(s, unprocessedNodes);
+    }
+
+    while (unprocessedNodes.empty() == false) {
+        bool anyProcessed = false;
+        std::vector<StructNode> anotherUnprocessedNodes;
+        for (auto &s : unprocessedNodes) {
+            anyProcessed = anyProcessed || fillStructTypeFields(s, anotherUnprocessedNodes);
+        }
+        unprocessedNodes = std::move(anotherUnprocessedNodes);
+        if (anyProcessed == false) {
+            throw CodegenError(fmt::format("Failed to resolve field types. Circular dependency?"));
+        }
     }
 
     for (auto &globalVar : fulcrumModule.globalVariables) {
@@ -315,31 +295,6 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
 
     for (auto &function : fulcrumModule.functions) {
         emplaceFulcrumFunction(std::move(function));
-    }
-}
-
-void CodegenContext::generate(CModule &&cModule) {
-    for (auto &structNode : cModule.structs) {
-        emplaceCStructType(std::move(structNode));
-    }
-
-    // Now insert all alias types
-    for (auto &aliasNode : cModule.typeAliases) {
-        emplaceCAliasType(std::move(aliasNode));
-    }
-
-    // Now fill structure type fields, which could possibly refer
-    // to other structures or aliases
-    for (auto &structNode : cModule.structs) {
-        fillStructTypeFields(std::move(structNode));
-    }
-
-    for (auto &globalVar : cModule.globalVariables) {
-        emplaceGlobalVar(std::move(globalVar));
-    }
-
-    for (auto &function : cModule.functions) {
-        emplaceCFunction(std::move(function));
     }
 }
 
@@ -405,8 +360,6 @@ CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(cons
 std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNode> &&node) {
     if (auto t = dynamic_cast<const StructNode *>(node.get()); t != nullptr) {
         return nullptr;
-    } else if (auto t = dynamic_cast<const UnionNode *>(node.get()); t != nullptr) {
-        return nullptr;
     } else if (auto t = dynamic_cast<const TypeAliasNode *>(node.get()); t != nullptr) {
         return nullptr;
     } else if (auto t = dynamic_cast<const FunctionNode *>(node.get()); t != nullptr) {
@@ -433,9 +386,6 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
         for (auto &arg : t->args) {
             argsExprs.push_back(getExpression(std::move(arg)));
         }
-        for (const auto &a : argsExprs) {
-            a->dump();
-        }
         std::string fullName = t->name;
         return std::make_unique<FunctionCall>(fullName, std::move(argsExprs));
     } else if (auto t = dynamic_cast<const SymbolNode *>(node.get()); t != nullptr) {
@@ -443,9 +393,10 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
         return std::make_unique<SymbolAccess>(t->name);
     } else if (auto t = dynamic_cast<DereferenceNode *>(node.get()); t != nullptr) {
         return std::make_unique<Dereference>(getExpression(std::move(t->target)));
-    } else if (auto t = dynamic_cast<NthNode *>(node.get()); t != nullptr) {
-        return std::make_unique<Subscription>(getExpression(std::move(t->array)),
-                                                   getExpression(std::move(t->subscript)));
+    } else if (auto t = dynamic_cast<AtNode *>(node.get()); t != nullptr) {
+        auto expr = std::make_unique<InboundAccess>(getExpression(std::move(t->target)),
+                                                    getExpression(std::move(t->subscript)));
+        return expr;
     } else if (auto t = dynamic_cast<VariableDeclarationNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableDeclaration>(
             t->name,
