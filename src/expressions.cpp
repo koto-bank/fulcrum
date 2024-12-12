@@ -287,8 +287,11 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         ));
     }
 
+    // TODO: auto casts for signed/unsigned and various bit width
+/*
     for (auto i = 0u; i < args.size(); i++) {
         auto &arg = args[i];
+
         if (arg->languageType(genContext) != expectedType) {
             throw CodegenError(fmt::format(
                 "Expected all arguments to {} to be of type {}, but argument #{} was of type {}", name,
@@ -296,7 +299,7 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
             ));
         }
     }
-
+*/
     using namespace std::placeholders;
     std::function<llvm::Value *(llvm::IRBuilderBase *, llvm::Value *, llvm::Value *)> buildOperation;
 
