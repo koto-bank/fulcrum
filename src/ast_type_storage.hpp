@@ -8,7 +8,7 @@
 
 struct ASTTypeStorage {
     template <typename T, typename ...Args>
-    ASTType *getType(Args  &&...args) {
+    ASTType *getOrEmplaceType(Args  &&...args) {
         auto val = std::make_unique<T>(std::forward<Args>(args)...);
         return getOrEmplaceType(std::move(val));
     }

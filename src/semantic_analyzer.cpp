@@ -51,7 +51,7 @@ std::optional<ASTType *> parseIntType(SemanticAnalyzer &sem, const std::string &
     if (bits > 999) {
         return std::nullopt;
     }
-    return sem.module.types.getType<ASTIntegerType>(isSigned, bits);
+    return sem.module.types.getOrEmplaceType<ASTIntegerType>(isSigned, bits);
 }
 
 template <typename T>
@@ -442,7 +442,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         }
         case token::Type::IntegerLiteral: {
             auto t = form.token->as<token::IntegerLiteral>();
-            auto type = module.types.getType<ASTIntegerType>(t->isSigned, t->bits);
+            auto type = module.types.getOrEmplaceType<ASTIntegerType>(t->isSigned, t->bits);
             if (t->isSigned) {
                 return std::make_unique<ConstantIntNode>(type, std::get<int64_t>(t->value));
             } else {
@@ -454,7 +454,7 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
         }
         case token::Type::FloatLiteral: {
             auto t = form.token->as<token::FloatLiteral>();
-            auto type = module.types.getType<ASTFloatType>(t->bits);
+            auto type = module.types.getOrEmplaceType<ASTFloatType>(t->bits);
             return std::make_unique<ConstantFloatNode>(std::move(type), t->value);
         }
         case token::Type::StringLiteral: {
@@ -583,13 +583,13 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
 
         fc_assert(!sym.value().empty());
         if (sym == "f32") {
-            return module.types.getType<ASTFloatType>(32);
+            return module.types.getOrEmplaceType<ASTFloatType>(32);
         } else if (sym == "f64") {
-            return module.types.getType<ASTFloatType>(64);
+            return module.types.getOrEmplaceType<ASTFloatType>(64);
         } else if (sym == "void") {
-            return module.types.getType<ASTVoidType>();
+            return module.types.getOrEmplaceType<ASTVoidType>();
         } else if (sym == "bool") {
-            return module.types.getType<ASTBoolType>();
+            return module.types.getOrEmplaceType<ASTBoolType>();
         } else if (sym.value()[0] == 'i'
                    || sym.value()[0] == 'u') {
             auto intType = parseIntType(*this, sym.value());
@@ -599,7 +599,7 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
             // Then it's smth like u666-MyType, that is, a custom type
         }
         auto name = sym.value();
-        return module.types.getType<ASTNamedType>(std::move(name));
+        return module.types.getOrEmplaceType<ASTNamedType>(std::move(name));
     } else {
         // ptr or array
         if (form.children.empty()) {
@@ -632,7 +632,7 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
                 return std::nullopt;
             }
 
-            return module.types.getType<ASTPointerType>(std::move(pointeeType.value()));
+            return module.types.getOrEmplaceType<ASTPointerType>(std::move(pointeeType.value()));
         } else if (sym == "array") {
             // (array Type IntLiteral)
             if (form.children.size() != 3) {
@@ -652,7 +652,7 @@ std::optional<ASTType *> SemanticAnalyzer::parseType(const Parser::Expression &f
                 return std::nullopt;
             }
 
-            return module.types.getType<ASTArrayType>(std::move(targetType.value()), size.value());
+            return module.types.getOrEmplaceType<ASTArrayType>(std::move(targetType.value()), size.value());
         } else {
             reportError(kind.token, "unknown compound type");
             return std::nullopt;
