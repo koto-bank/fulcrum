@@ -182,11 +182,11 @@ public:
     std::string dump(int indent) const override;
 };
 
-struct VariableAccess : Expression {
+struct SymbolAccess : Expression {
 public:
     std::string name;
 
-    VariableAccess(const std::string &name);
+    SymbolAccess(const std::string &name);
     const LanguageType *languageType(const ExpressionGenContext &genContext) override;
     llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
     std::string dump(int indent) const override;

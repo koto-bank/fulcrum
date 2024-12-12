@@ -432,7 +432,7 @@ SemanticAnalyzer::parseVariableDeclaraion(const Parser::Expression &form) {
 }
 
 std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(const Parser::Expression &form) {
-    // atom: Literal Variable
+    // atom: Literal Symbol
     // list: FnCall
     if (form.token != nullptr) {
         switch (form.token->type) {
@@ -462,9 +462,9 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
             return std::make_unique<ConstantStringNode>(s->contents);
         }
         case token::Type::Symbol: {
-            // variable access
+            // variable access or an argument of some other form, e.g. field access
             auto sym = form.token->as<token::Symbol>();
-            return std::make_unique<VariableAccessNode>(std::move(sym->symbol));
+            return std::make_unique<SymbolNode>(std::move(sym->symbol));
         }
         default:
             reportError(form.token, "unexpected token");

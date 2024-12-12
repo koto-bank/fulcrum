@@ -435,8 +435,9 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
         }
         std::string fullName = t->name;
         return std::make_unique<FunctionCall>(fullName, std::move(argsExprs));
-    } else if (auto t = dynamic_cast<const VariableAccessNode *>(node.get()); t != nullptr) {
-        return std::make_unique<VariableAccess>(t->name);
+    } else if (auto t = dynamic_cast<const SymbolNode *>(node.get()); t != nullptr) {
+        // Most probably variable access
+        return std::make_unique<SymbolAccess>(t->name);
     } else if (auto t = dynamic_cast<DereferenceNode *>(node.get()); t != nullptr) {
         return std::make_unique<Dereference>(getExpression(std::move(t->target)));
     } else if (auto t = dynamic_cast<NthNode *>(node.get()); t != nullptr) {
