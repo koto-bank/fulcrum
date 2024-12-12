@@ -428,7 +428,7 @@ const LanguageType *FunctionCall::boolProcessorType(const ExpressionGenContext &
 const LanguageType *FunctionCall::addrOfProcessorType(const ExpressionGenContext &genContext) const {
     if (args.size() != 1) { throw CodegenError(fmt::format("Expected exactly 1 argument to {}, but got {}", name, args.size())); }
     const auto &target = args[0];
-    auto maybeVar = dynamic_cast<VariableAccess *>(target.get());
+    auto maybeVar = dynamic_cast<SymbolAccess *>(target.get());
     if (maybeVar == nullptr) {
         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
     }
@@ -488,7 +488,7 @@ llvm::Value *FunctionCall::setProcessor(ExpressionGenContext &genContext) {
             varAddress = maybeSubscription->getElementPtr(genContext);
         }
         if (variableType == nullptr) {
-            auto maybeVarExpr = dynamic_cast<VariableAccess *>(args[i].get());
+            auto maybeVarExpr = dynamic_cast<SymbolAccess *>(args[i].get());
             if (maybeVarExpr != nullptr) {
                 variableType = maybeVarExpr->languageType(genContext);
                 varAddress = maybeVarExpr->varAddress(genContext);
@@ -623,7 +623,7 @@ llvm::Value *FunctionCall::addrOfProcessor(ExpressionGenContext &genContext) {
         throw CodegenError("'addr-of' expects exactly one argument");
     }
     const auto &target = args[0];
-    auto maybeVar = dynamic_cast<VariableAccess *>(target.get());
+    auto maybeVar = dynamic_cast<SymbolAccess *>(target.get());
     if (maybeVar == nullptr) {
         throw CodegenError(fmt::format("Expected a variable to take an address of, got {}", target->dump()));
     }
@@ -701,32 +701,11 @@ std::string FunctionCall::dump(int indent) const {
     return fmt::format("{}($call {} {})", indentSpaces(indent), name, fmt::join(argDumps, " "));
 }
 
-VariableAccess::VariableAccess(const std::string &path)
+SymbolAccess::SymbolAccess(const std::string &path)
     : Expression(nullptr),
       name(path) {}
 
-const LanguageType *VariableAccess::languageType(const ExpressionGenContext &genCont) {
-    // TODO
-    /* if (name.size() > 1) {
-        LanguageType *currentType = nullptr;
-        for (auto &currentName : name.getPath()) {
-            if (currentType == nullptr) {
-                auto foundVar = genCont.lookupVariable(currentName);
-                if (foundVar == nullptr) throw CodegenError(fmt::format("Variable {} not defined", currentName));
-
-                currentType = foundVar->type;
-            } else {
-                // This works both for unions and structs
-                auto *structType = dynamic_cast<StructType *>(currentType);
-                if (structType == nullptr)
-                    throw CodegenError(fmt::format("Expected {} to be a structure type", currentType->signature()));
-                auto fieldIndex = structType->fieldIndex(currentName);
-                currentType = std::get<1>(structType->fields[fieldIndex]);
-            }
-        }
-
-        return currentType;
-    } else { */
+const LanguageType *SymbolAccess::languageType(const ExpressionGenContext &genCont) {
     auto var = genCont.lookupVariable(name);
     if (var == nullptr) {
         throw CodegenError(fmt::format("Variable {} not defined", name));
@@ -735,58 +714,15 @@ const LanguageType *VariableAccess::languageType(const ExpressionGenContext &gen
         return at->decay();
     }
     return var->type;
-//    }
 }
 
-llvm::Value *VariableAccess::varAddress(ExpressionGenContext &genCont) {
-    llvm::Value *currentValue = nullptr;
-    const LanguageType *currentType = nullptr;
-
-    // definitely unused lol
-    [[maybe_unused]] auto loadStructField = [&](const std::string &currentName) {
-        if (currentValue == nullptr) {
-            auto var = genCont.lookupVariable(currentName);
-            currentValue = var->value;
-            currentType = var->type;
-        } else {
-            auto structType = dynamic_cast<const StructType *>(currentType);
-            if (structType == nullptr)
-                throw CodegenError(
-                    fmt::format("Expected {} to be a structure or a union type", currentType->signature())
-                );
-            auto fieldIndex = structType->fieldIndex(currentName);
-
-            currentType = structType->fields[fieldIndex].type;
-
-            if (dynamic_cast<const UnionType *>(structType) != nullptr) {
-                // Don't do anything, loading with current type will produce the right value
-            } else {
-                currentValue = genCont.builder.CreateStructGEP(structType->llvmType(), currentValue, fieldIndex);
-            }
-        }
-    };
-
-    // TODO
-    /*
-    if (name.size() > 1) {
-        for (auto &currentName : name.getPath()) {
-            loadStructField(currentName);
-        }
-        return currentValue;
-    } else { */
-        auto var = genCont.lookupVariable(name);
-        if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
-        return var->value;
-//    }
+llvm::Value *SymbolAccess::varAddress(ExpressionGenContext &genCont) {
+    auto var = genCont.lookupVariable(name);
+    if (var == nullptr) throw CodegenError(fmt::format("Variable {} not defined", name));
+    return var->value;
 }
 
-llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
-    /* if (name.size() > 1) { // TODO?
-        llvm::outs() << "Multi-path variable: ";
-        for (auto &s : name.getPath()) { llvm::outs() << s; }
-        llvm::outs() << '\n';
-        return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
-    } */
+llvm::Value *SymbolAccess::llvmValue(ExpressionGenContext &genContext) {
     auto var = genContext.lookupVariable(name);
     if (dynamic_cast<const ArrayType *>(var->type) != nullptr) {
         // no need to store arrays, since they are alloca'd and thus immutable
@@ -795,7 +731,7 @@ llvm::Value *VariableAccess::llvmValue(ExpressionGenContext &genContext) {
     return genContext.builder.CreateLoad(llvmType(genContext), varAddress(genContext));
 }
 
-std::string VariableAccess::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), name); }
+std::string SymbolAccess::dump(int indent) const { return fmt::format("{}{}", indentSpaces(indent), name); }
 
 Dereference::Dereference(std::unique_ptr<Expression> &&target)
     : Expression(nullptr),
