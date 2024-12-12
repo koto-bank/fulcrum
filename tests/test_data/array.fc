@@ -4,7 +4,7 @@
 (fn print-array void ((array (array str 10)) (size i32))
   (var i i32 0)
   (while (< i size)
-    (printf "String at %p which is '%s'\n" (nth array i) (nth array i))
+    (printf "String at %p which is '%s'\n" (at array i) (at array i))
    (set i (+ i 1))))
 
 (fn main i32 ((argc i32) (argv (ptr str)))
@@ -17,13 +17,13 @@
       (set arr-size 5)))
 
   (while (< i arr-size)
-    (set (nth str-arr i) (deref (ptr+ argv (+ i 1))))
+    (set (at str-arr i) (deref (ptr+ argv (+ i 1))))
     (set i (+ i 1)))
 
   (puts "First, print array from main function\n")
   (set i 0)
   (while (< i arr-size)
-    (printf "String at %p which is '%s'\n" (nth str-arr i) (nth str-arr i))
+    (printf "String at %p which is '%s'\n" (at str-arr i) (at str-arr i))
     (set i (+ i 1)))
 
   (puts "----------------------------------------\n")

@@ -181,10 +181,10 @@ struct FunctionCallNode : ASTNode {
     FunctionCallNode(const std::string &name);
 };
 
-struct VariableAccessNode : ASTNode {
+struct SymbolNode : ASTNode {
     std::string name;
 
-    VariableAccessNode(const std::string &name);
+    SymbolNode(const std::string &name);
 };
 
 struct DereferenceNode : ASTNode {
@@ -193,11 +193,11 @@ struct DereferenceNode : ASTNode {
     DereferenceNode(std::unique_ptr<ASTNode> &&target);
 };
 
-struct NthNode : ASTNode {
-    std::unique_ptr<ASTNode> array;
+struct AtNode : ASTNode {
+    std::unique_ptr<ASTNode> target;
     std::unique_ptr<ASTNode> subscript;
 
-    NthNode(std::unique_ptr<ASTNode> &&array, std::unique_ptr<ASTNode> &&subscript);
+    AtNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&subscript);
 };
 
 struct VariableDeclarationNode : ASTNode {
