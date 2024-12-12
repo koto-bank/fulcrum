@@ -91,7 +91,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         return nullptr;
     }
     if (qualType->isBooleanType()) {
-        return cModule.types.getType<ASTBoolType>();
+        return cModule.types.getOrEmplaceType<ASTBoolType>();
     } else if (qualType->isIntegerType()
                || qualType->isCharType()) {
         bool isSigned = false;
@@ -99,10 +99,10 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
             isSigned = true;
         }
         auto size = ctx->getTypeSize(qualType);
-        return cModule.types.getType<ASTIntegerType>(isSigned, size);
+        return cModule.types.getOrEmplaceType<ASTIntegerType>(isSigned, size);
     } else if (qualType->isFloatingType()) {
         auto size = ctx->getTypeSize(qualType);
-        return cModule.types.getType<ASTFloatType>(size);
+        return cModule.types.getOrEmplaceType<ASTFloatType>(size);
     } else if (qualType->isVoidType()) {
         return cModule.types.getType<ASTVoidType>();
     } else if (qualType->isPointerType()
@@ -114,7 +114,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
             // when underlying type is unsupported
             return nullptr;
         }
-        return cModule.types.getType<ASTPointerType>(underlyingType);
+        return cModule.types.getOrEmplaceType<ASTPointerType>(underlyingType);
     } else if (qualType->isArrayType()) {
         // ..?
         spdlog::info("Array type {} is unsupported", qualType.getAsString());
@@ -134,7 +134,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
                 fc_unreachable();
             }
         }
-        return cModule.types.getType<ASTNamedType>(std::move(name));
+        return cModule.types.getOrEmplaceType<ASTNamedType>(std::move(name));
     } else if (qualType->isFunctionProtoType()) {
         auto ft = qualType->getAs<clang::FunctionProtoType>();
         ASTFunctionType::ArgTypes argTypes;
@@ -144,7 +144,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
 
         auto retType = qualTypeToASTType(ft->getReturnType(), cModule, ctx);
 
-        return cModule.types.getType<ASTFunctionType>(std::move(argTypes), retType);
+        return cModule.types.getOrEmplaceType<ASTFunctionType>(std::move(argTypes), retType);
     } else {
         spdlog::warn("Unsupported type '{}'", qualType.getAsString());
         return nullptr;
@@ -289,7 +289,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                 // TODO: wide strings, some other errors, idk, looks kinda brittle
 
                 auto varVal = VariableDeclarationNode(std::move(macroName),
-                                                      cModule.types.getType<ASTIntegerType>(true, 8));
+                                                      cModule.types.getOrEmplaceType<ASTIntegerType>(true, 8));
                 varVal.initialValue = std::make_unique<ConstantStringNode>(sp.GetString().str());
                 cModule.globalVariables.push_back(std::move(varVal));
                 macroCount++;
@@ -325,7 +325,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                 if (litParser.isIntegerLiteral()) {
                     llvm::APInt val(64, 0);
                     litParser.GetIntegerValue(val);
-                    auto type = cModule.types.getType<ASTIntegerType>(!litParser.isUnsigned, 64);
+                    auto type = cModule.types.getOrEmplaceType<ASTIntegerType>(!litParser.isUnsigned, 64);
 
                     auto varVal = VariableDeclarationNode(std::move(macroName), type);
                     varVal.initialValue = std::make_unique<ConstantIntNode>(type, val.getLimitedValue());
@@ -334,7 +334,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                 } else if (litParser.isFloatingLiteral()) {
                     llvm::APFloat val(0.0f);
                     litParser.GetFloatValue(val, llvm::RoundingMode::Dynamic);
-                    auto type = cModule.types.getType<ASTFloatType>(32);
+                    auto type = cModule.types.getOrEmplaceType<ASTFloatType>(32);
 
                     // TODO: how to do double literals?
                     auto varVal = VariableDeclarationNode(std::move(macroName), type);
