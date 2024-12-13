@@ -31,6 +31,11 @@ cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
 -Wno-builtin-macro-redefined" -DLLVM_CONFIG_BIN=llvm-config-18
 #+end_src
 
+*** Debugging
+Don't forget to pass ~-glldb~ if you want to debug the resulting
+executable with lldb. Otherwise it will be unpleasant: incomplete
+types, failures to find certain symbols and so on.
+
 ** Macos
 Don't forget to export paths to LLVM and Clang:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
