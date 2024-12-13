@@ -1,0 +1,63 @@
+(module hello-opengl
+  (import :c "stdio.h")
+  (import :c "SDL2/SDL.h")
+  (import :c "SDL2/SDL_opengl.h")
+  (import :c "SDL2/SDL_events.h")
+  (import :c "SDL2/SDL_video.h")
+  (import :c "gl.h"))
+
+(fn update f32 ((value (ptr f32))
+               (delta f32))
+  (var invert bool false)
+  (set (deref value) (+ (deref value) delta))
+  (if (> (deref value) 1.0f32)
+      (set (deref value) 1.0f32
+           invert true))
+  (if (< (deref value) 0.0f32)
+        (set (deref value) 0.0f32
+             invert true))
+  (if invert
+      (return (- 0.0f32 delta)) ; lmao (- delta) doesn't work, so
+                                ; explicit subtraction is needed
+    (return delta)))
+
+(fn main i32 ()
+  (if (< 0 (SDL_Init (cast SDL_INIT_VIDEO u32)))
+       (puts "Failed to initialize"))
+  (var event SDL_Event)
+  (var running bool true)
+  (var window (ptr SDL_Window)
+  (SDL_CreateWindow "Hello from Fulcrum"
+                     500 ; pos x
+                     500 ; pos y
+                     640 ; width
+                     480 ; height
+                     SDL_WINDOW_OPENGL))
+  (SDL_GL_CreateContext window) ; GLContext is void * alias, and
+  (glViewport 0 0 640 480)      ; aliases are not supported yet
+  (SDL_ShowWindow window)
+  (var r f32 0.0f32)
+  (var g f32 0.0f32)
+  (var b f32 1.0f32)
+
+  (var dr f32 0.01f32)
+  (var dg f32 0.008f32)
+  (var db f32 0.006f32)
+
+  (while running
+    (while (> (SDL_PollEvent (addr-of event)) 0)
+      (if (= (at event type) SDL_QUIT)
+          (set running false)))
+
+    (set dr (update (addr-of r) dr))
+    (set dg (update (addr-of g) dg))
+    (set db (update (addr-of b) db))
+
+    (glClearColor r g b 1.0f32)
+    (glClear (cast GL_COLOR_BUFFER_BIT u32))
+    (SDL_GL_SwapWindow window)
+    (SDL_Delay 16u))
+  (SDL_DestroyWindow window)
+  (SDL_Quit)
+  (puts "Goodbye, all seems to work!")
+  (return 0))
