@@ -10,9 +10,29 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
 
-if (${LLVM_CONFIG_BIN} STREQUAL "")
-    set(LLVM_CONFIG_BIN "llvm-config")
-endif()
+## First, build LLVM and Clang
+
+set(LLVM_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/llvm-project/ CACHE STRING "llvm-project root dir")
+set(LLVM_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/llvm-project/_build CACHE STRING "llvm-project build dir")
+set(LLVM_INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/_llvm_install CACHE STRING "llvm-project install dir")
+
+include(ExternalProject)
+file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
+ExternalProject_Add(llvm-project
+    PREFIX llvm-project
+    SOURCE_DIR ${LLVM_ROOT_DIR}/llvm
+    BINARY_DIR ${LLVM_BUILD_DIR}
+    CMAKE_ARGS
+    -DBUILD_SHARED_LIBS=ON
+    -DCMAKE_BUILD_TYPE=$<IF:$<CONFIG:Debug>,Debug,Release>
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    -DCMAKE_INSTALL_PREFIX=${LLVM_INSTALL_DIR}
+    -DLLVM_ENABLE_ASSERTIONS=ON
+    -DLLVM_ENABLE_PIC=ON
+    -DLLVM_ENABLE_RTTI=ON
+    -DLLVM_TARGETS_TO_BUILD=host
+    -DLLVM_ENABLE_PROJECTS=clang
+)
 
 ### Library
 
@@ -31,11 +51,15 @@ add_library(${FULCRUM_LIB} OBJECT
   "src/semantic_analyzer.cpp"
   "src/types.cpp"
   )
-target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
-target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
+set(LLVM_DIR ${LLVM_INSTALL_DIR}/lib/cmake/llvm CACHE STRING "llvm home dir" FORCE)
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+target_compile_definitions(${FULCRUM_LIB} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
+target_include_directories(${FULCRUM_LIB} PUBLIC "src")
 
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS} ${CLANG_DEFINITIONS})
