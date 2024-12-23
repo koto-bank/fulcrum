@@ -4,7 +4,9 @@
   (import :c "SDL2/SDL_opengl.h")
   (import :c "SDL2/SDL_events.h")
   (import :c "SDL2/SDL_video.h")
-  (import :c "gl.h"))
+  (import :c "GL/gl.h") ; on Linux
+  ; (import :c "gl.h") ; on Macos
+  )
 
 (fn update f32 ((value (ptr f32))
                (delta f32))
