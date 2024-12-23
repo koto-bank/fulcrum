@@ -182,7 +182,7 @@ void processImports(FulcrumModule &importTo, Compiler& compiler, ASTTypeStorage 
     }
     for (auto &&s : m.structs) {
         importNamed("", std::move(s), importTo.structs);
-        spdlog::info("Imported C struct {}", importTo.structs.back().name);
+        // spdlog::info("Imported C struct {}", importTo.structs.back().name);
     }
     for (auto &&t : m.typeAliases) {
         importNamed("", std::move(t), importTo.typeAliases);
