@@ -165,6 +165,7 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     emplaceType<VAType>();
 
     strType = emplaceType<AliasType>("str", str);
+    voidPtrType = emplaceType<PointerType>(voidType);
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(const StructNode &structNode) {
