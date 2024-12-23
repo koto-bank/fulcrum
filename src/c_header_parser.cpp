@@ -149,6 +149,17 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         auto retType = qualTypeToASTType(ft->getReturnType(), cModule, ctx);
 
         return cModule.types.getOrEmplaceType<ASTFunctionType>(std::move(argTypes), retType);
+    } else if (qualType->isTypedefNameType()) {
+        auto tdt = qualType->getAs<clang::TypedefType>();
+        auto nameDecl = tdt->getDecl();
+        auto name = nameDecl->getName();
+        auto targetType = qualTypeToASTType(tdt->desugar(), cModule, ctx);
+        // collect type alias!
+        cModule.typeAliases.push_back({ name.str(), targetType });
+        return targetType;
+    } else if (qualType->isVectorType()) {
+        // Vector type! What a marvel. Shame is goes straight in the trash
+        return cModule.types.getOrEmplaceType<ASTVoidType>();
     } else {
         spdlog::warn("Unsupported type '{}'", qualType.getAsString());
         return nullptr;
