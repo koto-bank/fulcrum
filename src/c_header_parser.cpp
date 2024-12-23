@@ -132,7 +132,6 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
             if (rt->isEmbeddedInDeclarator()) {
                 auto typedefDeclType = ctx->getTypeDeclType(rt);
                 name = typedefDeclType.getAsString();
-                spdlog::debug("Anon struct typedefd as {}", name);
             } else {
                 // shouldn't happen. probably?
                 fc_unreachable();
