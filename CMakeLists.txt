@@ -10,7 +10,7 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 set(FULCRUM_LIB libfulcrum)
 set(FULCRUM_COMPILER fulcrum)
 
-if (${LLVM_CONFIG_BIN} STREQUAL "")
+if ("${LLVM_CONFIG_BIN}" STREQUAL "")
     set(LLVM_CONFIG_BIN "llvm-config")
 endif()
 
