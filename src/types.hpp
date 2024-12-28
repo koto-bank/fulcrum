@@ -45,7 +45,7 @@ struct IntegerType : LanguageType {
 };
 
 struct FloatType : LanguageType {
-    enum class Bits { Float, Double };
+    enum class Bits { Half, Float, Double, Quad };
     Bits bits;
 
     FloatType(CodegenContext &context, Bits bits);

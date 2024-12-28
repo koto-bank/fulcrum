@@ -84,10 +84,30 @@ FloatType::FloatType(CodegenContext &context, Bits bits)
     : LanguageType(context),
       bits(bits) {}
 
-std::string FloatType::signature() const { return bits == Bits::Float ? "f32" : "f64"; }
+std::string FloatType::signature() const {
+   switch (bits) {
+   case Bits::Half:
+       return "f16";
+   case Bits::Float:
+       return "f32";
+   case Bits::Double:
+       return "f64";
+   case Bits::Quad:
+       return "f128";
+   }
+}
 
 llvm::Type *FloatType::llvmType() const {
-    return bits == Bits::Float ? llvm::Type::getFloatTy(context.context) : llvm::Type::getDoubleTy(context.context);
+    switch (bits) {
+    case Bits::Half:
+        return llvm::Type::getHalfTy(context.context);
+    case Bits::Float:
+        return llvm::Type::getFloatTy(context.context);
+    case Bits::Double:
+        return llvm::Type::getDoubleTy(context.context);
+    case Bits::Quad:
+        return llvm::Type::getFP128Ty(context.context);
+    }
 }
 
 AliasType::AliasType(CodegenContext &codegenContext, const std::string &name, const LanguageType *targetType)

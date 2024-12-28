@@ -144,8 +144,10 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
     , module(moduleName, context)
     , dataLayout (&module) {
 
+    emplaceType<FloatType>(FloatType::Bits::Half);
     emplaceType<FloatType>(FloatType::Bits::Float);
     emplaceType<FloatType>(FloatType::Bits::Double);
+    emplaceType<FloatType>(FloatType::Bits::Quad);
     voidType = emplaceType<VoidType>();
     boolType = emplaceType<BoolType>();
     auto i8 = emplaceType<IntegerType>(8, true);
