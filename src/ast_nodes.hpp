@@ -89,6 +89,16 @@ struct ASTFunctionType : ASTType {
     ASTFunctionType(ArgTypes &&arguments, ASTType *returnType);
 };
 
+struct ASTVectorType : ASTType {
+    const ASTType *elementType;
+    size_t elementCount;
+    bool isScalable;
+
+    std::string signature() const override;
+
+    ASTVectorType(const ASTType *elementType, size_t elementCount, bool isScalable);
+};
+
 // Nodes
 
 struct ASTNode {

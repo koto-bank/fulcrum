@@ -85,6 +85,18 @@ std::string ASTFunctionType::signature() const {
     return fmt::format("{}{}", returnType->signature(), argTypes);
 }
 
+ASTVectorType::ASTVectorType(const ASTType *elementType, size_t elementCount, bool isScalable)
+    : elementType(elementType)
+    , elementCount(elementCount)
+    , isScalable(isScalable) {}
+
+std::string ASTVectorType::signature() const {
+    // TODO: format should be m<bit width><element type> Thus, get bit
+    // width of target type, multiply by element count, and then
+    // decide on type suffix
+    return fmt::format("m{}??", elementCount);
+}
+
 StructNode::StructNode(const std::string &name, Fields &&fields, bool isPublic)
     : name(name),
       isPublic(isPublic),

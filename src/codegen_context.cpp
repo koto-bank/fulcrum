@@ -353,6 +353,9 @@ CodegenContext::CodegenResult<LanguageType> CodegenContext::getLanguageType(cons
         }
         auto retType = getLanguageType(t->returnType);
         return emplaceType<FunctionType>(exprArgs, retType.value(), false);
+    } else if (auto t = dynamic_cast<const ASTVectorType *>(type); t != nullptr) {
+        auto elemType = getLanguageType(t->elementType);
+        return emplaceType<VectorType>(elemType.value(), t->elementCount, t->isScalable);
     } else {
         // new type, unsupported above?
         fc_unreachable();
