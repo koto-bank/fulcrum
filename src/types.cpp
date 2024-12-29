@@ -142,12 +142,16 @@ bool StructType::fillFields(const Fields &newFields, const llvm::DataLayout &) {
     fields = newFields;
 
     std::vector<llvm::Type *> fieldTypes;
-    std::transform(fields.begin(), fields.end(), std::back_inserter(fieldTypes), [](auto &field) {
-        auto tp = field.type;
-        return tp->llvmType();
-    });
+    for (auto &field : fields) {
+        auto tp = field.type->llvmType();
+        if (tp == nullptr) {
+            return false;
+        }
+        fieldTypes.push_back(tp);
+    }
 
     structType = llvm::StructType::create(context.context, fieldTypes, name);
+    fc_assert(structType != nullptr);
     return true;
 }
 
@@ -213,6 +217,7 @@ bool UnionType::fillFields(const Fields &newFields, const llvm::DataLayout &dl) 
     }
 
     structType = llvm::StructType::create(context.context, types, name);
+    fc_assert(structType != nullptr);
     return true;
 }
 
