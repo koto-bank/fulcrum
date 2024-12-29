@@ -2,6 +2,9 @@
 Generate:
 ~rm -rf _build ; mkdir _build ; cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1~
 
+If you want to use some other compiler, e.g. clang, pass these options
+to cmake: ~-DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang~
+
 Build:
 ~cmake --build _build~
 
