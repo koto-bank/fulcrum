@@ -180,12 +180,13 @@ bool UnionType::fillFields(const Fields &newFields, const llvm::DataLayout &dl) 
     for (auto& field : fields) {
         auto t = field.type->llvmType();
         if (t == nullptr) {
-            spdlog::info("Failed to get llvm type for type {} of {}.{}",
-                                           field.type->signature(),
-                                           name,
-                                           field.name);
+            spdlog::info("Failed to get llvm type for structure field {}.{} of type {}",
+                          name,
+                          field.name,
+                          field.type->signature());
             return false;
         }
+
         if (biggestType == nullptr) {
             biggestType = t;
             biggestSize = dl.getTypeAllocSize(t);

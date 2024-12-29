@@ -253,6 +253,8 @@ bool CodegenContext::fillStructTypeFields(const StructNode &structNode, std::vec
 
     auto structType = dynamic_cast<StructType *>(namedTypes.at(structNode.name).get());
     fc_assert(structType != nullptr);
+    // fragile processing of nested structures.
+    // dep graph is needed for proper solution.
     if (structType->fillFields(exprFields, dataLayout) == false) {
         unprocessed.push_back(structNode);
         return false;
@@ -284,7 +286,7 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
         bool anyProcessed = false;
         std::vector<StructNode> anotherUnprocessedNodes;
         for (auto &s : unprocessedNodes) {
-            anyProcessed = anyProcessed || fillStructTypeFields(s, anotherUnprocessedNodes);
+            anyProcessed = fillStructTypeFields(s, anotherUnprocessedNodes) || anyProcessed;
         }
         unprocessedNodes = std::move(anotherUnprocessedNodes);
         if (anyProcessed == false) {
