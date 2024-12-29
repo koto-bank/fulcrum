@@ -153,6 +153,17 @@ struct ArrayType : LanguageType {
     std::string signature() const override;
 };
 
+struct VectorType : LanguageType {
+    const LanguageType *elementType;
+    size_t size;
+    bool isScalable;
+
+    llvm::Type *llvmType() const override;
+    std::string signature() const override;
+
+    VectorType(CodegenContext &context, const LanguageType *elementType, size_t size, bool isScalable);
+};
+
 struct VAType : LanguageType {
     using LanguageType::LanguageType;
 

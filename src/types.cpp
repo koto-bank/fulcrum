@@ -266,6 +266,21 @@ const PointerType *ArrayType::decay() const {
     return decayedType;
 }
 
+llvm::Type *VectorType::llvmType() const {
+    return llvm::VectorType::get(elementType->llvmType(), size, isScalable);
+}
+
+std::string VectorType::signature() const {
+    // TODO: proper signature
+    return "m???";
+}
+
+VectorType::VectorType(CodegenContext &context, const LanguageType *elementType, size_t size, bool isScalable)
+    : LanguageType(context)
+    , elementType(elementType)
+    , size(size)
+    , isScalable(isScalable) {}
+
 llvm::Type *VAType::llvmType() const {
     return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0);
 }
