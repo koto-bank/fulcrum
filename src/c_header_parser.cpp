@@ -439,7 +439,10 @@ bool HeaderParser::parseHeader(const std::filesystem::path &path) {
     std::vector<std::string> includes;
     for (auto &include : compiler.includeDirectories) {
         includes.push_back(fmt::format("-I{}", include.string()));
-        argStrs.push_back(includes.back().c_str());
+    }
+
+    for (auto &i : includes) {
+        argStrs.push_back(i.c_str());
     }
     argStrs.push_back(path.c_str());
     std::unique_ptr<clang::CompilerInvocation> ci = clang::createInvocation(argStrs, ciOpts);
@@ -474,7 +477,7 @@ bool HeaderParser::parseHeader(const std::filesystem::path &path) {
     const clang::FrontendInputFile &mainInput = clang->getFrontendOpts().Inputs[0];
     if (!action->BeginSourceFile(*clang, mainInput)) {
         spdlog::error("BeginSourceFile() failed when building AST for {}",
-                                 std::string(mainInput.getFile()));
+                      std::string(mainInput.getFile()));
         return false;
     }
 
