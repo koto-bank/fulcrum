@@ -40,6 +40,17 @@ bool LanguageType::assignable(const LanguageType *to, const LanguageType *from) 
         return false;
     }
 
+    // If one of the types is an alias, check underying type
+    auto aliasTo = dynamic_cast<const AliasType *>(to);
+    auto aliasFrom = dynamic_cast<const AliasType *>(from);
+    if (aliasTo != nullptr) {
+        return assignable(aliasTo->targetType, from);
+    }
+
+    if (aliasFrom != nullptr) {
+        return assignable(to, aliasFrom->targetType);
+    }
+
     // we can assign from array to pointer, if their underlying types are the same...
     auto ptTo = dynamic_cast<const PointerType *>(to);
     auto atFrom = dynamic_cast<const ArrayType *>(from);

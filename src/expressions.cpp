@@ -871,7 +871,7 @@ llvm::Value *VariableDeclaration::llvmValue(ExpressionGenContext &genContext) {
     auto varDef = genContext.insertVariable(name, type);
     if (initialValue != nullptr) {
         auto initialValType = initialValue->languageType(genContext);
-        if (initialValType != type) {
+        if (!LanguageType::assignable(initialValType, type)) {
             throw CodegenError(fmt::format(
                 "Tried to assign a value ot type {} to {}, which is a variable of type {}", initialValType->signature(),
                 name, type->signature()

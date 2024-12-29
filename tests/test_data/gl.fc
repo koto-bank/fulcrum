@@ -35,8 +35,8 @@
                      640 ; width
                      480 ; height
                      SDL_WINDOW_OPENGL))
-  (SDL_GL_CreateContext window) ; GLContext is void * alias, and
-  (glViewport 0 0 640 480)      ; aliases are not supported yet
+  (var ctx SDL_GLContext (SDL_GL_CreateContext window))
+  (glViewport 0 0 640 480)
   (SDL_ShowWindow window)
   (var r f32 0.0f32)
   (var g f32 0.0f32)
@@ -59,6 +59,8 @@
     (glClear (cast GL_COLOR_BUFFER_BIT u32))
     (SDL_GL_SwapWindow window)
     (SDL_Delay 16u))
+
+  (SDL_GL_DeleteContext ctx)
   (SDL_DestroyWindow window)
   (SDL_Quit)
   (puts "Goodbye, all seems to work!")

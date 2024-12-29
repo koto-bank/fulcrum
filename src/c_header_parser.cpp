@@ -1,6 +1,5 @@
 #include <iostream>
 #include <map>
-#include <optional>
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Module.h>
@@ -91,7 +90,11 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         // why can this happen? is this a error?
         return nullptr;
     }
-    if (qualType->isBooleanType()) {
+    if (qualType->isTypedefNameType()) {
+        auto tdt = qualType->getAs<clang::TypedefType>();
+        auto targetType = qualTypeToASTType(tdt->desugar(), cModule, ctx);
+        return targetType;
+    } else if (qualType->isBooleanType()) {
         return cModule.types.getOrEmplaceType<ASTBoolType>();
     } else if (qualType->isIntegerType()
                || qualType->isCharType()) {
@@ -148,17 +151,13 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         auto retType = qualTypeToASTType(ft->getReturnType(), cModule, ctx);
 
         return cModule.types.getOrEmplaceType<ASTFunctionType>(std::move(argTypes), retType);
-    } else if (qualType->isTypedefNameType()) {
-        auto tdt = qualType->getAs<clang::TypedefType>();
-        auto nameDecl = tdt->getDecl();
-        auto name = nameDecl->getName();
-        auto targetType = qualTypeToASTType(tdt->desugar(), cModule, ctx);
-        // collect type alias!
-        cModule.typeAliases.push_back({ name.str(), targetType });
-        return targetType;
     } else if (qualType->isVectorType()) {
-        // Vector type! What a marvel. Shame is goes straight in the trash
-        return cModule.types.getOrEmplaceType<ASTVoidType>();
+        auto vt = qualType->getAs<clang::VectorType>();
+        auto et = vt->getElementType();
+        auto elementCount = vt->getNumElements();
+        auto elementType = qualTypeToASTType(et, cModule, ctx);
+        // TODO: is the type scalable in terms of llvm::VectorType?
+        return cModule.types.getOrEmplaceType<ASTVectorType>(elementType, elementCount, false);
     } else {
         spdlog::warn("Unsupported type '{}'", qualType.getAsString());
         return nullptr;
@@ -181,6 +180,13 @@ public:
 
     void setASTContext(clang::ASTContext &ctx) {
         context = &ctx;
+    }
+
+    bool VisitTypedefDecl(clang::TypedefDecl *td) {
+        auto targetQualType = td->getUnderlyingType();
+        auto targetType = qualTypeToASTType(targetQualType, cModule, context);
+        cModule.typeAliases.push_back({ td->getName().str(), targetType });
+        return true;
     }
 
     bool VisitTagDecl(clang::TagDecl *td) {
@@ -209,6 +215,10 @@ public:
             fc_assert(recordDecl != nullptr);
             // NB! bit fields are not supported yet
             for (const auto& f : recordDecl->fields()) {
+                // if the field if fn pointer, check its return type,
+                // probably it's not defined and the declaration
+                // becomes invalid because of this
+                fc_assert(!f->isInvalidDecl());
                 auto name = f->getNameAsString();
                 auto type = qualTypeToASTType(f->getType(), cModule, context);
                 s.fields.push_back({ name, type });
