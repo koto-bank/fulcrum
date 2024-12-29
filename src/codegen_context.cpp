@@ -168,6 +168,8 @@ CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext 
 
     strType = emplaceType<AliasType>("str", str);
     voidPtrType = emplaceType<PointerType>(voidType);
+
+    emplaceType<AliasType>("__va_list_tag", voidPtrType);
 }
 
 CodegenContext::CodegenResult<StructType> CodegenContext::emplaceStructType(const StructNode &structNode) {
@@ -270,6 +272,7 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
 
     // Now insert all alias types
     for (auto &aliasNode : fulcrumModule.typeAliases) {
+        spdlog::info("Emplacing type alias {} = {}", aliasNode.name, aliasNode.target->signature());
         emplaceAliasType(std::move(aliasNode));
     }
 
