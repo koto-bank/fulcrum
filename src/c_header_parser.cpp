@@ -158,6 +158,9 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         auto elementType = qualTypeToASTType(et, cModule, ctx);
         // TODO: is the type scalable in terms of llvm::VectorType?
         return cModule.types.getOrEmplaceType<ASTVectorType>(elementType, elementCount, false);
+    } else if (qualType->isEnumeralType()) {
+        // TOOD: proper enum support as argument type?
+        return cModule.types.getOrEmplaceType<ASTIntegerType>(false, 32);
     } else {
         spdlog::warn("Unsupported type '{}'", qualType.getAsString());
         return nullptr;
