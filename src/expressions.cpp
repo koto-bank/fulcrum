@@ -671,7 +671,8 @@ llvm::Value *FunctionCall::llvmValue(ExpressionGenContext &genContext) {
                 throw CodegenError(fmt::format(
                                        "Incompatible argument type in {}: for argument #{}"
                                        " expected {}, but received {}",
-                                       name, i, expectedType->signature(), argType->signature()
+                                       name, i,
+                                       expectedType->signature(), argType->signature()
                                        ));
             }
         }
@@ -732,9 +733,6 @@ const LanguageType *SymbolAccess::languageType(const ExpressionGenContext &genCo
     auto var = genCont.lookupVariable(name);
     if (var == nullptr) {
         throw CodegenError(fmt::format("Variable {} not defined", name));
-    }
-    if (auto at = dynamic_cast<const ArrayType *>(var->type); at != nullptr) {
-        return at->decay();
     }
     return var->type;
 }
@@ -861,10 +859,20 @@ const LanguageType *ArraySubscription::languageType(const ExpressionGenContext &
 llvm::Value *ArraySubscription::getElementPtr(ExpressionGenContext &genContext) {
     auto idx = subscript->llvmValue(genContext);
     fc_assert(targetType != nullptr);
-    return genContext.builder.CreateInBoundsGEP(
-        target->llvmType(genContext),
-        target->llvmValue(genContext),
-        idx);
+    auto arrayType = dynamic_cast<const ArrayType *>(targetType);
+    auto ptrType = dynamic_cast<const PointerType *>(targetType);
+    if (arrayType == nullptr) {
+        fc_assert(ptrType != nullptr);
+        return genContext.builder.CreateInBoundsGEP(
+            target->llvmType(genContext),
+            target->llvmValue(genContext),
+            { idx });
+    } else {
+        return genContext.builder.CreateInBoundsGEP(
+            target->llvmType(genContext),
+            target->llvmValue(genContext),
+            { llvm::ConstantInt::get(llvm::Type::getInt32Ty(genContext.codegenContext.context), 0u), idx });
+    }
 }
 
 llvm::Value *ArraySubscription::llvmValue(ExpressionGenContext &genContext) {
