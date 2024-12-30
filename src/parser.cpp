@@ -46,7 +46,13 @@ void Parser::Expression::dump(uint32_t indent) const {
         for (auto i = indent * 4; i > 0; i--) {
             std::cout << " ";
         }
-        std::cout << token->type << '\n';
+        std::cout << token->type;
+        if (token->type == token::Type::Symbol) {
+            std::cout << " " << token->as<token::Symbol>()->symbol;
+        } else if (token->type == token::Type::Error) {
+            std::cout << " " << token->as<token::Error>()->what;
+        }
+        std::cout << '\n';
     } else {
         for (auto i = indent * 4; i > 0; i--) {
             std::cout << " ";
