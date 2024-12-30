@@ -1,0 +1,192 @@
+(module shaders
+  (import :c "stdio.h")
+  (import :c "SDL2/SDL.h")
+  ; we need a way to pass defines to preprocessor
+  (import :c "opengl-hack.h")
+  (import :c "SDL2/SDL_events.h")
+  (import :c "SDL2/SDL_video.h")
+  (import :c "math.h"))
+
+(fn init-gl void ((vao (ptr u32))
+                  (vbo-verts (ptr u32))
+                  (vbo-color (ptr u32))
+                  (verts (ptr f32))
+                  (color (ptr f32)))
+  (glGenVertexArrays 1 vao)
+  (glBindVertexArray (deref vao))
+
+  ; VBO for vertex data
+  (glGenBuffers 1 vbo-verts)
+  (glBindBuffer GL_ARRAY_BUFFER (deref vbo-verts))
+  (glBufferData GL_ARRAY_BUFFER
+                (cast (* 9 (size-of GLfloat)) u64)
+                (cast verts (ptr void))
+                GL_STATIC_DRAW)
+  (glVertexAttribPointer 0 3
+                         GL_FLOAT
+                         (cast GL_FALSE u8) ; otherwise we get
+                                            ; '[error] Incompatible
+                                            ; argument type in
+                                            ; glVertexAttribPointer:
+                                            ; for argument #3 expected
+                                            ; u8, but received i32',
+                                            ; which also needs fixing
+                         0
+                         (cast 0 (ptr void)))
+  (glEnableVertexAttribArray 0)
+
+  ; VBO for color data
+  (glGenBuffers 1 vbo-color)
+  (glBindBuffer GL_ARRAY_BUFFER (deref vbo-color))
+  (glBufferData GL_ARRAY_BUFFER
+                (cast (* 9 (size-of GLfloat)) u64)
+                (cast color (ptr void))
+                GL_STATIC_DRAW)
+  (glVertexAttribPointer 1 3
+                         GL_FLOAT
+                         (cast GL_FALSE u8)
+                         0
+                         (cast 0 (ptr void)))
+  (glEnableVertexAttribArray 1)
+
+  (glBindVertexArray 0))
+
+(fn init-shaders void ((program (ptr GLint)))
+  (var frag-src str
+"#version 330                      \
+                                   \
+in vec3 color;                     \
+out vec4 frag_color;               \
+                                   \
+void main()                        \
+{                                  \
+    frag_color = vec4(color, 1.0); \
+}")
+  (var vert-src str
+"#version 330                            \
+                                         \
+layout(location = 0) in vec3 vert_pos;   \
+layout(location = 1) in vec3 vert_color; \
+                                         \
+out vec3 color;                          \
+                                         \
+void main() {                            \
+    color = vert_color;                  \
+    gl_Position = vec4(vert_pos, 1.0);   \
+}")
+  (var v GLint (glCreateShader GL_VERTEX_SHADER))
+  (var f GLint (glCreateShader GL_FRAGMENT_SHADER))
+
+  (var vlen GLint)
+  (var flen GLint)
+
+  (glShaderSource v 1 (addr-of vert-src) (cast 0 (ptr i32)))
+  (glShaderSource f 1 (addr-of frag-src) (cast 0 (ptr i32)))
+
+  (var compiled GLint)
+
+  (var error-msg (array i8 512))
+  (var len i32 0)
+  (glCompileShader v)
+  (glGetShaderiv v GL_COMPILE_STATUS (addr-of compiled))
+  (if (= 0 compiled)
+      (progn
+        (puts "Vertex shader failed to compile")
+        (glGetShaderInfoLog v 512 (addr-of len) error-msg)
+        (puts error-msg)))
+
+  (glCompileShader f)
+  (glGetShaderiv f GL_COMPILE_STATUS (addr-of compiled))
+  (if (= 0 compiled)
+      (puts "Fragment shader not compiled\n"))
+
+
+  (set (deref program) (glCreateProgram))
+  (var p u32 (deref program))
+  (printf "Generated program %d\n")
+  (glAttachShader p v)
+  (glAttachShader p f)
+  (glLinkProgram p)
+  (glGetProgramInfoLog p 512 (addr-of len) error-msg)
+  (if (> len 0)
+      (puts error-msg))
+
+  (glUseProgram p))
+
+(fn main i32 ()
+  (if (< 0 (SDL_Init SDL_INIT_VIDEO))
+      (puts "Failed to initialize"))
+    (var event SDL_Event)
+  (var running bool true)
+  (SDL_GL_SetAttribute SDL_GL_CONTEXT_MAJOR_VERSION 3)
+  (SDL_GL_SetAttribute SDL_GL_CONTEXT_MINOR_VERSION 3)
+  (SDL_GL_SetAttribute SDL_GL_CONTEXT_PROFILE_MASK SDL_GL_CONTEXT_PROFILE_CORE)
+  (var window (ptr SDL_Window)
+       (SDL_CreateWindow "Behold The Triangle"
+                         500 ; pos x
+                         500 ; pos y
+                         640 ; width
+                         480 ; height
+                         SDL_WINDOW_OPENGL))
+  (var ctx SDL_GLContext (SDL_GL_CreateContext window))
+  (glViewport 0 0 640 480)
+
+  ; OpenGL initialization
+  (var vao u32)
+  (var vbo-verts u32)
+  (var vbo-color u32)
+  (var verts (array f32 9))
+  (set (at verts 0) 1.0f32
+       (at verts 1) 0.0f32
+       (at verts 2) 0.0f32
+       (at verts 3) 0.0f32
+       (at verts 4) 1.0f32
+       (at verts 5) 0.0f32
+       (at verts 6) 0.0f32
+       (at verts 7) -1.0f32
+       (at verts 8) 0.0f32)
+
+  (var color (array f32 9))
+  (set (at color 0) 1.0f32
+       (at color 1) 0.0f32
+       (at color 2) 0.0f32
+       (at color 3) 0.0f32
+       (at color 4) 1.0f32
+       (at color 5) 0.0f32
+       (at color 6) 0.0f32
+       (at color 7) 0.0f32
+       (at color 8) 1.0f32)
+
+  (init-gl (addr-of vao)
+           (addr-of vbo-verts)
+           (addr-of vbo-color)
+           verts
+           color)
+
+  (var program GLint)
+  (init-shaders (addr-of program))
+  (printf "Program after init: %d\n" program)
+
+  (var x f32 0.0f32)
+  (var dx f32 0.01f32)
+
+  (var a f32 0.0f32)
+  (var da f32 (/ M_PI 180.0f32))
+
+  (SDL_ShowWindow window)
+  (glClearColor 0.0f32 0.0f32 0.0f32 1.0f32)
+  (while running
+    (while (> (SDL_PollEvent (addr-of event)) 0)
+      (if (= (at-field event type) SDL_QUIT)
+          (set running false)))
+    (glClear GL_COLOR_BUFFER_BIT)
+    (glBindVertexArray vao)
+    (glDrawArrays GL_TRIANGLES 0 3)
+    (glBindVertexArray 0u)
+    (SDL_GL_SwapWindow window)
+    (SDL_Delay 16u))
+
+  (SDL_GL_DeleteContext ctx)
+  (SDL_DestroyWindow window)
+  (SDL_Quit)
+  (return 0))
