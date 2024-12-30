@@ -404,8 +404,12 @@ std::unique_ptr<Expression> CodegenContext::getExpression(std::unique_ptr<ASTNod
     } else if (auto t = dynamic_cast<DereferenceNode *>(node.get()); t != nullptr) {
         return std::make_unique<Dereference>(getExpression(std::move(t->target)));
     } else if (auto t = dynamic_cast<AtNode *>(node.get()); t != nullptr) {
-        auto expr = std::make_unique<InboundAccess>(getExpression(std::move(t->target)),
-                                                    getExpression(std::move(t->subscript)));
+        auto expr = std::make_unique<ArraySubscription>(getExpression(std::move(t->target)),
+                                                        getExpression(std::move(t->subscript)));
+        return expr;
+    } else if (auto t = dynamic_cast<FieldAccessNode *>(node.get()); t != nullptr) {
+        auto expr = std::make_unique<FieldAccess>(getExpression(std::move(t->target)),
+                                                  getExpression(std::move(t->subscript)));
         return expr;
     } else if (auto t = dynamic_cast<VariableDeclarationNode *>(node.get()); t != nullptr) {
         return std::make_unique<VariableDeclaration>(

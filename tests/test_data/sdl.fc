@@ -18,7 +18,7 @@
   (SDL_ShowWindow window)
   (while running
     (while (> (SDL_PollEvent (addr-of event)) 0)
-      (if (= (at event type) SDL_QUIT)
+      (if (= (at-field event type) SDL_QUIT)
           (set running false))
       (SDL_Delay 16u)))
   (SDL_DestroyWindow window)

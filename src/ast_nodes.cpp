@@ -171,6 +171,10 @@ AtNode::AtNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&sub
     : target(std::move(target))
     , subscript(std::move(subscript)) {}
 
+FieldAccessNode::FieldAccessNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&subscript)
+    : target(std::move(target))
+    , subscript(std::move(subscript)) {}
+
 CastNode::CastNode(std::unique_ptr<ASTNode> &&target, ASTType *targetType)
     : targetType(targetType)
     , targetExpression(std::move(target)) {}

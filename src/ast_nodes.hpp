@@ -207,6 +207,13 @@ struct AtNode : ASTNode {
     AtNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&subscript);
 };
 
+struct FieldAccessNode : ASTNode {
+    std::unique_ptr<ASTNode> target;
+    std::unique_ptr<ASTNode> subscript;
+
+    FieldAccessNode(std::unique_ptr<ASTNode> &&target, std::unique_ptr<ASTNode> &&subscript);
+};
+
 struct VariableDeclarationNode : ASTNode {
     ASTType *type;
     std::string name;
