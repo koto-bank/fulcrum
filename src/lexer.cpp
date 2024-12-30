@@ -68,6 +68,11 @@ Lexer::Tokens Lexer::lex(std::istream *stream) {
     while (stream->get(c)) {
         if (utils::isLineBreak(c)) {
             if (inString) {
+                if (escape) {
+                    escape = false;
+                    escapeChar(c, currentTokenStr);
+                    continue;
+                }
                 pushError<token::Error::LineBreakInString, token::StringLiteral>(currentTokenStr);
                 inString = false;
                 currentTokenStr.clear();
