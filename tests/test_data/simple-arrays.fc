@@ -1,0 +1,51 @@
+(module array
+  (import :c "stdio.h"))
+
+(fn main i32 ()
+  (var fu (array u32 9))
+  (var i u32 0)
+  (var arr-size u32 9)
+  (puts "Int array")
+  (set (at fu 0) 1
+       (at fu 1) 2
+       (at fu 2) 3
+       (at fu 3) 4
+       (at fu 4) 3
+       (at fu 5) 2
+       (at fu 6) 1
+       (at fu 7) 0
+       (at fu 8) 7)
+  (while (< i arr-size)
+    (printf "Current i: %d " i)
+    (printf "%d %d %d\n"
+            (at fu i)
+            (at fu (+ i 1))
+            (at fu (+ i 2)))
+    (set i (+ i 3)))
+
+  (puts "Now, float array!")
+  (var fa (array f32 9))
+  (set arr-size 9
+       i 0
+       (at fa 0) 1.0f32
+       (at fa 1) 0.0f32
+       (at fa 2) 0.0f32
+       (at fa 3) 0.0f32
+       (at fa 4) 1.0f32
+       (at fa 5) 0.0f32
+       (at fa 6) 0.0f32
+       (at fa 7) 0.0f32
+       (at fa 8) 1.0f32)
+
+  (printf "(at fa 0) > 1.1? %d\n(at fa 0) < 1.3? %d\n"
+          (> (at fa 0) 1.1f32)
+          (< (at fa 0) 1.3f32))
+  (while (< i arr-size)
+    (printf "%f %f %f\n"
+            (at fa i)
+            (at fa (+ i 1))
+            (at fa (+ i 2)))
+    (set i (+ i 3)))
+
+  (puts "We've finished")
+  (return 0))
