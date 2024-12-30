@@ -203,13 +203,28 @@ struct Dereference : Expression {
     std::string dump(int indent) const override;
 };
 
-struct InboundAccess : Expression {
-    std::unique_ptr<Expression> target; // either structure or array
-    std::unique_ptr<Expression> subscript; // array index or field name
+struct FieldAccess : Expression {
+    std::unique_ptr<Expression> target; // structure
+    std::unique_ptr<Expression> subscript; // field name
 
     const LanguageType *targetType = nullptr;
 
-    InboundAccess(std::unique_ptr<Expression> &&target, std::unique_ptr<Expression> &&subscript);
+    FieldAccess(std::unique_ptr<Expression> &&target, std::unique_ptr<Expression> &&subscript);
+
+    llvm::Value *getElementPtr(ExpressionGenContext &genContext);
+
+    const LanguageType *languageType(const ExpressionGenContext &genContext) override;
+    llvm::Value *llvmValue(ExpressionGenContext &genContext) override;
+    std::string dump(int indent) const override;
+};
+
+struct ArraySubscription : Expression {
+    std::unique_ptr<Expression> target; // array
+    std::unique_ptr<Expression> subscript; // index
+
+    const LanguageType *targetType = nullptr;
+
+    ArraySubscription(std::unique_ptr<Expression> &&target, std::unique_ptr<Expression> &&subscript);
 
     llvm::Value *getElementPtr(ExpressionGenContext &genContext);
 

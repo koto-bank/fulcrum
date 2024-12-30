@@ -48,7 +48,7 @@
 
   (while running
     (while (> (SDL_PollEvent (addr-of event)) 0)
-      (if (= (at event type) SDL_QUIT)
+      (if (= (at-field event type) SDL_QUIT)
           (set running false)))
 
     (set dr (update (addr-of r) dr))

@@ -518,6 +518,24 @@ std::optional<std::unique_ptr<ASTNode>> SemanticAnalyzer::parseArgExpression(con
 
             return std::make_unique<AtNode>(std::move(target.value()),
                                             std::move(subscript.value()));
+        } else if (sym == "at-field") {
+            if (form.children.size() != 3) {
+                reportError(symForm.token, "at must have 2 arguments: an target and a subscript");
+                return std::nullopt;
+            }
+
+            auto target = parseArgExpression(form.children[1]);
+            if (target == std::nullopt) {
+                return std::nullopt;
+            }
+
+            auto subscript = parseArgExpression(form.children[2]);
+            if (subscript == std::nullopt) {
+                return std::nullopt;
+            }
+
+            return std::make_unique<FieldAccessNode>(std::move(target.value()),
+                                                     std::move(subscript.value()));
         } else if (sym == "cast") {
             if (form.children.size() < 3) {
                 reportError(symForm.token, "cast must have target and type");
