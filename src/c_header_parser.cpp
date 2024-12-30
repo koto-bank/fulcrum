@@ -164,7 +164,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
     }
 }
 
-bool isInsideMainFile(clang::SourceLocation loc, const clang::SourceManager &sm) {
+[[maybe_unused]] bool isInsideMainFile(clang::SourceLocation loc, const clang::SourceManager &sm) {
     if (!loc.isValid()) {
         return false;
     }
@@ -302,13 +302,8 @@ private:
 
 class CollectMacros : public clang::PPCallbacks {
 public:
-    CollectMacros(clang::Preprocessor &pp)
-        : pp(pp) {}
-
     void MacroDefined(const clang::Token &macroName, const clang::MacroDirective *md) override {
-        if (isInsideMainFile(macroName.getLocation(), pp.getSourceManager())) {
-            add(macroName, md);
-        }
+        add(macroName, md);
     }
 
     using MacroDefinitions = std::vector<std::pair<std::string, const clang::MacroDirective *>>;
@@ -324,7 +319,6 @@ private:
     }
 
     MacroDefinitions macroDefinitions;
-    clang::Preprocessor &pp;
 };
 
 uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, clang::CompilerInstance &ci) {
@@ -482,7 +476,7 @@ bool HeaderParser::parseHeader(const std::filesystem::path &path) {
     }
 
     auto &pp = clang->getPreprocessor();
-    auto macroCollector = std::make_unique<CollectMacros>(pp);
+    auto macroCollector = std::make_unique<CollectMacros>();
     auto *macroCollectorPtr = macroCollector.get();
     pp.addPPCallbacks(std::move(macroCollector));
 
