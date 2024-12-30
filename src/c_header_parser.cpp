@@ -381,7 +381,11 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
                 if (litParser.isIntegerLiteral()) {
                     llvm::APInt val(64, 0);
                     litParser.GetIntegerValue(val);
-                    auto type = cModule.types.getOrEmplaceType<ASTIntegerType>(!litParser.isUnsigned, 64);
+                    auto size = 32u;
+                    if (litParser.isLong || litParser.isLongLong) {
+                        size = 64u;
+                    }
+                    auto type = cModule.types.getOrEmplaceType<ASTIntegerType>(!litParser.isUnsigned, size);
 
                     auto varVal = VariableDeclarationNode(std::move(macroName), type);
                     varVal.initialValue = std::make_unique<ConstantIntNode>(type, val.getLimitedValue());
