@@ -272,7 +272,6 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
 
     // Now insert all alias types
     for (auto &aliasNode : fulcrumModule.typeAliases) {
-        spdlog::info("Emplacing type alias {} = {}", aliasNode.name, aliasNode.target->signature());
         emplaceAliasType(std::move(aliasNode));
     }
 
