@@ -35,7 +35,7 @@ cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
 #+end_src
 
 ** macOS
-Don't forget to export paths to LLVM and Clang:
+Don't forget to export paths to LLVM and Clang, e.g.:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
 ~export Clang_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/clang~
 
@@ -50,20 +50,29 @@ In llvm dir (tested on version 19.6):
 #+begin_src
 mkdir _build llvm-install
 cd llvm
-cmake -B ../_build -DCMAKE_BUILD_TYPE=Debug
-                   -DCMAKE_INSTALL_PREFIX=../llvm-install
-                   -DCMAKE_C_COMPILER=clang
-                   -DCMAKE_CXX_COMPILER=clang++
-                   -DCMAKE_CXX_FLAGS=-glldb
-                   -DLLVM_ENABLE_PROJECTS="clang;lldb"
+cmake -B ../_build -DCMAKE_BUILD_TYPE=Debug \
+                   -DCMAKE_INSTALL_PREFIX=../llvm-install \
+                   -DCMAKE_C_COMPILER=clang \
+                   -DCMAKE_CXX_COMPILER=clang++ \
+                   -DCMAKE_CXX_FLAGS=-glldb \
+                   -DBUILD_SHARED_LIBS=ON \
+                   -DLLVM_BUILD_EXAMPLES=OFF \
+                   -DLLVM_ENABLE_ASSERTIONS=ON \
+                   -DLLVM_ENABLE_PIC=ON \
+                   -DLLVM_ENABLE_RTTI=ON \
+                   -DLLVM_ENABLE_PROJECTS="clang;lldb" \
                    -DLLVM_TARGETS_TO_BUILD=host
 cmake --build ../_build
 cmake --build ../_build --target install
 #+end_src
 
-After that, the installed llvm will be in ./llvm-install directory, and can be
-used during fulcrum build by setting ~LLVM_DIR~ and ~Clang_DIR~ as explained
-above.
+ENABLE_PIC and BUILD_SHARED_LIBS options are important. (Or one of them
+anyway). Failure to provide them on generation step can lead to ld being unable
+to link Clang libraries with Fulcrum.
+
+After completing the steps, the installed llvm will be in ./llvm-install
+directory, and can be used during fulcrum build by setting ~LLVM_DIR~ and
+~Clang_DIR~ as explained above.
 
 The ~-glldb~ option is needed if you want to debug the resulting executable with
 lldb. Otherwise it will be unpleasant: incomplete types, failures to find
