@@ -34,21 +34,42 @@ cmake . -B _build -DCMAKE_EXPORT_COMPILE_COMMANDS=1
 -Wno-builtin-macro-redefined" -DLLVM_CONFIG_BIN=llvm-config-18
 #+end_src
 
-*** Debugging
-If you want to have llvm and clang debug symbols, and you most
-certainly want them, you should compile llvm and then set environment
-variables LLVM_DIR and Clang_DIR to appropriate locations.
-
-Don't forget to pass ~-glldb~ if you want to debug the resulting
-executable with lldb. Otherwise it will be unpleasant: incomplete
-types, failures to find certain symbols and so on.
-
 ** macOS
 Don't forget to export paths to LLVM and Clang:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
 ~export Clang_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/clang~
 
-* Debug
+* Debugging
+** LLVM and Clang
+If you want to have llvm and clang debug symbols, and you most
+certainly want them, you should compile llvm and then set environment
+variables LLVM_DIR and Clang_DIR to appropriate locations.
+
+*** How to compile LLVM and Clang
+In llvm dir (tested on version 19.6):
+#+begin_src
+mkdir _build llvm-install
+cd llvm
+cmake -B ../_build -DCMAKE_BUILD_TYPE=Debug
+                   -DCMAKE_INSTALL_PREFIX=../llvm-install
+                   -DCMAKE_C_COMPILER=clang
+                   -DCMAKE_CXX_COMPILER=clang++
+                   -DCMAKE_CXX_FLAGS=-glldb
+                   -DLLVM_ENABLE_PROJECTS="clang;lldb"
+                   -DLLVM_TARGETS_TO_BUILD=host
+cmake --build ../_build
+cmake --build ../_build --target install
+#+end_src
+
+After that, the installed llvm will be in ./llvm-install directory, and can be
+used during fulcrum build by setting ~LLVM_DIR~ and ~Clang_DIR~ as explained
+above.
+
+The ~-glldb~ option is needed if you want to debug the resulting executable with
+lldb. Otherwise it will be unpleasant: incomplete types, failures to find
+certain symbols and so on. If you build with gcc, change the argument
+accordingly, to ~-ggdb~.
+
 ** Parser
 There's ~Parser::Expression::dump()~ method, which is intended to be
 used in situations where there's a need to inspect AST more closely.
