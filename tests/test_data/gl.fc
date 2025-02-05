@@ -19,8 +19,7 @@
         (set (deref value) 0.0f32
              invert true))
   (if invert
-      (return (- 0.0f32 delta)) ; lmao (- delta) doesn't work, so
-                                ; explicit subtraction is needed
+      (return (- delta))
     (return delta)))
 
 (fn main i32 ()
