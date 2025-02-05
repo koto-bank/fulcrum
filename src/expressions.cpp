@@ -300,6 +300,15 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
         }
     }
 */
+
+    if (name[0] == '-' && args.size() == 1) {
+        if (intType) {
+            return genContext.builder.CreateNeg(args[0]->llvmValue(genContext), "", false);
+        } else {
+            return genContext.builder.CreateFNeg(args[0]->llvmValue(genContext), "", nullptr);
+        }
+    }
+
     using namespace std::placeholders;
     std::function<llvm::Value *(llvm::IRBuilderBase *, llvm::Value *, llvm::Value *)> buildOperation;
 
@@ -312,10 +321,11 @@ llvm::Value *FunctionCall::arithmeticsProcessor(ExpressionGenContext &genContext
 
         break;
     case '-':
-        if (intType)
+        if (intType) {
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateSub, _1, _2, _3, "", false, false);
-        else
+        } else {
             buildOperation = std::bind(&llvm::IRBuilderBase::CreateFSub, _1, _2, _3, "", nullptr);
+        }
         break;
     case '*':
         if (intType)
