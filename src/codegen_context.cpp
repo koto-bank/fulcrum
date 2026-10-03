@@ -142,7 +142,7 @@ const char *StackedCodegenErrors::whatIndented(int indent) const {
 CodegenContext::CodegenContext(const std::string &moduleName, llvm::LLVMContext &context)
     : context(context)
     , module(moduleName, context)
-    , dataLayout (&module) {
+    , dataLayout (module.getDataLayout()) {
 
     emplaceType<FloatType>(FloatType::Bits::Half);
     emplaceType<FloatType>(FloatType::Bits::Float);
@@ -267,12 +267,16 @@ bool CodegenContext::fillStructTypeFields(const StructNode &structNode, std::vec
 void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
     // First insert all the structure types
     for (auto &structNode : fulcrumModule.structs) {
-        emplaceStructType(structNode);
+        if (auto res = emplaceStructType(structNode); !res) {
+            spdlog::error(res.error().whatIndented(4));
+        }
     }
 
     // Now insert all alias types
     for (auto &aliasNode : fulcrumModule.typeAliases) {
-        emplaceAliasType(std::move(aliasNode));
+        if (auto res = emplaceAliasType(std::move(aliasNode)); !res) {
+            spdlog::error(res.error().whatIndented(4));
+        }
     }
 
     // Now fill structure type fields, which could possibly refer
@@ -297,11 +301,15 @@ void CodegenContext::generate(FulcrumModule &&fulcrumModule) {
     }
 
     for (auto &globalVar : fulcrumModule.globalVariables) {
-        emplaceGlobalVar(std::move(globalVar));
+        if (auto res = emplaceGlobalVar(std::move(globalVar)); !res) {
+            spdlog::error(res.error().whatIndented(4));
+        }
     }
 
     for (auto &function : fulcrumModule.functions) {
-        emplaceFulcrumFunction(std::move(function));
+        if (auto res = emplaceFulcrumFunction(std::move(function)); !res) {
+            spdlog::error(res.error().whatIndented(4));
+        }
     }
 }
 

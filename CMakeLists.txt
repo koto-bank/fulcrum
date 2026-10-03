@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.25)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
@@ -59,6 +59,10 @@ add_subdirectory(deps/fmt)
 option(ARGS_BUILD_EXAMPLE "" OFF)
 option(ARGS_BUILD_UNITTESTS "" OFF)
 add_subdirectory(deps/args)
+block()
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+  add_subdirectory(deps/args)
+endblock()
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
 add_subdirectory(deps/spdlog)

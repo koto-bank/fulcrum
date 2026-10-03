@@ -25,6 +25,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Triple.h>
 
 #include <fmt/color.h>
 
@@ -224,7 +225,7 @@ int Compiler::run(int argc, char *argv[]) {
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
 
-        auto targetTriple = llvm::sys::getDefaultTargetTriple();
+        const llvm::Triple targetTriple(llvm::sys::getDefaultTargetTriple());
         std::string err;
         auto target = llvm::TargetRegistry::lookupTarget(targetTriple, err);
         if (!target) {

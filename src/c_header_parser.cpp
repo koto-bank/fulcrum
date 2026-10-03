@@ -11,6 +11,7 @@
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/AST/Type.h>
 #include <clang/Basic/Diagnostic.h>
+#include <clang/Driver/CreateInvocationFromArgs.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>
 #include <clang/Frontend/FrontendOptions.h>
@@ -104,7 +105,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         }
         auto size = ctx->getTypeSize(qualType);
         return cModule.types.getOrEmplaceType<ASTIntegerType>(isSigned, size);
-    } else if (qualType->isFloatingType()) {
+    } else if (qualType->isRealFloatingType()) {
         auto size = ctx->getTypeSize(qualType);
         return cModule.types.getOrEmplaceType<ASTFloatType>(size);
     } else if (qualType->isVoidType()) {
@@ -133,7 +134,7 @@ ASTType * qualTypeToASTType(const clang::QualType &qualType,
         auto name = rt->getName().str();
         if (name.empty()) {
             if (rt->isEmbeddedInDeclarator()) {
-                auto typedefDeclType = ctx->getTypeDeclType(rt);
+                const clang::QualType typedefDeclType = ctx->getCanonicalTagType(rt);
                 name = typedefDeclType.getAsString();
             } else {
                 // shouldn't happen. probably?
@@ -188,6 +189,11 @@ public:
     bool VisitTypedefDecl(clang::TypedefDecl *td) {
         auto targetQualType = td->getUnderlyingType();
         auto targetType = qualTypeToASTType(targetQualType, cModule, context);
+        if (targetType == nullptr) {
+            spdlog::warn("Failed to get target type for typedef {}, skipping it",
+                         td->getName().str());
+            return true;
+        }
         cModule.typeAliases.push_back({ td->getName().str(), targetType });
         return true;
     }
@@ -199,7 +205,8 @@ public:
             s.name = recordDecl->getName().str();
             if (s.name.empty()) {
                 if (recordDecl->isEmbeddedInDeclarator()) {
-                    auto typedefDeclType = context->getTypeDeclType(recordDecl);
+                    const clang::QualType typedefDeclType =
+                        context->getCanonicalTagType(recordDecl);
                     s.name = typedefDeclType.getAsString();
                 } else {
                     // shouldn't happen. probably?
@@ -224,6 +231,13 @@ public:
                 fc_assert(!f->isInvalidDecl());
                 auto name = f->getNameAsString();
                 auto type = qualTypeToASTType(f->getType(), cModule, context);
+                if (type == nullptr) {
+                    // Skip the whole record: omitting one field would
+                    // silently misreport the layout of all the others.
+                    spdlog::warn("Failed to get type for field {} of {}, skipping the whole type",
+                                 name, s.name);
+                    return true;
+                }
                 s.fields.push_back({ name, type });
             }
             cModule.structs.push_back(std::move(s));
@@ -247,7 +261,10 @@ public:
         auto name = d->getNameInfo().getAsString();
         auto qualType = d->getReturnType();
         ASTType* retType = qualTypeToASTType(qualType, cModule, context);
-        fc_assert(retType != nullptr);
+        if (retType == nullptr) {
+            spdlog::warn("Failed to get return type for function {}, skipping it", name);
+            return true;
+        }
 
         for (auto i = 0u; i < d->getNumParams(); i++) {
             auto param = d->getParamDecl(i);
@@ -354,7 +371,7 @@ uint32_t processParsedMacros(CModule &cModule, CollectMacros &macroCollector, cl
             }
 
             if (toks.size() != 1) {
-                spdlog::warn("Skipping multi-token object-like macro {} (they are not supported yet)", macroName);
+                spdlog::debug("Skipping multi-token object-like macro {} (they are not supported yet)", macroName);
                 continue; // TODO: support more complex macro evaluation
             }
 
@@ -468,10 +485,10 @@ bool HeaderParser::parseHeader(const std::filesystem::path &path) {
         }
     }
 
-    std::unique_ptr<clang::CompilerInstance> clang = std::make_unique<clang::CompilerInstance>();
+    std::unique_ptr<clang::CompilerInstance> clang =
+        std::make_unique<clang::CompilerInstance>(std::move(ci));
     clang::IgnoringDiagConsumer dropDiags; // we probably _should_ report malformed headers
 
-    clang->setInvocation(std::move(ci));
     clang->createDiagnostics(&dropDiags, false);
     clang->createFileManager();
     clang->createTarget();

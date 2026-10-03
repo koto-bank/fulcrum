@@ -106,6 +106,8 @@ std::string FloatType::signature() const {
    case Bits::Quad:
        return "f128";
    }
+   fc_unreachable();
+   return {};
 }
 
 llvm::Type *FloatType::llvmType() const {
@@ -119,6 +121,8 @@ llvm::Type *FloatType::llvmType() const {
     case Bits::Quad:
         return llvm::Type::getFP128Ty(context.context);
     }
+    fc_unreachable();
+    return nullptr;
 }
 
 AliasType::AliasType(CodegenContext &codegenContext, const std::string &name, const LanguageType *targetType)
@@ -230,8 +234,8 @@ PointerType::PointerType(CodegenContext &context, const LanguageType *targetType
       targetType(targetType) {}
 
 llvm::Type *PointerType::llvmType() const {
-    // what. why Int8Ty?
-    return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0);
+    // Pointers are opaque, so there is no pointee type to pass here.
+    return llvm::PointerType::get(context.context, 0);
 }
 
 std::string PointerType::signature() const { return targetType->signature() + "*"; }
@@ -299,7 +303,7 @@ VectorType::VectorType(CodegenContext &context, const LanguageType *elementType,
     , isScalable(isScalable) {}
 
 llvm::Type *VAType::llvmType() const {
-    return llvm::PointerType::get(llvm::Type::getInt8Ty(context.context), 0);
+    return llvm::PointerType::get(context.context, 0);
 }
 
 std::string VAType::signature() const {
