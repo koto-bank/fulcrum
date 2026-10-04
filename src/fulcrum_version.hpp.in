@@ -1,0 +1,3 @@
+#pragma once
+
+#define FULCRUM_VERSION "@PROJECT_VERSION@"
