@@ -39,6 +39,7 @@
 #include "codegen_context.hpp"
 #include "compiler.hpp"
 #include "expressions.hpp"
+#include "fulcrum_version.hpp"
 #include "parser.hpp"
 #include "semantic_analyzer.hpp"
 #include "types.hpp"
@@ -203,6 +204,12 @@ int Compiler::run(int argc, char *argv[]) {
     );
     args::HelpFlag helpArg(argParser, "help", "Display help", { 'h', "help" });
     args::Flag picArg(argParser, "pic", "Create a dynamically linked position independent object", { "pic" });
+    args::ValueFlag<std::string> outputArg(
+        argParser, "output", "Object file to write", { 'o', "output" }, "output.o"
+    );
+    args::Flag emitLlvmArg(argParser, "emit-llvm", "Dump the generated LLVM IR to stderr", { "emit-llvm" });
+    args::Flag versionArg(argParser, "version", "Display version and exit", { "version" });
+    args::Flag verboseArg(argParser, "verbose", "Enable debug-level diagnostics", { 'v', "verbose" });
 
     try {
         argParser.ParseCLI(argc, argv);
@@ -213,6 +220,18 @@ int Compiler::run(int argc, char *argv[]) {
         spdlog::error(e.what());
         std::cout << argParser;
         return 1;
+    }
+
+    if (versionArg) {
+        std::cout << "fulcrum version " << FULCRUM_VERSION << "\n"
+                  << "target: " << llvm::sys::getDefaultTargetTriple() << "\n";
+        return 0;
+    }
+
+    // main() turns everything on; processImports logs one line per imported C
+    // symbol, which buries a build log. Opt into that with -v instead.
+    if (verboseArg) {
+        spdlog::set_level(spdlog::level::debug);
     }
 
     llvm::LLVMContext context;
@@ -291,7 +310,9 @@ int Compiler::run(int argc, char *argv[]) {
         }
     }
 
-    llvm::errs() << codegenCont.module;
+    if (emitLlvmArg) {
+        llvm::errs() << codegenCont.module;
+    }
 
     if (llvm::verifyModule(codegenCont.module, &llvm::errs())) {
         // Exit early if there's an error
@@ -301,9 +322,13 @@ int Compiler::run(int argc, char *argv[]) {
 
     // Object file generation
 
-    auto filename = "output.o";
+    const auto filename = outputArg.Get();
     std::error_code EC;
     llvm::raw_fd_ostream dest(filename, EC, llvm::sys::fs::OF_None);
+    if (EC) {
+        spdlog::error("Failed to open output file '{}': {}", filename, EC.message());
+        return 1;
+    }
 
     llvm::legacy::PassManager passManager;
     targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile);

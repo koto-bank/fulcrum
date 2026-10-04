@@ -1,0 +1,5 @@
+(module greet
+  (import :c "stdio.h"))
+
+(fn greet void ()
+  (puts "Hello from a Fulcrum library!"))

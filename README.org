@@ -39,6 +39,83 @@ Don't forget to export paths to LLVM and Clang, e.g.:
 ~export LLVM_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/llvm~
 ~export Clang_DIR=/opt/homebrew/Cellar/llvm/14.0.6_1/lib/cmake/clang~
 
+* Using Fulcrum from CMake
+Fulcrum is available to CMake as a first-class language, so ~.fc~ files can be
+compiled, archived, linked and installed by ordinary CMake commands.
+
+** From an installed Fulcrum
+#+begin_src
+cmake_minimum_required(VERSION 3.25)
+
+# C must be enabled before Fulcrum, see "The C requirement" below.
+project(myapp LANGUAGES C)
+
+find_package(Fulcrum REQUIRED)
+enable_language(Fulcrum)
+
+add_executable(myapp main.fc)
+add_library(mylib SHARED mylib.fc)
+#+end_src
+
+Point CMake at the installed package with ~-DCMAKE_PREFIX_PATH=<prefix>~, or at
+an uninstalled Fulcrum build tree with ~-DFulcrum_ROOT=<build dir>~.
+
+~find_package(Fulcrum)~ sets ~CMAKE_MODULE_PATH~, which is directory-scoped, so
+call it in the same directory as ~enable_language(Fulcrum)~ or in a parent of
+it, and before any ~add_subdirectory()~ that needs Fulcrum.
+
+** Without find_package
+If the language modules in ~cmake/~ are already on ~CMAKE_MODULE_PATH~, the
+compiler is located, in order of precedence, from:
+1. the ~CMAKE_Fulcrum_COMPILER~ cache variable (~-DCMAKE_Fulcrum_COMPILER=...~,
+   or a toolchain file)
+2. the ~FULCRUM_COMPILER~ environment variable
+3. a ~fulcrum~ executable on ~PATH~
+
+** Source file extensions
+~.fc~ and ~.fulcrum~. Anything else needs an explicit
+~set_source_files_properties(x.foo PROPERTIES LANGUAGE Fulcrum)~.
+
+** The C requirement
+~fulcrum~ emits relocatable object files and cannot link, so CMake drives every
+Fulcrum link step through the C compiler driver. Enabling Fulcrum without C is a
+hard error. Enabling C also gives Fulcrum the system include directories it
+needs to resolve ~(import :c "stdio.h")~, which it gets from
+~CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES~ -- so a C import needs no manual ~-I~.
+
+** Supported generators
+~Ninja~, ~Ninja Multi-Config~ and ~Unix Makefiles~. The IDE generators have no
+code path for a custom language.
+
+** Known limitations
+- *One ~.fc~ file per target.* Fulcrum has no forward declarations, and
+  ~(import other-module)~ copies function bodies into the importer under a
+  ~nick:name~ symbol, so Fulcrum modules cannot yet call each other across
+  object files. A Fulcrum library is consumable from C and C++, which see its
+  plain unmangled symbols; see ~examples/hello~.
+- *~target_compile_definitions~ is silently ignored* on Fulcrum sources.
+  ~fulcrum~ has no ~-D~ switch, so the ~<DEFINES>~ placeholder is deliberately
+  absent from the compile rule.
+- *No dependency tracking.* ~fulcrum~ emits no depfile, so editing an imported
+  module or an imported C header does not rebuild dependents. Use
+  ~set_source_files_properties(x.fc PROPERTIES OBJECT_DEPENDS ...)~ meanwhile.
+- *~CMAKE_BUILD_TYPE~ does not affect Fulcrum sources.* There is no ~-O<n>~ and
+  no ~-g~, so all configurations produce identical objects.
+- *Host only.* The target triple is always
+  ~llvm::sys::getDefaultTargetTriple()~, so cross-compiling silently produces
+  host objects.
+- *Always position independent.* The compile rule passes ~--pic~
+  unconditionally, because the host C driver defaults to ~-pie~ and a non-PIC
+  object cannot be linked into an executable. ~fulcrum~ has no switch to ask
+  for the static relocation model back.
+- The language modules use CMake's internal, unversioned language API, so a new
+  CMake release can break them. The ~fulcrum-examples~ test is the canary.
+
+** Compiler flags CMake relies on
+~-o <file>~, ~-I <dir>~, ~--pic~ and ~--version~. Also useful by hand:
+~--emit-llvm~ dumps the generated IR to stderr, and ~-v~ raises the log level to
+debug.
+
 * Debugging
 ** LLVM and Clang
 If you want to have llvm and clang debug symbols, and you most

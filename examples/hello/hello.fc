@@ -1,0 +1,6 @@
+(module hello
+  (import :c "stdio.h"))
+
+(fn main i32 ()
+  (puts "Hello, world!")
+  (return 0))

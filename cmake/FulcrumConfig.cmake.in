@@ -1,0 +1,44 @@
+@PACKAGE_INIT@
+
+# The Fulcrum language modules (CMakeDetermineFulcrumCompiler.cmake and
+# friends) live here. enable_language(Fulcrum) finds them through
+# CMAKE_MODULE_PATH, which is directory-scoped -- so call find_package(Fulcrum)
+# in the same directory as enable_language(Fulcrum), or in a parent of it, and
+# before any add_subdirectory() that needs Fulcrum.
+set(Fulcrum_MODULE_DIR "@PACKAGE_FULCRUM_CONFIG_MODULEDIR@")
+list(APPEND CMAKE_MODULE_PATH "${Fulcrum_MODULE_DIR}")
+list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+
+include("${CMAKE_CURRENT_LIST_DIR}/FulcrumTargets.cmake")
+
+# Point the language at the compiler this package ships, unless the caller or
+# the environment already chose one.
+if(NOT DEFINED CMAKE_Fulcrum_COMPILER AND "$ENV{FULCRUM_COMPILER}" STREQUAL "")
+  get_target_property(_fulcrum_exe Fulcrum::compiler IMPORTED_LOCATION)
+  if(NOT _fulcrum_exe)
+    # A single-config install writes IMPORTED_LOCATION_<CONFIG>, never the
+    # unsuffixed property, so walk the configurations the export declares.
+    get_target_property(_fulcrum_cfgs Fulcrum::compiler IMPORTED_CONFIGURATIONS)
+    foreach(_cfg IN LISTS _fulcrum_cfgs)
+      get_target_property(_fulcrum_exe Fulcrum::compiler IMPORTED_LOCATION_${_cfg})
+      if(_fulcrum_exe)
+        break()
+      endif()
+    endforeach()
+    unset(_fulcrum_cfgs)
+    unset(_cfg)
+  endif()
+  if(_fulcrum_exe)
+    set(CMAKE_Fulcrum_COMPILER "${_fulcrum_exe}" CACHE FILEPATH "Fulcrum compiler")
+  else()
+    set(Fulcrum_FOUND FALSE)
+    set(Fulcrum_NOT_FOUND_MESSAGE
+        "Could not resolve the location of the Fulcrum compiler from the Fulcrum::compiler imported target.")
+    return()
+  endif()
+  unset(_fulcrum_exe)
+endif()
+
+set(Fulcrum_COMPILER "${CMAKE_Fulcrum_COMPILER}")
+
+check_required_components(Fulcrum)
