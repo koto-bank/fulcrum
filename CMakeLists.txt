@@ -58,13 +58,10 @@ add_subdirectory(deps/fmt)
 
 option(ARGS_BUILD_EXAMPLE "" OFF)
 option(ARGS_BUILD_UNITTESTS "" OFF)
-add_subdirectory(deps/args)
-block()
-  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-  add_subdirectory(deps/args)
-endblock()
+add_subdirectory(deps/args EXCLUDE_FROM_ALL)
 target_include_directories(${FULCRUM_LIB} SYSTEM PUBLIC "deps/args")
 
+set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
 add_subdirectory(deps/spdlog)
 
 target_compile_options(${FULCRUM_LIB} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
@@ -75,7 +72,7 @@ target_link_libraries(${FULCRUM_LIB} PUBLIC fmt::fmt)
 
 add_executable(${FULCRUM_COMPILER} "src/main.cpp" $<TARGET_OBJECTS:${FULCRUM_LIB}>)
 target_compile_definitions(${FULCRUM_COMPILER} PRIVATE "FC_DEBUG=$<CONFIG:Debug>")
-target_link_libraries(${FULCRUM_COMPILER} ${FULCRUM_LIB} spdlog::spdlog)
+target_link_libraries(${FULCRUM_COMPILER} PRIVATE ${FULCRUM_LIB} spdlog::spdlog)
 target_compile_options(${FULCRUM_COMPILER} PRIVATE -Wall -Wextra -Wpedantic -Werror -Wsuggest-override)
 
 ### Tests
