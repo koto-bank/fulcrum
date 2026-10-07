@@ -85,7 +85,7 @@ void Function::generateBody(ExpressionGenContext &genContext) {
 
     genContext.popScope();
 
-    if (genContext.function->llvmFunction()->back().getTerminator() == nullptr) {
+    if (!genContext.function->llvmFunction()->back().hasTerminator()) {
         // If the function is not void, insert unreachable at the end, since the user must return
         // something
         if (genContext.function->functionType()->returnType != genContext.codegenContext.voidType) {

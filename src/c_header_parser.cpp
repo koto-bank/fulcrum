@@ -39,7 +39,7 @@ void disableUnusedCompilerOptions(clang::CompilerInvocation &ci) {
 
     // Disable "clang -verify" diagnostics
     ci.getDiagnosticOpts().VerifyDiagnostics = false;
-    ci.getDiagnosticOpts().ShowColors = false;
+    ci.getDiagnosticOpts().setShowColors(clang::ShowColorsKind::Off);
 
     // Disable any dependency outputting, we don't want to generate files or write
     // to stdout/stderr.
